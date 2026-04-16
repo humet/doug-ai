@@ -50,6 +50,25 @@ final class StarterViewModel {
         )
     }
 
+    /// Human-readable context used as the notification body and the starter card subtitle.
+    func feedContext(nextFeed: Date, upcomingBakeStart: Date?) -> String {
+        if upcomingBakeStart != nil {
+            return "Feeding now keeps your starter lined up for your upcoming bake."
+        }
+        return "Keep your starter on a healthy maintenance rhythm."
+    }
+
+    /// Schedules (or replaces) the pending starter feed reminder for the given date.
+    /// Call whenever the suggestion changes — on appear, after logging, after availability edits.
+    func syncFeedReminder(nextFeed: Date?, upcomingBakeStart: Date?) async {
+        guard let nextFeed else {
+            NotificationService.shared.cancelStarterFeedReminder()
+            return
+        }
+        let context = feedContext(nextFeed: nextFeed, upcomingBakeStart: upcomingBakeStart)
+        await NotificationService.shared.scheduleStarterFeedReminder(at: nextFeed, context: context)
+    }
+
     func logFeed(modelContext: ModelContext) {
         let log = StarterFeedLog(
             ratioStarter: feedRatioStarter,

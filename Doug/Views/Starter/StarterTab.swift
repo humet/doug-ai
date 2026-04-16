@@ -12,12 +12,38 @@ struct StarterTab: View {
     @Query private var windows: [UnavailableWindow]
     @Query(sort: \RevivalPlan.startDate, order: .reverse)
     private var revivalPlans: [RevivalPlan]
+    @Query(sort: \Schedule.createdAt, order: .reverse)
+    private var schedules: [Schedule]
 
     @Environment(\.modelContext) private var modelContext
 
     private var profile: StarterProfile? { profiles.first }
     private var activeRevivalPlan: RevivalPlan? {
         revivalPlans.first(where: { $0.revivalStatus == .active })
+    }
+
+    /// The upcoming bake's levain-build start time, if any, used to line up feed suggestions.
+    private var upcomingBakeStart: Date? {
+        let now = Date()
+        let candidates = schedules.filter {
+            $0.scheduleStatus == .planning || $0.scheduleStatus == .active
+        }
+        let levainStarts = candidates.compactMap { schedule in
+            schedule.steps
+                .first(where: { $0.stepTypeID == StepTypeID.buildLevain.rawValue })?
+                .computedStartTime
+        }
+        return levainStarts.filter { $0 > now }.min()
+    }
+
+    private var nextFeed: Date? {
+        viewModel.nextFeedTime(
+            profile: profile,
+            feedLogs: feedLogs,
+            availability: availabilities.first,
+            windows: Array(windows),
+            upcomingBakeStart: upcomingBakeStart
+        )
     }
 
     var body: some View {
@@ -40,6 +66,12 @@ struct StarterTab: View {
             }
             .sheet(isPresented: $viewModel.showLogFeed) {
                 LogFeedSheet(viewModel: viewModel, modelContext: modelContext)
+            }
+            .task(id: nextFeed) {
+                await viewModel.syncFeedReminder(
+                    nextFeed: nextFeed,
+                    upcomingBakeStart: upcomingBakeStart
+                )
             }
         }
     }
@@ -110,13 +142,7 @@ struct StarterTab: View {
 
     @ViewBuilder
     private var nextFeedSection: some View {
-        if let nextFeed = viewModel.nextFeedTime(
-            profile: profile,
-            feedLogs: feedLogs,
-            availability: availabilities.first,
-            windows: Array(windows),
-            upcomingBakeStart: nil
-        ) {
+        if let nextFeed {
             Section {
                 HStack {
                     Label("Next feed", systemImage: "clock")
@@ -130,6 +156,9 @@ struct StarterTab: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            } footer: {
+                Text(viewModel.feedContext(nextFeed: nextFeed, upcomingBakeStart: upcomingBakeStart))
+                    .font(.caption)
             }
         }
     }

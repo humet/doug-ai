@@ -12,7 +12,17 @@ final class NotificationService {
         static let foldStep = "FOLD_STEP"
         static let handsOnStep = "HANDS_ON_STEP"
         static let coldRetardEnd = "COLD_RETARD_END"
+        static let starterFeed = "STARTER_FEED"
     }
+
+    /// Action identifiers for interactive notifications.
+    enum Action {
+        static let logFeed = "LOG_FEED"
+        static let snoozeFeed = "SNOOZE_FEED_1H"
+    }
+
+    /// Stable identifier so feed reminders can be rescheduled or cancelled cleanly.
+    private static let starterFeedIdentifier = "starter-feed-reminder"
 
     // MARK: - Authorization
 
@@ -22,6 +32,28 @@ final class NotificationService {
         } catch {
             return false
         }
+    }
+
+    /// Registers all notification categories and their actions. Call once at app launch.
+    func registerCategories() {
+        let logFeedAction = UNNotificationAction(
+            identifier: Action.logFeed,
+            title: "Log Feed",
+            options: [.foreground]
+        )
+        let snoozeAction = UNNotificationAction(
+            identifier: Action.snoozeFeed,
+            title: "Snooze 1h",
+            options: []
+        )
+        let starterFeedCategory = UNNotificationCategory(
+            identifier: Category.starterFeed,
+            actions: [logFeedAction, snoozeAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        center.setNotificationCategories([starterFeedCategory])
     }
 
     // MARK: - Schedule Notifications
@@ -122,14 +154,23 @@ final class NotificationService {
 
     // MARK: - Starter Feed Reminders
 
+    /// Schedules (or replaces) the single pending starter feed reminder.
+    /// Uses a stable identifier so repeated calls don't stack up notifications.
     func scheduleStarterFeedReminder(at date: Date, context: String) async {
         let authorized = await requestAuthorization()
-        guard authorized, date > Date() else { return }
+        guard authorized, date > Date() else {
+            cancelStarterFeedReminder()
+            return
+        }
+
+        // Replace any existing reminder.
+        cancelStarterFeedReminder()
 
         let content = UNMutableNotificationContent()
         content.title = "Time to Feed Your Starter"
         content.body = context
         content.sound = .default
+        content.categoryIdentifier = Category.starterFeed
 
         let trigger = UNTimeIntervalNotificationTrigger(
             timeInterval: max(date.timeIntervalSinceNow, 1),
@@ -137,11 +178,17 @@ final class NotificationService {
         )
 
         let request = UNNotificationRequest(
-            identifier: "starter-feed-\(Int(date.timeIntervalSince1970))",
+            identifier: Self.starterFeedIdentifier,
             content: content,
             trigger: trigger
         )
 
         try? await center.add(request)
+    }
+
+    func cancelStarterFeedReminder() {
+        center.removePendingNotificationRequests(
+            withIdentifiers: [Self.starterFeedIdentifier]
+        )
     }
 }
