@@ -39,19 +39,24 @@ final class ScheduleViewModel {
 
     func buildPreview(
         availability: UserAvailability?,
-        windows: [UnavailableWindow]
+        windows: [UnavailableWindow],
+        feedLogs: [StarterFeedLog] = []
     ) {
         let avail = availability.map { AvailabilityInput(from: $0) }
             ?? AvailabilityInput(startHour: 6, startMinute: 30, endHour: 21, endMinute: 0)
 
         let windowInputs = windows.map { WindowInput(from: $0) }
+        let peakProfile = feedLogs.isEmpty
+            ? nil
+            : StarterPeakProfile(feedLogs: feedLogs.map { FeedLogInput(from: $0) })
 
         let input = ScheduleBuilderInput(
             recipe: selectedRecipe,
             targetBreadReadyTime: targetDate,
             kitchenTemperatureCelsius: kitchenTemperature,
             availability: avail,
-            unavailableWindows: windowInputs
+            unavailableWindows: windowInputs,
+            peakProfile: peakProfile
         )
 
         let result = ScheduleBuilder.build(input)
@@ -75,13 +80,14 @@ final class ScheduleViewModel {
     func apply(
         option: ConflictOption,
         availability: UserAvailability?,
-        windows: [UnavailableWindow]
+        windows: [UnavailableWindow],
+        feedLogs: [StarterFeedLog] = []
     ) {
         showConflictSheet = false
         if let shift = option.targetTimeShiftMinutes {
             targetDate = targetDate.addingTimeInterval(shift * 60)
         }
-        buildPreview(availability: availability, windows: windows)
+        buildPreview(availability: availability, windows: windows, feedLogs: feedLogs)
     }
 
     // MARK: - Pre-Bake Health Check

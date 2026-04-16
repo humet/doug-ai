@@ -43,22 +43,36 @@ enum TemperatureCalculator {
         }
     }
 
+    /// Standard levain-build ratio assumed for personalised peak-time lookups.
+    static let levainBuildRatio: FeedRatioBucket = .oneToFive
+
     /// Computes the effective duration of a method step, applying temperature
     /// adjustment if the step type is temperature-adjusted.
     ///
-    /// - Parameters:
-    ///   - step: The method step from the recipe.
-    ///   - kitchenTemp: The user's kitchen temperature in °C.
-    /// - Returns: Duration in minutes.
-    static func effectiveDuration(for step: MethodStep, kitchenTemp: Double) -> Double {
+    /// When `peakProfile` has at least `StarterPeakProfile.minimumSamples`
+    /// observations for the kitchen temp bracket at the standard levain ratio,
+    /// the observed average replaces the generic levain estimate.
+    static func effectiveDuration(
+        for step: MethodStep,
+        kitchenTemp: Double,
+        peakProfile: StarterPeakProfile? = nil
+    ) -> Double {
         let stepType = step.stepType
 
         guard stepType.isTemperatureAdjusted, let refTemp = stepType.referenceTemperatureCelsius else {
             return step.effectiveDuration
         }
 
-        // Special case: levain uses stepped estimates, not exponential
+        // Special case: levain uses stepped estimates, not exponential — and
+        // prefers the user's observed average when the bucket has enough data.
         if step.stepTypeID == .buildLevain {
+            if let profile = peakProfile,
+               let observed = profile.averageMinutes(
+                   ratio: levainBuildRatio,
+                   tempBracket: TemperatureBracket.bracket(celsius: kitchenTemp)
+               ) {
+                return observed
+            }
             return levainBuildMinutes(kitchenTemp: kitchenTemp)
         }
 

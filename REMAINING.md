@@ -22,16 +22,9 @@ Wired `scheduleStarterFeedReminder` via `StarterViewModel.syncFeedReminder`, cal
 
 ---
 
-## 4. Per-ratio and per-temperature peak-time profiling (Feature 7)
+## ~~4. Per-ratio and per-temperature peak-time profiling (Feature 7)~~ — DONE
 
-**What's missing:** `StarterProfile` tracks a global average time-to-peak. The brief calls for bracketed averages so health assessment and levain-build estimates can be personalised to the user's actual feeding behaviour.
-
-**Brief reference:** "It tracks average time-to-peak at different ratios and temperatures. This data can eventually feed back into the schedule builder to replace generic levain build estimates with personalised ones based on actual observations."
-
-**What to do:**
-- Bucket logged feeds by ratio (e.g. 1:1:1, 1:2:2, 1:5:5, 1:10:10) and temperature bracket (<22°C, 22–25°C, 26°C+).
-- Store bracketed averages on `StarterProfile` as computed properties or a small derived struct.
-- When the schedule builder encounters `build levain` and a matching bracket has ≥3 samples, prefer the observed average over the generic 4/5/6h default in `TemperatureCalculator`.
+`StarterPeakProfile` in `Doug/Domain/Starter/` buckets feed logs by ratio (1:1:1, 1:2:2, 1:5:5, 1:10:10) and temperature bracket (<22°C, 22–25°C, 26°C+) and exposes `averageMinutes(ratio:tempBracket:)` (nil below 3 samples). `ScheduleBuilderInput` takes an optional `peakProfile`; `TemperatureCalculator.effectiveDuration` prefers the observed average for `buildLevain` at the standard 1:5:5 ratio when the matching bracket has ≥3 samples, falling back to the generic 4/5/6h estimate otherwise. `ScheduleTab` passes `feedLogs` through `ScheduleViewModel.buildPreview` and `apply` so the personalisation flows from SwiftData to the builder. Covered by `StarterPeakProfileTests` and `ScheduleBuilderPeakProfileTests`.
 
 ---
 

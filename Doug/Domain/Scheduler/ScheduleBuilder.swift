@@ -9,6 +9,7 @@ struct ScheduleBuilderInput: Sendable {
     let availability: AvailabilityInput
     let unavailableWindows: [WindowInput]
     let calendar: Calendar
+    let peakProfile: StarterPeakProfile?
 
     init(
         recipe: Recipe,
@@ -16,7 +17,8 @@ struct ScheduleBuilderInput: Sendable {
         kitchenTemperatureCelsius: Double,
         availability: AvailabilityInput,
         unavailableWindows: [WindowInput] = [],
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        peakProfile: StarterPeakProfile? = nil
     ) {
         self.recipe = recipe
         self.targetBreadReadyTime = targetBreadReadyTime
@@ -24,6 +26,7 @@ struct ScheduleBuilderInput: Sendable {
         self.availability = availability
         self.unavailableWindows = unavailableWindows
         self.calendar = calendar
+        self.peakProfile = peakProfile
     }
 }
 
@@ -107,7 +110,8 @@ enum ScheduleBuilder {
             let stepType = methodStep.stepType
             let duration = TemperatureCalculator.effectiveDuration(
                 for: methodStep,
-                kitchenTemp: input.kitchenTemperatureCelsius
+                kitchenTemp: input.kitchenTemperatureCelsius,
+                peakProfile: input.peakProfile
             )
 
             let tentativeEnd = cursor

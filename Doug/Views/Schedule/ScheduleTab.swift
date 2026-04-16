@@ -50,7 +50,8 @@ struct ScheduleTab: View {
                         viewModel.apply(
                             option: option,
                             availability: availabilities.first,
-                            windows: Array(windows)
+                            windows: Array(windows),
+                            feedLogs: Array(feedLogs)
                         )
                     }
                 }
@@ -116,7 +117,8 @@ struct ScheduleTab: View {
             Button {
                 viewModel.buildPreview(
                     availability: availabilities.first,
-                    windows: Array(windows)
+                    windows: Array(windows),
+                    feedLogs: Array(feedLogs)
                 )
                 if viewModel.conflict == nil {
                     showConfig = true
