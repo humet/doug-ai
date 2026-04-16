@@ -161,7 +161,7 @@ struct ScheduleTab: View {
                     .frame(maxWidth: .infinity)
                     .padding()
             }
-            .buttonStyle(.glassProminent)
+            .adaptiveGlassButtonStyle(prominent: true)
             .padding(.top, 8)
         }
     }
@@ -214,7 +214,7 @@ struct ScheduleTab: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
             }
-            .buttonStyle(.glass)
+            .adaptiveGlassButtonStyle()
 
             let sortedSteps = schedule.steps
                 .filter { $0.parentStep == nil }

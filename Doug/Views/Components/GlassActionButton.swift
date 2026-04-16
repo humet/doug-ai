@@ -2,10 +2,7 @@ import SwiftUI
 
 /// A floating action button with Liquid Glass styling.
 ///
-/// Per the liquid-glass.md reference:
-/// - Uses `.glassEffect(.regular.interactive())` for tappable floating controls
-/// - Applied after layout modifiers
-/// - Only on elements that respond to user input
+/// Falls back to `.borderedProminent` when Reduce Transparency is enabled.
 struct GlassActionButton: View {
     let title: String
     let systemImage: String
@@ -18,7 +15,7 @@ struct GlassActionButton: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
         }
-        .buttonStyle(.glassProminent)
+        .adaptiveGlassButtonStyle(prominent: true)
     }
 }
 

@@ -34,13 +34,9 @@ Added a shared `@Namespace` (`glassNamespace`) on `ScheduleTab` and wrapped the 
 
 ---
 
-## 6. Reduce Transparency fallback (Design — Accessibility)
+## ~~6. Reduce Transparency fallback (Design — Accessibility)~~ — DONE
 
-**What to check:** The brief requires solid-slightly-translucent fallbacks when Reduce Transparency is on. No explicit `@Environment(\.accessibilityReduceTransparency)` reads appear in the codebase.
-
-**What to do:**
-- Audit all glass surfaces (action buttons, toolbar controls, any custom glass wrappers) and add a reduced-transparency branch that substitutes a solid material.
-- Test with Dynamic Type at XXL to confirm glass elements don't clip or overlap text.
+Extracted `adaptiveGlassButtonStyle(prominent:)` in `Doug/Views/Components/AdaptiveGlassButtonStyle.swift`. The modifier reads `@Environment(\.accessibilityReduceTransparency)` and swaps `.glass`/`.glassProminent` for `.bordered`/`.borderedProminent` when on. Wired into "Plan Bake" and "Adjust Cold Retard" in `ScheduleTab` and the `GlassActionButton` component. The three `.glassEffect`/`GlassEffectContainer` sites on the morph region already had sibling fallbacks from item #5 (morph skips the container and both branches fall back to `.ultraThinMaterial`). Dynamic Type at XXL spot-check still needs a manual run on the simulator — previews render without clipping but the `.bordered` style wraps differently than glass in constrained widths, so it's worth eyeballing.
 
 ---
 
