@@ -70,6 +70,17 @@ struct ScheduleTab: View {
                     )
                 }
             }
+            .sheet(item: $viewModel.pendingFoldEntry) { entry in
+                if let schedule = viewModel.activeSchedule {
+                    TemperatureEntryView(
+                        schedule: schedule,
+                        foldStep: schedule.steps.first {
+                            $0.stepTypeID == entry.stepTypeID
+                                && $0.sequenceIndex == entry.sequenceIndex
+                        }
+                    )
+                }
+            }
             .alert(
                 "Starter Not Ready",
                 isPresented: Binding(

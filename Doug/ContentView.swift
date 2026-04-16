@@ -4,6 +4,7 @@ import SwiftData
 struct ContentView: View {
     @Query private var availabilities: [UserAvailability]
     @State private var hasCompletedOnboarding = false
+    @State private var router = NotificationRouter.shared
 
     private var needsOnboarding: Bool {
         availabilities.isEmpty && !hasCompletedOnboarding
@@ -15,20 +16,21 @@ struct ContentView: View {
                 hasCompletedOnboarding = true
             }
         } else {
-            TabView {
-                Tab("Schedule", systemImage: "calendar.badge.clock") {
+            @Bindable var router = router
+            TabView(selection: $router.selectedTab) {
+                Tab("Schedule", systemImage: "calendar.badge.clock", value: NotificationRouter.Tab.schedule) {
                     ScheduleTab()
                 }
 
-                Tab("Starter", systemImage: "bubbles.and.sparkles") {
+                Tab("Starter", systemImage: "bubbles.and.sparkles", value: NotificationRouter.Tab.starter) {
                     StarterTab()
                 }
 
-                Tab("Calculator", systemImage: "function") {
+                Tab("Calculator", systemImage: "function", value: NotificationRouter.Tab.calculator) {
                     CalculatorTab()
                 }
 
-                Tab("Settings", systemImage: "gear") {
+                Tab("Settings", systemImage: "gear", value: NotificationRouter.Tab.settings) {
                     SettingsView()
                 }
             }

@@ -10,16 +10,9 @@ Wired `scheduleStarterFeedReminder` via `StarterViewModel.syncFeedReminder`, cal
 
 ---
 
-## 2. Fold notification deep-link to temperature entry (Notifications section)
+## ~~2. Fold notification deep-link to temperature entry (Notifications section)~~ — DONE
 
-**What's missing:** No `UNUserNotificationCenterDelegate`, no `didReceive` response handler, no `onOpenURL` anywhere in the codebase. Fold notifications fire but tapping one just opens the app to wherever it was last.
-
-**Brief reference:** "Opening the notification deep-links to the temperature logging screen with the current fold pre-selected."
-
-**What to do:**
-- Implement a delegate that captures `UNNotificationResponse`, reads the fold's schedule-step ID from the notification `userInfo`, and routes the app to `TemperatureEntryView` pre-selected to that fold.
-- Expose a navigation route on `ScheduleViewModel` (e.g. `pendingFoldEntry: ScheduleStep.ID?`) that the schedule tab observes and presents.
-- Same mechanism applies to the "time to preheat" notification — it should open the active schedule.
+`NotificationActionHandler.didReceive` now routes `FOLD_STEP` default-action taps through `NotificationRouter` to `ScheduleViewModel.pendingFoldEntry`, which `ScheduleTab` observes as a sheet presenting `TemperatureEntryView` pre-selected to that fold. `COLD_RETARD_END` taps focus the Schedule tab via `NotificationRouter.selectedTab` bound on the root `TabView`.
 
 ---
 

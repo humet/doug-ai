@@ -25,6 +25,11 @@ final class ScheduleViewModel {
     var showTemperatureEntry = false
     var selectedFoldStep: ScheduleStep?
     var starterHealthBlock: StarterHealthStatus?
+    var pendingFoldEntry: PendingFoldEntry?
+
+    init() {
+        NotificationRouter.shared.registerScheduleViewModel(self)
+    }
 
     var selectedRecipe: Recipe {
         RecipeBook.recipe(for: selectedRecipeID)

@@ -28,9 +28,13 @@ final class NotificationActionHandler: NSObject, UNUserNotificationCenterDelegat
     ) {
         let actionIdentifier = response.actionIdentifier
         let categoryIdentifier = response.notification.request.content.categoryIdentifier
+        let userInfo = response.notification.request.content.userInfo
+        let stepTypeID = userInfo["stepTypeID"] as? String
+        let sequenceIndex = userInfo["sequenceIndex"] as? Int
 
         Task { @MainActor in
-            if categoryIdentifier == NotificationService.Category.starterFeed {
+            switch categoryIdentifier {
+            case NotificationService.Category.starterFeed:
                 switch actionIdentifier {
                 case NotificationService.Action.logFeed:
                     self.logFeedFromNotification()
@@ -39,6 +43,20 @@ final class NotificationActionHandler: NSObject, UNUserNotificationCenterDelegat
                 default:
                     break
                 }
+            case NotificationService.Category.foldStep:
+                if actionIdentifier == UNNotificationDefaultActionIdentifier,
+                   let stepTypeID, let sequenceIndex {
+                    NotificationRouter.shared.requestFoldEntry(
+                        stepTypeID: stepTypeID,
+                        sequenceIndex: sequenceIndex
+                    )
+                }
+            case NotificationService.Category.coldRetardEnd:
+                if actionIdentifier == UNNotificationDefaultActionIdentifier {
+                    NotificationRouter.shared.focusScheduleTab()
+                }
+            default:
+                break
             }
             completionHandler()
         }
