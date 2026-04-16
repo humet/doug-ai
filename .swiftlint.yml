@@ -1,0 +1,32 @@
+included:
+  - Doug
+  - DougTests
+
+excluded:
+  - Doug.xcodeproj
+
+line_length:
+  warning: 120
+  error: 200
+
+type_body_length:
+  warning: 300
+  error: 500
+
+file_length:
+  warning: 500
+  error: 1000
+
+function_body_length:
+  warning: 50
+  error: 100
+
+identifier_name:
+  min_length: 1
+  excluded:
+    - id
+
+disabled_rules:
+  - trailing_comma
+  - multiple_closures_with_trailing_closure
+  - nesting
