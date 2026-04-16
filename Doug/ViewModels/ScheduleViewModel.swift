@@ -19,6 +19,13 @@ final class ScheduleViewModel {
 
     var activeSchedule: Schedule?
 
+    // UI state
+    var showConflictSheet = false
+    var showColdRetardSlider = false
+    var showTemperatureEntry = false
+    var selectedFoldStep: ScheduleStep?
+    var starterHealthBlock: StarterHealthStatus?
+
     var selectedRecipe: Recipe {
         RecipeBook.recipe(for: selectedRecipeID)
     }
@@ -51,8 +58,41 @@ final class ScheduleViewModel {
         case .conflict(let scheduleConflict):
             previewSteps = []
             conflict = scheduleConflict
+            showConflictSheet = true
         }
     }
+
+    // MARK: - Pre-Bake Health Check
+
+    /// Checks starter health before allowing bake to start.
+    /// Returns true if bake can proceed, false if blocked.
+    func preBakeHealthCheck(
+        profile: StarterProfile?,
+        feedLogs: [StarterFeedLog]
+    ) -> Bool {
+        guard let profile else {
+            starterHealthBlock = .needsFeed
+            return false
+        }
+
+        let profileInput = StarterProfileInput(from: profile)
+        let logInputs = feedLogs.map { FeedLogInput(from: $0) }
+        let status = StarterHealthAssessor.assess(profile: profileInput, feedLogs: logInputs)
+
+        switch status {
+        case .readyToBake:
+            starterHealthBlock = nil
+            return true
+        case .needsFeed:
+            starterHealthBlock = .needsFeed
+            return false
+        case .needsRevival:
+            starterHealthBlock = .needsRevival
+            return false
+        }
+    }
+
+    // MARK: - Start Bake
 
     func startBake(modelContext: ModelContext) {
         guard !previewSteps.isEmpty else { return }
@@ -65,6 +105,8 @@ final class ScheduleViewModel {
         schedule.scheduleStatus = .active
         modelContext.insert(schedule)
 
+        var persistedSteps: [ScheduleStep] = []
+
         for (index, step) in previewSteps.enumerated() {
             let scheduleStep = ScheduleStep(
                 stepTypeID: step.stepTypeID,
@@ -74,8 +116,8 @@ final class ScheduleViewModel {
                 computedDurationMinutes: step.durationMinutes
             )
             scheduleStep.schedule = schedule
+            persistedSteps.append(scheduleStep)
 
-            // Persist sub-steps (folds)
             for (subIndex, subStep) in step.subSteps.enumerated() {
                 let sub = ScheduleStep(
                     stepTypeID: subStep.stepTypeID,
@@ -86,10 +128,110 @@ final class ScheduleViewModel {
                 )
                 sub.parentStep = scheduleStep
                 sub.schedule = schedule
+                persistedSteps.append(sub)
             }
         }
 
         activeSchedule = schedule
+
+        // Schedule notifications
+        Task {
+            await NotificationService.shared.scheduleNotifications(for: persistedSteps)
+        }
     }
 
+    // MARK: - Cold Retard Adjustment
+
+    func adjustColdRetard(to newDurationMinutes: Double, modelContext: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+
+        let steps = schedule.steps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        guard let coldRetardStep = steps.first(where: {
+            StepTypeID(rawValue: $0.stepTypeID) == .coldRetard
+        }) else { return }
+
+        let oldEnd = coldRetardStep.computedEndTime
+        let newEnd = coldRetardStep.computedStartTime.addingTimeInterval(newDurationMinutes * 60)
+        let delta = newEnd.timeIntervalSince(oldEnd)
+
+        coldRetardStep.computedEndTime = newEnd
+        coldRetardStep.computedDurationMinutes = newDurationMinutes
+
+        // Cascade delta to all downstream steps
+        for step in steps where step.computedStartTime >= oldEnd {
+            step.computedStartTime = step.computedStartTime.addingTimeInterval(delta)
+            step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
+        }
+
+        // Update target bread-ready time
+        schedule.targetBreadReadyTime = schedule.targetBreadReadyTime.addingTimeInterval(delta)
+
+        // Reschedule notifications
+        Task {
+            await NotificationService.shared.rescheduleNotifications(for: steps)
+        }
+    }
+
+    // MARK: - Degree-Hour Schedule Correction
+
+    func handleNewTemperatureReading(schedule: Schedule) {
+        let readings = schedule.temperatureReadings.sorted { $0.timestamp < $1.timestamp }
+        guard readings.count >= 2 else { return }
+
+        let pairs = readings.map {
+            (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
+        }
+        let currentDH = DegreeHourCalculator.accumulatedDegreeHours(readings: pairs)
+        let target = schedule.recipe.degreeHourTarget
+        let latestTemp = readings.last!.temperatureCelsius
+
+        guard let remainingMinutes = DegreeHourCalculator.estimatedMinutesRemaining(
+            currentDegreeHours: currentDH,
+            targetDegreeHours: target,
+            latestTempCelsius: latestTemp
+        ) else { return }
+
+        // Find bulk ferment step and adjust its end time
+        let steps = schedule.steps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        guard let bulkStep = steps.first(where: {
+            StepTypeID(rawValue: $0.stepTypeID) == .bulkFerment
+        }) else { return }
+
+        let newBulkEnd = Date().addingTimeInterval(remainingMinutes * 60)
+        let oldBulkEnd = bulkStep.computedEndTime
+        let delta = newBulkEnd.timeIntervalSince(oldBulkEnd)
+
+        // Only correct if the change is significant (>10 minutes)
+        guard abs(delta) > 600 else { return }
+
+        bulkStep.computedEndTime = newBulkEnd
+        bulkStep.computedDurationMinutes = newBulkEnd.timeIntervalSince(bulkStep.computedStartTime) / 60
+
+        // Cascade to downstream steps
+        for step in steps where step.computedStartTime >= oldBulkEnd {
+            step.computedStartTime = step.computedStartTime.addingTimeInterval(delta)
+            step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
+        }
+
+        schedule.targetBreadReadyTime = schedule.targetBreadReadyTime.addingTimeInterval(delta)
+
+        // Reschedule notifications
+        Task {
+            await NotificationService.shared.rescheduleNotifications(for: steps)
+        }
+    }
+
+    // MARK: - Cold Retard Step Lookup
+
+    var coldRetardStep: ScheduleStep? {
+        activeSchedule?.steps.first(where: {
+            StepTypeID(rawValue: $0.stepTypeID) == .coldRetard
+        })
+    }
+
+    var coldRetardFlexRange: ClosedRange<Double>? {
+        let recipe = activeSchedule.map { RecipeBook.recipe(for: RecipeID(rawValue: $0.recipeID)!) }
+        let coldRetardMethod = recipe?.method.first(where: { $0.stepTypeID == .coldRetard })
+        return coldRetardMethod?.effectiveFlexRange
+    }
 }

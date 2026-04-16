@@ -7,13 +7,18 @@ struct ScheduleTab: View {
 
     @Query private var availabilities: [UserAvailability]
     @Query private var windows: [UnavailableWindow]
+    @Query private var profiles: [StarterProfile]
+    @Query(sort: \StarterFeedLog.timestamp, order: .reverse)
+    private var feedLogs: [StarterFeedLog]
+
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     if let schedule = viewModel.activeSchedule {
-                        ActiveBakeSection(schedule: schedule)
+                        activeBakeSection(schedule: schedule)
                     } else {
                         recipeSelection
                     }
@@ -24,20 +29,66 @@ struct ScheduleTab: View {
             .navigationTitle("Schedule")
             .sheet(isPresented: $showConfig) {
                 ScheduleConfigSheet(viewModel: viewModel) {
-                    viewModel.startBake(modelContext: availabilities.first != nil
-                        ? getModelContext()
-                        : getModelContext())
-                    showConfig = false
+                    // Pre-bake starter health check
+                    let canBake = viewModel.preBakeHealthCheck(
+                        profile: profiles.first,
+                        feedLogs: feedLogs
+                    )
+                    if canBake {
+                        viewModel.startBake(modelContext: modelContext)
+                        showConfig = false
+                    }
+                }
+            }
+            .sheet(isPresented: $viewModel.showConflictSheet) {
+                if let conflict = viewModel.conflict {
+                    ConflictResolutionSheet(
+                        conflict: conflict,
+                        recipe: viewModel.selectedRecipe,
+                        kitchenTemp: viewModel.kitchenTemperature
+                    ) { _ in
+                        viewModel.showConflictSheet = false
+                    }
+                }
+            }
+            .sheet(isPresented: $viewModel.showColdRetardSlider) {
+                if let step = viewModel.coldRetardStep,
+                   let range = viewModel.coldRetardFlexRange {
+                    ColdRetardSliderView(
+                        coldRetardStep: step,
+                        flexRange: range
+                    ) { newDuration in
+                        viewModel.adjustColdRetard(to: newDuration, modelContext: modelContext)
+                    }
+                }
+            }
+            .sheet(isPresented: $viewModel.showTemperatureEntry) {
+                if let schedule = viewModel.activeSchedule {
+                    TemperatureEntryView(
+                        schedule: schedule,
+                        foldStep: viewModel.selectedFoldStep
+                    )
+                }
+            }
+            .alert(
+                "Starter Not Ready",
+                isPresented: Binding(
+                    get: { viewModel.starterHealthBlock != nil },
+                    set: { if !$0 { viewModel.starterHealthBlock = nil } }
+                )
+            ) {
+                Button("OK") { viewModel.starterHealthBlock = nil }
+            } message: {
+                if viewModel.starterHealthBlock == .needsRevival {
+                    Text("Your starter needs revival before baking. Check the Starter tab for a revival plan.")
+                } else {
+                    Text("Your starter needs a feed before baking. Feed it and wait for it to peak, then try again.")
                 }
             }
         }
     }
 
-    @Environment(\.modelContext) private var modelContext
-
-    private func getModelContext() -> ModelContext {
-        modelContext
-    }
+    // MARK: - Recipe Selection
 
     private var recipeSelection: some View {
         VStack(spacing: 16) {
@@ -52,7 +103,9 @@ struct ScheduleTab: View {
                     availability: availabilities.first,
                     windows: Array(windows)
                 )
-                showConfig = true
+                if viewModel.conflict == nil {
+                    showConfig = true
+                }
             } label: {
                 Label("Plan Bake", systemImage: "calendar.badge.plus")
                     .font(.headline)
@@ -61,6 +114,75 @@ struct ScheduleTab: View {
             }
             .buttonStyle(.glassProminent)
             .padding(.top, 8)
+        }
+    }
+
+    // MARK: - Active Bake
+
+    @ViewBuilder
+    private func activeBakeSection(schedule: Schedule) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(schedule.recipe.name)
+                        .font(.title2.bold())
+                    Text("Bread ready \(schedule.targetBreadReadyTime, style: .relative)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("Active")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(.green, in: .capsule)
+            }
+
+            // Degree-hour chart (if readings exist)
+            DegreeHoursChartView(
+                readings: schedule.temperatureReadings,
+                targetDegreeHours: schedule.recipe.degreeHourTarget
+            )
+
+            // "Life Happened" button
+            Button {
+                viewModel.showColdRetardSlider = true
+            } label: {
+                Label("Adjust Cold Retard", systemImage: "clock.arrow.2.circlepath")
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.glass)
+
+            // Step timeline
+            let sortedSteps = schedule.steps
+                .filter { $0.parentStep == nil }
+                .sorted { $0.sequenceIndex < $1.sequenceIndex }
+
+            ForEach(sortedSteps) { step in
+                StepTimelineRow(step: step)
+                    .onTapGesture {
+                        if step.stepType.requiresTempReading || !step.subSteps.isEmpty {
+                            viewModel.selectedFoldStep = step
+                            viewModel.showTemperatureEntry = true
+                        }
+                    }
+
+                // Show sub-steps (folds) inline
+                ForEach(step.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }) { subStep in
+                    StepTimelineRow(step: subStep)
+                        .padding(.leading, 24)
+                        .onTapGesture {
+                            if subStep.stepType.requiresTempReading {
+                                viewModel.selectedFoldStep = subStep
+                                viewModel.showTemperatureEntry = true
+                            }
+                        }
+                }
+            }
         }
     }
 }
@@ -100,47 +222,13 @@ private struct RecipeCard: View {
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                Color(.systemBackground),
-                in: .rect(cornerRadius: 12)
-            )
+            .background(Color(.systemBackground), in: .rect(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Active Bake Section
-
-private struct ActiveBakeSection: View {
-    let schedule: Schedule
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(schedule.recipe.name)
-                        .font(.title2.bold())
-                    Text("Bread ready \(schedule.targetBreadReadyTime, style: .relative)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text("Active")
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.green, in: .capsule)
-            }
-
-            ForEach(schedule.steps.sorted(by: { $0.sequenceIndex < $1.sequenceIndex })) { step in
-                StepTimelineRow(step: step)
-            }
-        }
     }
 }
 
@@ -157,8 +245,15 @@ struct StepTimelineRow: View {
                 .padding(.top, 6)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(step.stepType.label)
-                    .font(.subheadline.bold())
+                HStack {
+                    Text(step.stepType.label)
+                        .font(.subheadline.bold())
+                    if step.stepType.requiresTempReading {
+                        Image(systemName: "thermometer.medium")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
 
                 HStack {
                     Text(step.computedStartTime, style: .time)

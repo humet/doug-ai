@@ -10,15 +10,21 @@ struct StarterTab: View {
     @Query private var profiles: [StarterProfile]
     @Query private var availabilities: [UserAvailability]
     @Query private var windows: [UnavailableWindow]
+    @Query(sort: \RevivalPlan.startDate, order: .reverse)
+    private var revivalPlans: [RevivalPlan]
 
     @Environment(\.modelContext) private var modelContext
 
     private var profile: StarterProfile? { profiles.first }
+    private var activeRevivalPlan: RevivalPlan? {
+        revivalPlans.first(where: { $0.revivalStatus == .active })
+    }
 
     var body: some View {
         NavigationStack {
             List {
                 healthSection
+                revivalSection
                 nextFeedSection
                 feedHistorySection
             }
@@ -63,6 +69,46 @@ struct StarterTab: View {
     }
 
     @ViewBuilder
+    private var revivalSection: some View {
+        let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
+
+        if status == .needsRevival {
+            Section {
+                if let plan = activeRevivalPlan {
+                    NavigationLink {
+                        RevivalPlanView(plan: plan)
+                    } label: {
+                        HStack {
+                            Label("Revival in progress", systemImage: "arrow.trianglehead.2.clockwise")
+                            Spacer()
+                            if let bakeReady = plan.estimatedBakeReadyDate {
+                                Text(bakeReady, style: .relative)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } else {
+                    Button {
+                        _ = viewModel.startRevival(
+                            profile: profile,
+                            availability: availabilities.first,
+                            windows: Array(windows),
+                            modelContext: modelContext
+                        )
+                    } label: {
+                        Label("Start Revival Plan", systemImage: "arrow.trianglehead.2.clockwise")
+                    }
+                }
+            } header: {
+                Text("Revival")
+            } footer: {
+                Text("Your starter needs multiple feeds before it's ready to bake.")
+            }
+        }
+    }
+
+    @ViewBuilder
     private var nextFeedSection: some View {
         if let nextFeed = viewModel.nextFeedTime(
             profile: profile,
@@ -100,7 +146,7 @@ struct StarterTab: View {
             Section {
                 ForEach(feedLogs) { log in
                     FeedLogRow(log: log) {
-                        viewModel.markPeak(for: log)
+                        viewModel.markPeak(for: log, profile: profile, allLogs: feedLogs)
                     }
                 }
             } header: {
