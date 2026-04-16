@@ -4,6 +4,7 @@ import SwiftData
 struct ScheduleTab: View {
     @State private var viewModel = ScheduleViewModel()
     @State private var showConfig = false
+    @Namespace private var glassNamespace
 
     @Query private var availabilities: [UserAvailability]
     @Query private var windows: [UnavailableWindow]
@@ -12,15 +13,15 @@ struct ScheduleTab: View {
     private var feedLogs: [StarterFeedLog]
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    morphRegion
                     if let schedule = viewModel.activeSchedule {
-                        activeBakeSection(schedule: schedule)
-                    } else {
-                        recipeSelection
+                        activeBakeRest(schedule: schedule)
                     }
                 }
                 .padding()
@@ -35,7 +36,9 @@ struct ScheduleTab: View {
                         feedLogs: feedLogs
                     )
                     if canBake {
-                        viewModel.startBake(modelContext: modelContext)
+                        withAnimation(.smooth) {
+                            viewModel.startBake(modelContext: modelContext)
+                        }
                         showConfig = false
                     }
                 }
@@ -104,13 +107,42 @@ struct ScheduleTab: View {
         }
     }
 
+    // MARK: - Morph Region
+
+    @ViewBuilder
+    private var morphRegion: some View {
+        if reduceTransparency {
+            morphContent
+        } else {
+            GlassEffectContainer(spacing: 16) {
+                morphContent
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var morphContent: some View {
+        if let schedule = viewModel.activeSchedule {
+            activeHeader(schedule: schedule)
+        } else {
+            recipeSelection
+        }
+    }
+
     // MARK: - Recipe Selection
 
     private var recipeSelection: some View {
         VStack(spacing: 16) {
             ForEach(RecipeBook.all) { recipe in
-                RecipeCard(recipe: recipe, isSelected: recipe.id == viewModel.selectedRecipeID) {
-                    viewModel.selectedRecipeID = recipe.id
+                RecipeCard(
+                    recipe: recipe,
+                    isSelected: recipe.id == viewModel.selectedRecipeID,
+                    glassNamespace: glassNamespace,
+                    reduceTransparency: reduceTransparency
+                ) {
+                    withAnimation(.smooth) {
+                        viewModel.selectedRecipeID = recipe.id
+                    }
                 }
             }
 
@@ -137,33 +169,43 @@ struct ScheduleTab: View {
     // MARK: - Active Bake
 
     @ViewBuilder
-    private func activeBakeSection(schedule: Schedule) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(schedule.recipe.name)
-                        .font(.title2.bold())
-                    Text("Bread ready \(schedule.targetBreadReadyTime, style: .relative)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text("Active")
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.green, in: .capsule)
+    private func activeHeader(schedule: Schedule) -> some View {
+        let header = HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(schedule.recipe.name)
+                    .font(.title2.bold())
+                Text("Bread ready \(schedule.targetBreadReadyTime, style: .relative)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
+            Spacer()
+            Text("Active")
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(.green, in: .capsule)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Degree-hour chart (if readings exist)
+        if reduceTransparency {
+            header.background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
+        } else {
+            header
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                .glassEffectID("selectedRecipe", in: glassNamespace)
+        }
+    }
+
+    @ViewBuilder
+    private func activeBakeRest(schedule: Schedule) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
             DegreeHoursChartView(
                 readings: schedule.temperatureReadings,
                 targetDegreeHours: schedule.recipe.degreeHourTarget
             )
 
-            // "Life Happened" button
             Button {
                 viewModel.showColdRetardSlider = true
             } label: {
@@ -174,7 +216,6 @@ struct ScheduleTab: View {
             }
             .buttonStyle(.glass)
 
-            // Step timeline
             let sortedSteps = schedule.steps
                 .filter { $0.parentStep == nil }
                 .sorted { $0.sequenceIndex < $1.sequenceIndex }
@@ -188,7 +229,6 @@ struct ScheduleTab: View {
                         }
                     }
 
-                // Show sub-steps (folds) inline
                 ForEach(step.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }) { subStep in
                     StepTimelineRow(step: subStep)
                         .padding(.leading, 24)
@@ -209,6 +249,8 @@ struct ScheduleTab: View {
 private struct RecipeCard: View {
     let recipe: Recipe
     let isSelected: Bool
+    let glassNamespace: Namespace.ID
+    let reduceTransparency: Bool
     let onTap: () -> Void
 
     var body: some View {
@@ -239,13 +281,39 @@ private struct RecipeCard: View {
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.systemBackground), in: .rect(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
-            )
+            .modifier(RecipeCardBackground(
+                isSelected: isSelected,
+                glassNamespace: glassNamespace,
+                reduceTransparency: reduceTransparency
+            ))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct RecipeCardBackground: ViewModifier {
+    let isSelected: Bool
+    let glassNamespace: Namespace.ID
+    let reduceTransparency: Bool
+
+    func body(content: Content) -> some View {
+        Group {
+            if isSelected, !reduceTransparency {
+                content
+                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16))
+                    .glassEffectID("selectedRecipe", in: glassNamespace)
+            } else if isSelected, reduceTransparency {
+                content
+                    .background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
+            } else {
+                content
+                    .background(Color(.systemBackground), in: .rect(cornerRadius: 16))
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
+        )
     }
 }
 

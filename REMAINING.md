@@ -28,16 +28,9 @@ Wired `scheduleStarterFeedReminder` via `StarterViewModel.syncFeedReminder`, cal
 
 ---
 
-## 5. Liquid Glass morphing transition (Design section)
+## ~~5. Liquid Glass morphing transition (Design section)~~ — DONE
 
-**What's missing:** No `GlassEffectContainer` or `glassEffectID` usage anywhere. Standard glass buttons and the system tab bar adopt Liquid Glass correctly, but the brief's specific morphing transition from recipe-selection into active schedule is not implemented.
-
-**Brief reference:** "Use `GlassEffectContainer` and `glassEffectID` for the transition from recipe selection into the active schedule view. The selected recipe card morphs into the schedule header."
-
-**What to do:**
-- Wrap the recipe list and the schedule header in a shared `GlassEffectContainer`.
-- Assign matching `glassEffectID` to the selected recipe card and the schedule header container so SwiftUI animates the morph.
-- Verify with Reduce Transparency enabled — the fallback should be a cross-fade, not a broken transition.
+Added a shared `@Namespace` (`glassNamespace`) on `ScheduleTab` and wrapped the recipe-selection / active-header branch in a `GlassEffectContainer`. The selected `RecipeCard` applies `.glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16))` with `glassEffectID("selectedRecipe", …)`; the active bake header applies the non-interactive variant of the same effect and ID, so SwiftUI morphs between them. Flipping `activeSchedule` is now wrapped in `withAnimation(.smooth)` inside the `ScheduleConfigSheet` completion so the transition animates. `@Environment(\.accessibilityReduceTransparency)` gates the container and the glass modifiers: when on, the morph region skips `GlassEffectContainer` and both participants fall back to `.ultraThinMaterial` in the same rect shape, letting the default `.opacity` transition cross-fade the branches. Active bake chart, "Adjust Cold Retard" button, and step timeline sit outside the morph region and are untouched.
 
 ---
 
