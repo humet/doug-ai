@@ -67,6 +67,23 @@ final class ScheduleViewModel {
         }
     }
 
+    // MARK: - Apply Conflict Resolution Option
+
+    /// Applies a user-selected conflict-resolution option and re-runs the builder.
+    /// If the option carries a structured target-time shift, the target moves and the
+    /// preview rebuilds; the sheet either dismisses on success or reopens on a fresh conflict.
+    func apply(
+        option: ConflictOption,
+        availability: UserAvailability?,
+        windows: [UnavailableWindow]
+    ) {
+        showConflictSheet = false
+        if let shift = option.targetTimeShiftMinutes {
+            targetDate = targetDate.addingTimeInterval(shift * 60)
+        }
+        buildPreview(availability: availability, windows: windows)
+    }
+
     // MARK: - Pre-Bake Health Check
 
     /// Checks starter health before allowing bake to start.

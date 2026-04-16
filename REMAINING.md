@@ -16,16 +16,9 @@ Wired `scheduleStarterFeedReminder` via `StarterViewModel.syncFeedReminder`, cal
 
 ---
 
-## 3. Verify conflict-resolution option application (Feature 6)
+## ~~3. Verify conflict-resolution option application (Feature 6)~~ — DONE
 
-**What to check:** `ConflictResolutionSheet` displays LLM-ranked options, but it's worth confirming end-to-end that tapping an option actually re-runs `ScheduleBuilder` with the chosen parameters (new bread-ready time, extended cold retard, swapped recipe) rather than just dismissing.
-
-**Brief reference:** "The LLM returns options, the user taps one, the scheduler recalculates with the selected parameters."
-
-**What to do:**
-- Trace the `onSelect` / `apply` callback from `ConflictResolutionSheet` into `ScheduleViewModel`.
-- Write a Swift Testing case that feeds a known conflict, accepts one option programmatically, and asserts the rebuilt schedule reflects the new parameters.
-- If the apply path is absent or partial, wire it: each option needs enough structured payload (target time shift, cold-retard delta, recipe swap) to re-invoke the builder.
+`ConflictOption` now carries an optional `targetTimeShiftMinutes` payload. `ScheduleViewModel.apply(option:availability:windows:)` shifts `targetDate` by that amount (when set) and re-invokes `buildPreview`, so the sheet's selection triggers a real rebuild instead of a silent dismiss. `ScheduleTab` wires the `ConflictResolutionSheet` `onOptionSelected` closure to that method. Covered by `ScheduleViewModelApplyOptionTests.applyingShiftedTargetOptionResolvesConflictAndRebuildsPreview`.
 
 ---
 

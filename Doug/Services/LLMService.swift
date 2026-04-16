@@ -152,4 +152,15 @@ struct ConflictOption: Identifiable, Sendable {
     let id = UUID()
     let summary: String
     let explanation: String
+    let targetTimeShiftMinutes: Double?
+
+    init(
+        summary: String,
+        explanation: String,
+        targetTimeShiftMinutes: Double? = nil
+    ) {
+        self.summary = summary
+        self.explanation = explanation
+        self.targetTimeShiftMinutes = targetTimeShiftMinutes
+    }
 }

@@ -46,8 +46,12 @@ struct ScheduleTab: View {
                         conflict: conflict,
                         recipe: viewModel.selectedRecipe,
                         kitchenTemp: viewModel.kitchenTemperature
-                    ) { _ in
-                        viewModel.showConflictSheet = false
+                    ) { option in
+                        viewModel.apply(
+                            option: option,
+                            availability: availabilities.first,
+                            windows: Array(windows)
+                        )
                     }
                 }
             }
