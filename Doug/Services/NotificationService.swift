@@ -19,6 +19,7 @@ final class NotificationService {
     enum Action {
         static let logFeed = "LOG_FEED"
         static let snoozeFeed = "SNOOZE_FEED_1H"
+        static let snoozeStep = "SNOOZE_STEP_30M"
     }
 
     /// Stable identifier so feed reminders can be rescheduled or cancelled cleanly.
@@ -41,19 +42,41 @@ final class NotificationService {
             title: "Log Feed",
             options: [.foreground]
         )
-        let snoozeAction = UNNotificationAction(
+        let snoozeFeedAction = UNNotificationAction(
             identifier: Action.snoozeFeed,
             title: "Snooze 1h",
             options: []
         )
         let starterFeedCategory = UNNotificationCategory(
             identifier: Category.starterFeed,
-            actions: [logFeedAction, snoozeAction],
+            actions: [logFeedAction, snoozeFeedAction],
             intentIdentifiers: [],
             options: []
         )
 
-        center.setNotificationCategories([starterFeedCategory])
+        let snoozeStepAction = UNNotificationAction(
+            identifier: Action.snoozeStep,
+            title: "Snooze 30m",
+            options: []
+        )
+        let handsOnStepCategory = UNNotificationCategory(
+            identifier: Category.handsOnStep,
+            actions: [snoozeStepAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        let foldStepCategory = UNNotificationCategory(
+            identifier: Category.foldStep,
+            actions: [snoozeStepAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        center.setNotificationCategories([
+            starterFeedCategory,
+            handsOnStepCategory,
+            foldStepCategory,
+        ])
     }
 
     // MARK: - Schedule Notifications

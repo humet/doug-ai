@@ -11,6 +11,7 @@ final class ScheduleStep {
     var computedDurationMinutes: Double
     var status: String
     var notificationIdentifier: String?
+    var actualEndTime: Date?
 
     var parentStep: ScheduleStep?
     @Relationship(deleteRule: .cascade, inverse: \ScheduleStep.parentStep)
@@ -28,7 +29,7 @@ final class ScheduleStep {
         self.computedStartTime = computedStartTime
         self.computedEndTime = computedEndTime
         self.computedDurationMinutes = computedDurationMinutes
-        self.status = StepStatus.upcoming.rawValue
+        status = StepStatus.upcoming.rawValue
     }
 
     var stepStatus: StepStatus {
@@ -41,7 +42,7 @@ final class ScheduleStep {
     }
 }
 
-enum StepStatus: String, Codable, Sendable {
+enum StepStatus: String, Codable {
     case upcoming
     case active
     case done

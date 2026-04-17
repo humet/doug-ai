@@ -8,6 +8,7 @@ final class Schedule {
     var kitchenTemperatureCelsius: Double
     var status: String
     var createdAt: Date
+    var pausedAt: Date?
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduleStep.schedule)
     var steps: [ScheduleStep] = []
@@ -25,8 +26,8 @@ final class Schedule {
         self.recipeID = recipeID.rawValue
         self.targetBreadReadyTime = targetBreadReadyTime
         self.kitchenTemperatureCelsius = kitchenTemperatureCelsius
-        self.status = ScheduleStatus.planning.rawValue
-        self.createdAt = Date()
+        status = ScheduleStatus.planning.rawValue
+        createdAt = Date()
     }
 
     var scheduleStatus: ScheduleStatus {
@@ -34,10 +35,12 @@ final class Schedule {
         set { status = newValue.rawValue }
     }
 
-    var recipe: Recipe { RecipeBook.recipe(for: RecipeID(rawValue: recipeID)!) }
+    var recipe: Recipe {
+        RecipeBook.recipe(for: RecipeID(rawValue: recipeID)!)
+    }
 }
 
-enum ScheduleStatus: String, Codable, Sendable {
+enum ScheduleStatus: String, Codable {
     case planning
     case active
     case complete

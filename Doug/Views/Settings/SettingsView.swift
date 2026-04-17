@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Query private var availabilities: [UserAvailability]
     @Query private var windows: [UnavailableWindow]
     @Query private var profiles: [StarterProfile]
+    @Query private var feedLogs: [StarterFeedLog]
     @Environment(\.modelContext) private var modelContext
 
     @State private var showAddWindow = false
@@ -119,6 +120,10 @@ struct SettingsView: View {
                         Text("Starter Settings")
                     }
                 }
+
+                #if DEBUG
+                    debugSection
+                #endif
             }
             .navigationTitle("Settings")
             .sheet(isPresented: $showAddWindow) {
@@ -126,6 +131,40 @@ struct SettingsView: View {
             }
         }
     }
+
+    #if DEBUG
+        private var debugSection: some View {
+            Section {
+                Button {
+                    seedHealthyStarter()
+                } label: {
+                    Label("Seed healthy starter", systemImage: "testtube.2")
+                }
+            } header: {
+                Text("Debug")
+            } footer: {
+                Text("Creates a fridge-stored StarterProfile (if missing) and a recent peaked feed log so the pre-bake health check returns readyToBake.")
+            }
+        }
+
+        private func seedHealthyStarter() {
+            if profiles.isEmpty {
+                modelContext.insert(StarterProfile(storageType: .fridge))
+            }
+
+            let now = Date()
+            let feed = StarterFeedLog(
+                timestamp: now.addingTimeInterval(-2 * 60 * 60),
+                ratioStarter: 1,
+                ratioFlour: 5,
+                ratioWater: 5,
+                flourType: "white",
+                kitchenTemperatureCelsius: 22
+            )
+            feed.markPeak(at: now.addingTimeInterval(-60 * 60))
+            modelContext.insert(feed)
+        }
+    #endif
 
     private func dateFrom(hour: Int, minute: Int) -> Date {
         Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: Date()) ?? Date()

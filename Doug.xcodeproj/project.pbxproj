@@ -28,6 +28,7 @@
 		10DB37D42F912E00003679E8 /* DougTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DougTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		10DB37DE2F912E00003679E8 /* DougUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DougUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		10DB38192F9130F7003679E8 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		10E457D72F9238E900F78144 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -94,6 +95,11 @@
 			sourceTree = "<group>";
 		};
 		10DB381B2F9130F7003679E8 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		10E457D92F9238E900F78144 /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -205,6 +211,10 @@
 			productRefGroup = 10DB37C62F912E00003679E8 /* Products */;
 			projectDirPath = "";
 			projectReferences = (
+				{
+					ProductGroup = 10E457D92F9238E900F78144 /* Products */;
+					ProjectRef = 10E457D72F9238E900F78144 /* Doug.xcodeproj */;
+				},
 				{
 					ProductGroup = 10DB381B2F9130F7003679E8 /* Products */;
 					ProjectRef = 10DB38192F9130F7003679E8 /* Doug.xcodeproj */;

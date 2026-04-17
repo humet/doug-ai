@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 /// View for logging dough temperature at each fold during an active bake.
 ///
@@ -67,7 +67,7 @@ struct TemperatureEntryView: View {
                         Text(String(format: "%.1f°C", temperatureCelsius))
                             .font(.title3.bold().monospacedDigit())
                     }
-                    Slider(value: $temperatureCelsius, in: 18...35, step: 0.5)
+                    Slider(value: $temperatureCelsius, in: 18 ... 35, step: 0.5)
                         .accessibilityLabel("Dough temperature")
                         .accessibilityValue(String(format: "%.1f degrees", temperatureCelsius))
                 } header: {
@@ -147,6 +147,12 @@ struct TemperatureEntryView: View {
         )
         reading.schedule = schedule
         modelContext.insert(reading)
+
+        // Mark the step complete — the temperature reading is implicit confirmation.
+        if let fold = foldStep, fold.stepStatus != .done {
+            fold.stepStatus = .done
+            fold.actualEndTime = Date()
+        }
     }
 
     private func formatMinutes(_ minutes: Double) -> String {

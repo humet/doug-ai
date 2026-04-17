@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Step Type ID
 
-enum StepTypeID: String, CaseIterable, Codable, Sendable {
+enum StepTypeID: String, CaseIterable, Codable {
     case buildLevain
     case autolyse
     case mix
@@ -18,7 +18,7 @@ enum StepTypeID: String, CaseIterable, Codable, Sendable {
 
 // MARK: - Step Classification
 
-enum StepClassification: String, Codable, Sendable {
+enum StepClassification: String, Codable {
     case handsOn
     case passiveFlexible
     case passiveFixed
@@ -26,7 +26,7 @@ enum StepClassification: String, Codable, Sendable {
 
 // MARK: - Step Type (Template)
 
-struct StepType: Identifiable, Sendable {
+struct StepType: Identifiable {
     let id: StepTypeID
     let label: String
     let classification: StepClassification
@@ -37,4 +37,5 @@ struct StepType: Identifiable, Sendable {
     let requiresTempReading: Bool
     let instructionText: String
     let notificationText: String
+    let successSignal: String
 }

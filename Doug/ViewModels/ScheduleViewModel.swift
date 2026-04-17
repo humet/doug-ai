@@ -1,6 +1,6 @@
 import Foundation
-import SwiftData
 import Observation
+import SwiftData
 
 @Observable
 @MainActor
@@ -11,6 +11,7 @@ final class ScheduleViewModel {
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
         return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
     }()
+
     var kitchenTemperature: Double = 22.0
 
     var previewSteps: [ScheduledStep] = []
@@ -23,9 +24,11 @@ final class ScheduleViewModel {
     var showConflictSheet = false
     var showColdRetardSlider = false
     var showTemperatureEntry = false
+    var showRecipeDetailSheet = false
     var selectedFoldStep: ScheduleStep?
     var starterHealthBlock: StarterHealthStatus?
     var pendingFoldEntry: PendingFoldEntry?
+    var pendingStepDetail: PendingStepDetail?
 
     init() {
         NotificationRouter.shared.registerScheduleViewModel(self)
@@ -62,10 +65,10 @@ final class ScheduleViewModel {
         let result = ScheduleBuilder.build(input)
 
         switch result {
-        case .success(let steps):
+        case let .success(steps):
             previewSteps = steps
             conflict = nil
-        case .conflict(let scheduleConflict):
+        case let .conflict(scheduleConflict):
             previewSteps = []
             conflict = scheduleConflict
             showConflictSheet = true
@@ -170,10 +173,10 @@ final class ScheduleViewModel {
 
     // MARK: - Cold Retard Adjustment
 
-    func adjustColdRetard(to newDurationMinutes: Double, modelContext: ModelContext) {
+    func adjustColdRetard(to newDurationMinutes: Double, modelContext _: ModelContext) {
         guard let schedule = activeSchedule else { return }
 
-        let steps = schedule.steps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        let steps = allSteps(in: schedule)
         guard let coldRetardStep = steps.first(where: {
             StepTypeID(rawValue: $0.stepTypeID) == .coldRetard
         }) else { return }
@@ -185,19 +188,7 @@ final class ScheduleViewModel {
         coldRetardStep.computedEndTime = newEnd
         coldRetardStep.computedDurationMinutes = newDurationMinutes
 
-        // Cascade delta to all downstream steps
-        for step in steps where step.computedStartTime >= oldEnd {
-            step.computedStartTime = step.computedStartTime.addingTimeInterval(delta)
-            step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
-        }
-
-        // Update target bread-ready time
-        schedule.targetBreadReadyTime = schedule.targetBreadReadyTime.addingTimeInterval(delta)
-
-        // Reschedule notifications
-        Task {
-            await NotificationService.shared.rescheduleNotifications(for: steps)
-        }
+        cascade(afterEnd: oldEnd, delta: delta, in: schedule)
     }
 
     // MARK: - Degree-Hour Schedule Correction
@@ -220,7 +211,7 @@ final class ScheduleViewModel {
         ) else { return }
 
         // Find bulk ferment step and adjust its end time
-        let steps = schedule.steps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        let steps = allSteps(in: schedule)
         guard let bulkStep = steps.first(where: {
             StepTypeID(rawValue: $0.stepTypeID) == .bulkFerment
         }) else { return }
@@ -235,18 +226,7 @@ final class ScheduleViewModel {
         bulkStep.computedEndTime = newBulkEnd
         bulkStep.computedDurationMinutes = newBulkEnd.timeIntervalSince(bulkStep.computedStartTime) / 60
 
-        // Cascade to downstream steps
-        for step in steps where step.computedStartTime >= oldBulkEnd {
-            step.computedStartTime = step.computedStartTime.addingTimeInterval(delta)
-            step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
-        }
-
-        schedule.targetBreadReadyTime = schedule.targetBreadReadyTime.addingTimeInterval(delta)
-
-        // Reschedule notifications
-        Task {
-            await NotificationService.shared.rescheduleNotifications(for: steps)
-        }
+        cascade(afterEnd: oldBulkEnd, delta: delta, in: schedule)
     }
 
     // MARK: - Cold Retard Step Lookup
@@ -261,5 +241,226 @@ final class ScheduleViewModel {
         let recipe = activeSchedule.map { RecipeBook.recipe(for: RecipeID(rawValue: $0.recipeID)!) }
         let coldRetardMethod = recipe?.method.first(where: { $0.stepTypeID == .coldRetard })
         return coldRetardMethod?.effectiveFlexRange
+    }
+
+    // MARK: - Per-step adjustment controls
+
+    /// Marks a hands-on step complete and advances to the next step.
+    /// Used when the user confirms "Mark Step Done" on a hands-on step.
+    func markStepDone(_ step: ScheduleStep, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        step.stepStatus = .done
+        if step.actualEndTime == nil {
+            step.actualEndTime = Date()
+        }
+        promoteNextUpcoming(in: schedule)
+    }
+
+    /// Reverts the most-recently-completed step to active without moving any times.
+    func reopenStep(_ step: ScheduleStep, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        guard step.stepStatus == .done || step.stepStatus == .skipped else { return }
+
+        // Demote whichever step is currently active back to upcoming so only one step is active.
+        let steps = allSteps(in: schedule)
+        for candidate in steps where candidate.stepStatus == .active {
+            candidate.stepStatus = .upcoming
+        }
+
+        step.stepStatus = .active
+        step.actualEndTime = nil
+    }
+
+    /// Walks steps in sequence and auto-progresses passive steps whose end time has passed.
+    /// Hands-on steps block progression until `markStepDone` is called. Idempotent.
+    func advanceIfReady(now: Date, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule, schedule.pausedAt == nil else { return }
+        let steps = orderedTopLevelSteps(in: schedule)
+
+        for step in steps {
+            switch step.stepStatus {
+            case .done, .skipped:
+                continue
+            case .upcoming:
+                // First not-yet-done step — flip it to active if its start has arrived.
+                if step.computedStartTime <= now {
+                    step.stepStatus = .active
+                }
+                return
+            case .active:
+                // Passive steps auto-progress when their end time has passed.
+                if step.stepType.classification != .handsOn, step.computedEndTime <= now {
+                    step.stepStatus = .done
+                    step.actualEndTime = step.computedEndTime
+                    continue
+                }
+                return
+            }
+        }
+    }
+
+    // MARK: - Pause / Resume
+
+    func pauseSchedule(modelContext _: ModelContext) {
+        guard let schedule = activeSchedule, schedule.pausedAt == nil else { return }
+        schedule.pausedAt = Date()
+        let steps = allSteps(in: schedule)
+        NotificationService.shared.cancelNotifications(for: steps)
+    }
+
+    func resumeSchedule(modelContext _: ModelContext) {
+        guard let schedule = activeSchedule, let pausedAt = schedule.pausedAt else { return }
+        let delta = Date().timeIntervalSince(pausedAt)
+        schedule.pausedAt = nil
+        guard delta > 0 else {
+            let steps = allSteps(in: schedule)
+            Task { await NotificationService.shared.rescheduleNotifications(for: steps) }
+            return
+        }
+        let steps = allSteps(in: schedule)
+        for step in steps where step.stepStatus == .upcoming || step.stepStatus == .active {
+            step.computedStartTime = step.computedStartTime.addingTimeInterval(delta)
+            step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
+        }
+        schedule.targetBreadReadyTime = schedule.targetBreadReadyTime.addingTimeInterval(delta)
+        Task { await NotificationService.shared.rescheduleNotifications(for: steps) }
+    }
+
+    // MARK: - Finish Early / Start Now / Extend / Shorten
+
+    func finishStepEarly(_ step: ScheduleStep, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        let now = Date()
+        let oldEnd = step.computedEndTime
+        let delta = now.timeIntervalSince(oldEnd)
+        guard delta < 0 else { return } // Only makes sense when finishing before scheduled end.
+
+        step.stepStatus = .done
+        step.actualEndTime = now
+        step.computedEndTime = now
+        step.computedDurationMinutes = now.timeIntervalSince(step.computedStartTime) / 60
+
+        cascade(afterEnd: oldEnd, delta: delta, in: schedule)
+        promoteNextUpcoming(in: schedule)
+    }
+
+    func startStepNow(_ step: ScheduleStep, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        let now = Date()
+        let delta = now.timeIntervalSince(step.computedStartTime)
+        let oldStart = step.computedStartTime
+        guard delta > 0 else { return } // Only makes sense when starting late.
+
+        step.computedStartTime = now
+        step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
+        step.stepStatus = .active
+
+        // Demote anything that was active before.
+        for candidate in allSteps(in: schedule)
+            where candidate !== step && candidate.stepStatus == .active
+        {
+            candidate.stepStatus = .upcoming
+        }
+
+        cascade(afterEnd: oldStart, delta: delta, in: schedule, excluding: step)
+    }
+
+    func extendStep(_ step: ScheduleStep, byMinutes minutes: Double, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        guard minutes > 0 else { return }
+        let delta = minutes * 60
+        let oldEnd = step.computedEndTime
+
+        step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
+        step.computedDurationMinutes += minutes
+
+        cascade(afterEnd: oldEnd, delta: delta, in: schedule)
+    }
+
+    func shortenStep(_ step: ScheduleStep, byMinutes minutes: Double, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        guard minutes > 0 else { return }
+        let delta = -minutes * 60
+        let oldEnd = step.computedEndTime
+        let newEnd = step.computedEndTime.addingTimeInterval(delta)
+        // Never shorten below a 1-minute floor from the start time.
+        guard newEnd > step.computedStartTime.addingTimeInterval(60) else { return }
+
+        step.computedEndTime = newEnd
+        step.computedDurationMinutes = max(1, step.computedDurationMinutes - minutes)
+
+        cascade(afterEnd: oldEnd, delta: delta, in: schedule)
+    }
+
+    // MARK: - Finish / Cancel bake
+
+    func finishBake(modelContext: ModelContext) {
+        endBake(modelContext: modelContext)
+    }
+
+    func cancelBake(modelContext: ModelContext) {
+        endBake(modelContext: modelContext)
+    }
+
+    private func endBake(modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        let steps = allSteps(in: schedule)
+        NotificationService.shared.cancelNotifications(for: steps)
+        schedule.scheduleStatus = .complete
+        activeSchedule = nil
+    }
+
+    // MARK: - Cascade helper
+
+    /// Shifts every step that starts at or after `boundaryEnd` by `delta` seconds, updates the
+    /// target bread-ready time, and reschedules notifications. Optionally excludes a step that
+    /// has already been shifted inline (e.g. the step whose start time was set to now).
+    private func cascade(
+        afterEnd boundaryEnd: Date,
+        delta: TimeInterval,
+        in schedule: Schedule,
+        excluding excluded: ScheduleStep? = nil
+    ) {
+        guard delta != 0 else { return }
+        let steps = allSteps(in: schedule)
+        for step in steps {
+            if step === excluded { continue }
+            if step.computedStartTime >= boundaryEnd {
+                step.computedStartTime = step.computedStartTime.addingTimeInterval(delta)
+                step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
+            }
+        }
+        schedule.targetBreadReadyTime = schedule.targetBreadReadyTime.addingTimeInterval(delta)
+
+        Task { await NotificationService.shared.rescheduleNotifications(for: steps) }
+    }
+
+    /// Marks the earliest still-upcoming step active. Leaves hands-on steps alone —
+    /// they're only promoted via `advanceIfReady` once their start time arrives.
+    private func promoteNextUpcoming(in schedule: Schedule) {
+        let steps = orderedTopLevelSteps(in: schedule)
+        guard !steps.contains(where: { $0.stepStatus == .active }) else { return }
+        if let next = steps.first(where: { $0.stepStatus == .upcoming }) {
+            next.stepStatus = .active
+        }
+    }
+
+    private func orderedTopLevelSteps(in schedule: Schedule) -> [ScheduleStep] {
+        schedule.steps
+            .filter { $0.parentStep == nil }
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+    }
+
+    private func allSteps(in schedule: Schedule) -> [ScheduleStep] {
+        schedule.steps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+    }
+}
+
+/// Lightweight identifier for deep-linking into a specific step's detail sheet from a notification tap.
+struct PendingStepDetail: Identifiable, Equatable {
+    let stepTypeID: String
+    let sequenceIndex: Int
+    var id: String {
+        "\(stepTypeID)-\(sequenceIndex)"
     }
 }

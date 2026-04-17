@@ -12,7 +12,8 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: false,
             instructionText: "Mix starter with flour and water at the specified ratio. Cover and leave at room temperature until doubled and domed.",
-            notificationText: "Time to build your levain — mix starter, flour, and water. It'll need a few hours to peak."
+            notificationText: "Time to build your levain — mix starter, flour, and water. It'll need a few hours to peak.",
+            successSignal: "Levain has at least doubled, with a domed top and bubbly surface. A spoonful dropped in water should float."
         ),
 
         .autolyse: StepType(
@@ -22,10 +23,11 @@ enum StepTypeRegistry {
             baseDurationMinutes: 45,
             isTemperatureAdjusted: false,
             referenceTemperatureCelsius: nil,
-            flexRange: 30...60,
+            flexRange: 30 ... 60,
             requiresTempReading: false,
             instructionText: "Mix flour and water until no dry flour remains. Cover and rest. Do not add salt or levain yet.",
-            notificationText: "Time to autolyse — mix flour and water, then rest. No salt or levain yet."
+            notificationText: "Time to autolyse — mix flour and water, then rest. No salt or levain yet.",
+            successSignal: "Dough has relaxed into a shaggy, hydrated mass with no dry flour visible."
         ),
 
         .mix: StepType(
@@ -38,7 +40,8 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: true,
             instructionText: "Add levain and salt to the autolysed dough. Pinch and fold until fully incorporated. Take a dough temperature reading.",
-            notificationText: "Time to mix — add levain and salt, pinch and fold until incorporated. Take a dough temp reading."
+            notificationText: "Time to mix — add levain and salt, pinch and fold until incorporated. Take a dough temp reading.",
+            successSignal: "Dough is smooth, even, and cohesive — no streaks of unmixed levain or salt remain."
         ),
 
         .bulkFerment: StepType(
@@ -51,7 +54,8 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: false,
             instructionText: "Let the dough ferment at room temperature. Perform stretch and folds at intervals during the first portion.",
-            notificationText: "Bulk ferment is underway — stretch and folds are scheduled within this window."
+            notificationText: "Bulk ferment is underway — stretch and folds are scheduled within this window.",
+            successSignal: "Dough has risen 50–75%, feels airy, and shows bubbles on the surface and sides of the container."
         ),
 
         .stretchAndFold: StepType(
@@ -64,7 +68,8 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: true,
             instructionText: "Wet your hands. Stretch one side of the dough up and fold it over. Rotate 90° and repeat 3 more times. Take a dough temp reading.",
-            notificationText: "Time for a stretch & fold — wet hands, stretch and fold four sides. Log your dough temperature."
+            notificationText: "Time for a stretch & fold — wet hands, stretch and fold four sides. Log your dough temperature.",
+            successSignal: "Dough resists the stretch more than last time and holds a neater package shape."
         ),
 
         .addInclusions: StepType(
@@ -77,7 +82,8 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: false,
             instructionText: "Spread the dough out gently and distribute inclusions evenly. Fold the dough over to enclose them, then perform a stretch and fold.",
-            notificationText: "Time to add inclusions — spread dough, distribute evenly, fold to enclose."
+            notificationText: "Time to add inclusions — spread dough, distribute evenly, fold to enclose.",
+            successSignal: "Inclusions are evenly distributed through the dough, not clustered in pockets."
         ),
 
         .shape: StepType(
@@ -90,7 +96,8 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: false,
             instructionText: "Pre-shape into a round. Rest 15 minutes. Final shape into a tight ball or batard. Place seam-side up in a floured banneton.",
-            notificationText: "Time to shape — pre-shape, bench rest 15 min, then final shape into banneton."
+            notificationText: "Time to shape — pre-shape, bench rest 15 min, then final shape into banneton.",
+            successSignal: "Dough holds a taut surface and bounces back slowly when poked — not slack, not over-tight."
         ),
 
         .coldRetard: StepType(
@@ -100,10 +107,11 @@ enum StepTypeRegistry {
             baseDurationMinutes: 720,
             isTemperatureAdjusted: false,
             referenceTemperatureCelsius: nil,
-            flexRange: 480...1080,
+            flexRange: 480 ... 1080,
             requiresTempReading: false,
             instructionText: "Cover the banneton and place in the fridge. The dough will slowly ferment and develop flavour. Longer retards give more sour flavour.",
-            notificationText: "Into the fridge — your dough will cold retard. You can adjust the duration if life gets in the way."
+            notificationText: "Into the fridge — your dough will cold retard. You can adjust the duration if life gets in the way.",
+            successSignal: "Dough feels firm and cold to the touch, with a slightly tacky surface — ready to score straight from the fridge."
         ),
 
         .preheat: StepType(
@@ -116,7 +124,8 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: false,
             instructionText: "Place your dutch oven (lid on) in the oven and preheat to the recipe's bake temperature. Allow a full hour for the pot to heat through.",
-            notificationText: "Time to preheat — get the dutch oven in and set your oven temperature. Full hour to heat through."
+            notificationText: "Time to preheat — get the dutch oven in and set your oven temperature. Full hour to heat through.",
+            successSignal: "Oven has held target temperature for at least 15 minutes and the dutch oven is thoroughly hot."
         ),
 
         .bakeCovered: StepType(
@@ -129,7 +138,8 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: false,
             instructionText: "Score the dough and carefully load it into the hot dutch oven. Cover with the lid and bake.",
-            notificationText: "Time to bake — score your dough, load into the hot dutch oven, and bake with the lid on."
+            notificationText: "Time to bake — score your dough, load into the hot dutch oven, and bake with the lid on.",
+            successSignal: "Loaf has sprung up tall and the score has opened into an ear — crust is pale but set."
         ),
 
         .bakeUncovered: StepType(
@@ -142,7 +152,8 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: false,
             instructionText: "Remove the lid and continue baking until the crust is deep golden brown. The internal temperature should reach 96–98°C.",
-            notificationText: "Remove the lid — bake uncovered until deep golden brown. Your bread is almost ready!"
+            notificationText: "Remove the lid — bake uncovered until deep golden brown. Your bread is almost ready!",
+            successSignal: "Crust is deep mahogany, the loaf sounds hollow when tapped underneath, and internal temperature reads 96–98°C."
         ),
     ]
 

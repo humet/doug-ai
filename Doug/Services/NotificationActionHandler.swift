@@ -14,15 +14,15 @@ final class NotificationActionHandler: NSObject, UNUserNotificationCenterDelegat
 
     /// Show banners even when the app is foregrounded.
     nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
+        _: UNUserNotificationCenter,
+        willPresent _: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound, .list])
     }
 
     nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
+        _: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
@@ -44,12 +44,44 @@ final class NotificationActionHandler: NSObject, UNUserNotificationCenterDelegat
                     break
                 }
             case NotificationService.Category.foldStep:
-                if actionIdentifier == UNNotificationDefaultActionIdentifier,
-                   let stepTypeID, let sequenceIndex {
-                    NotificationRouter.shared.requestFoldEntry(
-                        stepTypeID: stepTypeID,
-                        sequenceIndex: sequenceIndex
-                    )
+                switch actionIdentifier {
+                case UNNotificationDefaultActionIdentifier:
+                    if let stepTypeID, let sequenceIndex {
+                        NotificationRouter.shared.requestFoldEntry(
+                            stepTypeID: stepTypeID,
+                            sequenceIndex: sequenceIndex
+                        )
+                    }
+                case NotificationService.Action.snoozeStep:
+                    if let stepTypeID, let sequenceIndex {
+                        NotificationRouter.shared.snoozeStep(
+                            stepTypeID: stepTypeID,
+                            sequenceIndex: sequenceIndex
+                        )
+                    }
+                default:
+                    break
+                }
+            case NotificationService.Category.handsOnStep:
+                switch actionIdentifier {
+                case UNNotificationDefaultActionIdentifier:
+                    if let stepTypeID, let sequenceIndex {
+                        NotificationRouter.shared.requestStepDetail(
+                            stepTypeID: stepTypeID,
+                            sequenceIndex: sequenceIndex
+                        )
+                    } else {
+                        NotificationRouter.shared.focusScheduleTab()
+                    }
+                case NotificationService.Action.snoozeStep:
+                    if let stepTypeID, let sequenceIndex {
+                        NotificationRouter.shared.snoozeStep(
+                            stepTypeID: stepTypeID,
+                            sequenceIndex: sequenceIndex
+                        )
+                    }
+                default:
+                    break
                 }
             case NotificationService.Category.coldRetardEnd:
                 if actionIdentifier == UNNotificationDefaultActionIdentifier {
