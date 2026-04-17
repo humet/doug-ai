@@ -1,5 +1,5 @@
-import SwiftUI
 import Charts
+import SwiftUI
 
 /// Displays a temperature curve and degree-hour progress during active bulk ferment.
 ///

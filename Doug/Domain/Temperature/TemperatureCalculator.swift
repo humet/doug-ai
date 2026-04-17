@@ -37,9 +37,9 @@ enum TemperatureCalculator {
     /// - Returns: Estimated levain build time in minutes.
     static func levainBuildMinutes(kitchenTemp: Double) -> Double {
         switch kitchenTemp {
-        case 26...: return 240   // 4 hours
-        case 22..<26: return 300 // 5 hours
-        default: return 360      // 6 hours
+        case 26...: 240 // 4 hours
+        case 22 ..< 26: 300 // 5 hours
+        default: 360 // 6 hours
         }
     }
 
@@ -70,7 +70,8 @@ enum TemperatureCalculator {
                let observed = profile.averageMinutes(
                    ratio: levainBuildRatio,
                    tempBracket: TemperatureBracket.bracket(celsius: kitchenTemp)
-               ) {
+               )
+            {
                 return observed
             }
             return levainBuildMinutes(kitchenTemp: kitchenTemp)

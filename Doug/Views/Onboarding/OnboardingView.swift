@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct OnboardingView: View {
     @Environment(\.modelContext) private var modelContext
@@ -62,7 +62,7 @@ struct OnboardingView: View {
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $kitchenTemp, in: 16...32, step: 1)
+                    Slider(value: $kitchenTemp, in: 16 ... 32, step: 1)
                 } header: {
                     Text("Kitchen Temperature")
                 } footer: {

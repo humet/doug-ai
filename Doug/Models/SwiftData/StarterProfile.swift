@@ -18,16 +18,16 @@ final class StarterProfile {
     ) {
         self.storageType = storageType.rawValue
         self.maintenanceCycleDays = maintenanceCycleDays
-        self.healthStatus = StarterHealthStatus.needsFeed.rawValue
-        self.lastUpdated = Date()
+        healthStatus = StarterHealthStatus.needsFeed.rawValue
+        lastUpdated = Date()
 
         switch storageType {
         case .fridge:
-            self.needsFeedDaysThreshold = 7
-            self.needsRevivalDaysThreshold = 10
+            needsFeedDaysThreshold = 7
+            needsRevivalDaysThreshold = 10
         case .counter:
-            self.needsFeedDaysThreshold = 1.5
-            self.needsRevivalDaysThreshold = 2
+            needsFeedDaysThreshold = 1.5
+            needsRevivalDaysThreshold = 2
         }
     }
 
@@ -42,12 +42,12 @@ final class StarterProfile {
     }
 }
 
-enum StarterStorageType: String, Codable, Sendable {
+enum StarterStorageType: String, Codable {
     case fridge
     case counter
 }
 
-enum StarterHealthStatus: String, Codable, Sendable {
+enum StarterHealthStatus: String, Codable {
     case readyToBake
     case needsFeed
     case needsRevival

@@ -36,7 +36,7 @@ enum RecipeScaler {
     }
 }
 
-struct ScaledIngredients: Sendable {
+struct ScaledIngredients {
     let flour: Double
     let water: Double
     let salt: Double
@@ -48,7 +48,7 @@ struct ScaledIngredients: Sendable {
     }
 }
 
-struct ScaledExtra: Sendable {
+struct ScaledExtra {
     let name: String
     let grams: Double
     let note: String?

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Recipe ID
 
-enum RecipeID: String, CaseIterable, Codable, Sendable {
+enum RecipeID: String, CaseIterable, Codable {
     case countryLoaf
     case highHydrationArtisan
     case wholeWheatHoney
@@ -11,7 +11,7 @@ enum RecipeID: String, CaseIterable, Codable, Sendable {
 
 // MARK: - Difficulty
 
-enum Difficulty: String, Codable, Sendable {
+enum Difficulty: String, Codable {
     case beginner
     case intermediate
     case advanced
@@ -19,7 +19,7 @@ enum Difficulty: String, Codable, Sendable {
 
 // MARK: - Ingredients
 
-struct Ingredients: Sendable {
+struct Ingredients {
     let flourGrams: Double
     let waterGrams: Double
     let saltGrams: Double
@@ -44,7 +44,7 @@ struct Ingredients: Sendable {
     }
 }
 
-struct ExtraIngredient: Sendable {
+struct ExtraIngredient {
     let name: String
     let grams: Double
     let note: String?
@@ -58,7 +58,7 @@ struct ExtraIngredient: Sendable {
 
 // MARK: - Recipe
 
-struct Recipe: Identifiable, Sendable {
+struct Recipe: Identifiable {
     let id: RecipeID
     let name: String
     let description: String

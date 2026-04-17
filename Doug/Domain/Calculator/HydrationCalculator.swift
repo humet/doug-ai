@@ -54,7 +54,7 @@ enum HydrationCalculator {
     }
 }
 
-struct BakersPercentages: Sendable {
+struct BakersPercentages {
     let flour: Double
     let water: Double
     let levain: Double

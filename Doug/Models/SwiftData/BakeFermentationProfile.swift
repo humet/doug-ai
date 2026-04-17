@@ -25,6 +25,6 @@ final class BakeFermentationProfile {
         self.targetDegreeHoursUsed = targetDegreeHoursUsed
         self.kitchenTemperatureCelsius = kitchenTemperatureCelsius
         self.outcomeNote = outcomeNote
-        self.completedAt = Date()
+        completedAt = Date()
     }
 }

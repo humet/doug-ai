@@ -11,6 +11,7 @@ final class StarterFeedLog {
     var kitchenTemperatureCelsius: Double
     var peakTimestamp: Date?
     var timeToPeakMinutes: Double?
+    var starterGrams: Double?
 
     init(
         timestamp: Date = Date(),
@@ -18,7 +19,8 @@ final class StarterFeedLog {
         ratioFlour: Int,
         ratioWater: Int,
         flourType: String = "white",
-        kitchenTemperatureCelsius: Double
+        kitchenTemperatureCelsius: Double,
+        starterGrams: Double? = nil
     ) {
         self.timestamp = timestamp
         self.ratioStarter = ratioStarter
@@ -26,6 +28,7 @@ final class StarterFeedLog {
         self.ratioWater = ratioWater
         self.flourType = flourType
         self.kitchenTemperatureCelsius = kitchenTemperatureCelsius
+        self.starterGrams = starterGrams
     }
 
     func markPeak(at peakTime: Date) {
@@ -35,5 +38,15 @@ final class StarterFeedLog {
 
     var ratioDescription: String {
         "\(ratioStarter):\(ratioFlour):\(ratioWater)"
+    }
+
+    var flourGrams: Double? {
+        guard let starterGrams, ratioStarter > 0 else { return nil }
+        return starterGrams * Double(ratioFlour) / Double(ratioStarter)
+    }
+
+    var waterGrams: Double? {
+        guard let starterGrams, ratioStarter > 0 else { return nil }
+        return starterGrams * Double(ratioWater) / Double(ratioStarter)
     }
 }

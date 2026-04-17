@@ -1,6 +1,6 @@
-import Testing
-import Foundation
 @testable import Doug
+import Foundation
+import Testing
 
 struct ScheduleBuilderTests {
     // MARK: - Test Helpers
@@ -26,7 +26,7 @@ struct ScheduleBuilderTests {
 
     // MARK: - Happy Path
 
-    @Test func countryLoafProducesValidSchedule() {
+    @Test func countryLoafProducesValidSchedule() throws {
         let input = ScheduleBuilderInput(
             recipe: RecipeBook.countryLoaf,
             targetBreadReadyTime: Self.targetTime(),
@@ -36,7 +36,7 @@ struct ScheduleBuilderTests {
 
         let result = ScheduleBuilder.build(input)
 
-        guard case .success(let steps) = result else {
+        guard case let .success(steps) = result else {
             Issue.record("Expected success, got conflict")
             return
         }
@@ -46,12 +46,12 @@ struct ScheduleBuilderTests {
         #expect(steps.last?.stepTypeID == StepTypeID.bakeUncovered)
 
         // Steps should be in chronological order
-        for i in 1..<steps.count {
+        for i in 1 ..< steps.count {
             #expect(steps[i].startTime >= steps[i - 1].startTime)
         }
 
         // Last step should end at target time
-        let lastEnd = steps.last!.endTime
+        let lastEnd = try #require(steps.last?.endTime)
         let diff = abs(lastEnd.timeIntervalSince(Self.targetTime()))
         #expect(diff < 60)
     }
@@ -64,14 +64,14 @@ struct ScheduleBuilderTests {
             availability: Self.defaultAvailability
         )
 
-        guard case .success(let steps) = ScheduleBuilder.build(input) else {
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
             Issue.record("Expected success")
             return
         }
 
         let bulkStep = steps.first(where: { $0.stepTypeID == StepTypeID.bulkFerment })
         #expect(bulkStep != nil)
-        #expect(bulkStep!.subSteps.count == 4) // country loaf has 4 folds
+        #expect(bulkStep?.subSteps.count == 4) // country loaf has 4 folds
     }
 
     @Test func oliveRosemaryIncludesInclusionStep() {
@@ -82,19 +82,19 @@ struct ScheduleBuilderTests {
             availability: Self.defaultAvailability
         )
 
-        guard case .success(let steps) = ScheduleBuilder.build(input) else {
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
             Issue.record("Expected success")
             return
         }
 
         let hasInclusions = steps.contains(where: { $0.stepTypeID == StepTypeID.addInclusions })
-            || steps.flatMap({ $0.subSteps }).contains(where: { $0.stepTypeID == StepTypeID.addInclusions })
+            || steps.flatMap(\.subSteps).contains(where: { $0.stepTypeID == StepTypeID.addInclusions })
         #expect(hasInclusions)
     }
 
     // MARK: - Temperature Variations
 
-    @Test func hotKitchenProducesShorterSchedule() {
+    @Test func hotKitchenProducesShorterSchedule() throws {
         let hotInput = ScheduleBuilderInput(
             recipe: RecipeBook.countryLoaf,
             targetBreadReadyTime: Self.targetTime(),
@@ -108,21 +108,22 @@ struct ScheduleBuilderTests {
             availability: Self.defaultAvailability
         )
 
-        guard case .success(let hotSteps) = ScheduleBuilder.build(hotInput),
-              case .success(let coldSteps) = ScheduleBuilder.build(coldInput) else {
+        guard case let .success(hotSteps) = ScheduleBuilder.build(hotInput),
+              case let .success(coldSteps) = ScheduleBuilder.build(coldInput)
+        else {
             Issue.record("Expected both to succeed")
             return
         }
 
-        let hotStart = hotSteps.first!.startTime
-        let coldStart = coldSteps.first!.startTime
+        let hotStart = try #require(hotSteps.first?.startTime)
+        let coldStart = try #require(coldSteps.first?.startTime)
         #expect(coldStart < hotStart)
     }
 
     // MARK: - All Recipes Build
 
     @Test(arguments: RecipeBook.all)
-    func allRecipesBuildSuccessfully(recipe: Recipe) {
+    func allRecipesBuildSuccessfully(recipe: Recipe) throws {
         let input = ScheduleBuilderInput(
             recipe: recipe,
             targetBreadReadyTime: Self.targetTime(),
@@ -131,13 +132,13 @@ struct ScheduleBuilderTests {
         )
 
         let result = ScheduleBuilder.build(input)
-        guard case .success(let steps) = result else {
+        guard case let .success(steps) = result else {
             Issue.record("Recipe '\(recipe.name)' failed to build schedule")
             return
         }
 
         #expect(!steps.isEmpty)
-        #expect(steps.first!.startTime < steps.last!.endTime)
+        #expect(try #require(steps.first?.startTime) < steps.last!.endTime)
     }
 }
 
@@ -234,5 +235,7 @@ struct AvailabilityResolverTests {
 }
 
 extension Recipe: @retroactive CustomTestStringConvertible {
-    public var testDescription: String { name }
+    public var testDescription: String {
+        name
+    }
 }

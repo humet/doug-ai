@@ -7,12 +7,22 @@ final class RevivalPlan {
     var startDate: Date
     var estimatedBakeReadyDate: Date?
 
+    var initialStarterGrams: Double?
+    var flourType: String?
+    var kitchenTemperatureCelsius: Double?
+    var currentStepIndex: Int = 0
+    var assessedNeglect: String?
+    var hadHooch: Bool = false
+    var daysSinceLastFed: Int?
+    var userNotes: String?
+    var coachOpeningRead: String?
+
     @Relationship(deleteRule: .cascade, inverse: \RevivalFeedStep.plan)
     var feedSteps: [RevivalFeedStep] = []
 
     init() {
-        self.status = RevivalStatus.active.rawValue
-        self.startDate = Date()
+        status = RevivalStatus.active.rawValue
+        startDate = Date()
     }
 
     var revivalStatus: RevivalStatus {
@@ -33,6 +43,21 @@ final class RevivalFeedStep {
     var status: String
     var notificationIdentifier: String?
 
+    var retainStarterGrams: Double?
+    var addFlourGrams: Double?
+    var addWaterGrams: Double?
+    var startedAt: Date?
+    var peakTimestamp: Date?
+    var timeToPeakMinutes: Double?
+    var minPeakMinutes: Double?
+    var maxPeakMinutes: Double?
+    var originalScheduledTime: Date?
+
+    var instructionTitle: String?
+    var instructionBody: String?
+    var instructionWatchFor: String?
+    var instructionExpectedWait: String?
+
     init(
         sequenceIndex: Int,
         scheduledTime: Date,
@@ -47,7 +72,7 @@ final class RevivalFeedStep {
         self.targetRatioStarter = targetRatioStarter
         self.targetRatioFlour = targetRatioFlour
         self.targetRatioWater = targetRatioWater
-        self.status = RevivalFeedStatus.pending.rawValue
+        status = RevivalFeedStatus.pending.rawValue
     }
 
     var feedStatus: RevivalFeedStatus {
@@ -56,13 +81,14 @@ final class RevivalFeedStep {
     }
 }
 
-enum RevivalStatus: String, Codable, Sendable {
+enum RevivalStatus: String, Codable {
     case active
     case completed
     case cancelled
 }
 
-enum RevivalFeedStatus: String, Codable, Sendable {
+enum RevivalFeedStatus: String, Codable {
     case pending
+    case inProgress
     case completed
 }

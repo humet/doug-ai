@@ -1,6 +1,6 @@
 import Foundation
 
-struct MethodStep: Identifiable, Sendable {
+struct MethodStep: Identifiable {
     let id: UUID
     let stepTypeID: StepTypeID
     let durationOverrideMinutes: Double?
@@ -11,9 +11,17 @@ struct MethodStep: Identifiable, Sendable {
     let inclusionAtFold: Int?
     let subSteps: [MethodStep]
 
-    var stepType: StepType { StepTypeRegistry.type(for: stepTypeID) }
-    var effectiveDuration: Double { durationOverrideMinutes ?? stepType.baseDurationMinutes }
-    var effectiveFlexRange: ClosedRange<Double>? { flexRangeOverride ?? stepType.flexRange }
+    var stepType: StepType {
+        StepTypeRegistry.type(for: stepTypeID)
+    }
+
+    var effectiveDuration: Double {
+        durationOverrideMinutes ?? stepType.baseDurationMinutes
+    }
+
+    var effectiveFlexRange: ClosedRange<Double>? {
+        flexRangeOverride ?? stepType.flexRange
+    }
 
     init(
         stepTypeID: StepTypeID,
@@ -25,7 +33,7 @@ struct MethodStep: Identifiable, Sendable {
         inclusionAtFold: Int? = nil,
         subSteps: [MethodStep] = []
     ) {
-        self.id = UUID()
+        id = UUID()
         self.stepTypeID = stepTypeID
         self.durationOverrideMinutes = durationOverrideMinutes
         self.flexRangeOverride = flexRangeOverride

@@ -23,7 +23,7 @@ enum DegreeHourCalculator {
         let sorted = readings.sorted { $0.timestamp < $1.timestamp }
         var total = 0.0
 
-        for i in 1..<sorted.count {
+        for i in 1 ..< sorted.count {
             let prev = sorted[i - 1]
             let curr = sorted[i]
 

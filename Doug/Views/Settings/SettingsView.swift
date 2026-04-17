@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct SettingsView: View {
     @Query private var availabilities: [UserAvailability]
@@ -113,7 +113,7 @@ struct SettingsView: View {
                                 get: { profile.maintenanceCycleDays },
                                 set: { profile.maintenanceCycleDays = $0 }
                             ),
-                            in: 1...14,
+                            in: 1 ... 14,
                             step: 1
                         )
                     } header: {
@@ -140,10 +140,18 @@ struct SettingsView: View {
                 } label: {
                     Label("Seed healthy starter", systemImage: "testtube.2")
                 }
+
+                Button {
+                    seedStaleStarter()
+                } label: {
+                    Label("Seed stale starter (needs revival)", systemImage: "exclamationmark.triangle")
+                }
             } header: {
                 Text("Debug")
             } footer: {
-                Text("Creates a fridge-stored StarterProfile (if missing) and a recent peaked feed log so the pre-bake health check returns readyToBake.")
+                Text(
+                    "Healthy: recent peaked feed → readyToBake. Stale: last feed 14 days ago → needsRevival, unlocks the Start Revival button."
+                )
             }
         }
 
@@ -162,6 +170,28 @@ struct SettingsView: View {
                 kitchenTemperatureCelsius: 22
             )
             feed.markPeak(at: now.addingTimeInterval(-60 * 60))
+            modelContext.insert(feed)
+        }
+
+        private func seedStaleStarter() {
+            if profiles.isEmpty {
+                modelContext.insert(StarterProfile(storageType: .fridge))
+            }
+
+            // Clear any existing feed logs so the stale one is most recent.
+            for existing in feedLogs {
+                modelContext.delete(existing)
+            }
+
+            let now = Date()
+            let feed = StarterFeedLog(
+                timestamp: now.addingTimeInterval(-14 * 86400), // 14 days ago
+                ratioStarter: 1,
+                ratioFlour: 5,
+                ratioWater: 5,
+                flourType: "white",
+                kitchenTemperatureCelsius: 22
+            )
             modelContext.insert(feed)
         }
     #endif
@@ -196,7 +226,7 @@ struct AddUnavailableWindowSheet: View {
     @State private var endTime = Calendar.current.date(bySettingHour: 17, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var specificDate = Date()
 
-    private let weekdays = Array(1...7) // 1=Sun, 7=Sat
+    private let weekdays = Array(1 ... 7) // 1=Sun, 7=Sat
 
     var body: some View {
         NavigationStack {

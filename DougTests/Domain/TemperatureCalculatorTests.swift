@@ -1,5 +1,5 @@
-import Testing
 @testable import Doug
+import Testing
 
 struct TemperatureCalculatorTests {
     // MARK: - Exponential Adjustment

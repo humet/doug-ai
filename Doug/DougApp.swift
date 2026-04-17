@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 import UserNotifications
 
 @main
@@ -9,7 +9,7 @@ struct DougApp: App {
 
     init() {
         let container = Self.makeContainer()
-        self.sharedModelContainer = container
+        sharedModelContainer = container
         _notificationHandler = State(initialValue: NotificationActionHandler(modelContainer: container))
     }
 

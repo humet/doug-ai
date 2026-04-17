@@ -1,5 +1,5 @@
-import Testing
 @testable import Doug
+import Testing
 
 struct HydrationCalculatorTests {
     @Test func trueHydrationWith100PercentLevain() {

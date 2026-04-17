@@ -61,7 +61,7 @@ enum StarterHealthAssessor {
 
 // MARK: - Input Types (decoupled from SwiftData)
 
-struct StarterProfileInput: Sendable {
+struct StarterProfileInput {
     let storageType: StarterStorageType
     let maintenanceCycleDays: Double
     let needsFeedDaysThreshold: Double
@@ -69,7 +69,7 @@ struct StarterProfileInput: Sendable {
     let averageTimeToPeakMinutes: Double?
 }
 
-struct FeedLogInput: Sendable {
+struct FeedLogInput {
     let timestamp: Date
     let ratioStarter: Int
     let ratioFlour: Int
@@ -81,22 +81,22 @@ struct FeedLogInput: Sendable {
 
 extension StarterProfileInput {
     init(from model: StarterProfile) {
-        self.storageType = model.starterStorageType
-        self.maintenanceCycleDays = model.maintenanceCycleDays
-        self.needsFeedDaysThreshold = model.needsFeedDaysThreshold
-        self.needsRevivalDaysThreshold = model.needsRevivalDaysThreshold
-        self.averageTimeToPeakMinutes = model.averageTimeToPeakMinutes
+        storageType = model.starterStorageType
+        maintenanceCycleDays = model.maintenanceCycleDays
+        needsFeedDaysThreshold = model.needsFeedDaysThreshold
+        needsRevivalDaysThreshold = model.needsRevivalDaysThreshold
+        averageTimeToPeakMinutes = model.averageTimeToPeakMinutes
     }
 }
 
 extension FeedLogInput {
     init(from model: StarterFeedLog) {
-        self.timestamp = model.timestamp
-        self.ratioStarter = model.ratioStarter
-        self.ratioFlour = model.ratioFlour
-        self.ratioWater = model.ratioWater
-        self.flourType = model.flourType
-        self.kitchenTemperatureCelsius = model.kitchenTemperatureCelsius
-        self.timeToPeakMinutes = model.timeToPeakMinutes
+        timestamp = model.timestamp
+        ratioStarter = model.ratioStarter
+        ratioFlour = model.ratioFlour
+        ratioWater = model.ratioWater
+        flourType = model.flourType
+        kitchenTemperatureCelsius = model.kitchenTemperatureCelsius
+        timeToPeakMinutes = model.timeToPeakMinutes
     }
 }

@@ -12,7 +12,6 @@ private struct AdaptiveGlassButtonStyle: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let prominent: Bool
 
-    @ViewBuilder
     func body(content: Content) -> some View {
         switch (reduceTransparency, prominent) {
         case (true, true):

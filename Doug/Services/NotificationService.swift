@@ -214,4 +214,57 @@ final class NotificationService {
             withIdentifiers: [Self.starterFeedIdentifier]
         )
     }
+
+    // MARK: - Revival Mix Reminders
+
+    private static func revivalMixIdentifier(planID: String, stepIndex: Int) -> String {
+        "revival-mix-\(planID)-\(stepIndex)"
+    }
+
+    /// Schedules a one-shot reminder to mix the next revival feed at the given time.
+    func scheduleRevivalMixReminder(
+        at date: Date,
+        planID: String,
+        stepIndex: Int,
+        title: String
+    ) async {
+        let authorized = await requestAuthorization()
+        guard authorized, date > Date() else { return }
+
+        let identifier = Self.revivalMixIdentifier(planID: planID, stepIndex: stepIndex)
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+
+        let content = UNMutableNotificationContent()
+        content.title = "Time to mix your starter"
+        content.body = title
+        content.sound = .default
+        content.categoryIdentifier = Category.starterFeed
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: max(date.timeIntervalSinceNow, 1),
+            repeats: false
+        )
+
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: trigger
+        )
+
+        try? await center.add(request)
+    }
+
+    func cancelRevivalMixReminder(planID: String, stepIndex: Int) {
+        center.removePendingNotificationRequests(
+            withIdentifiers: [Self.revivalMixIdentifier(planID: planID, stepIndex: stepIndex)]
+        )
+    }
+
+    /// Whether the OS has a pending mix reminder matching the given plan + step.
+    /// Lets the UI survive navigation — it can re-derive button state on appear.
+    func hasPendingRevivalMixReminder(planID: String, stepIndex: Int) async -> Bool {
+        let target = Self.revivalMixIdentifier(planID: planID, stepIndex: stepIndex)
+        let pending = await center.pendingNotificationRequests()
+        return pending.contains { $0.identifier == target }
+    }
 }

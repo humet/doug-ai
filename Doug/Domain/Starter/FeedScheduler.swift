@@ -53,11 +53,11 @@ enum FeedScheduler {
     }
 
     /// Snaps a candidate time to the nearest available slot.
-    private static func snapToAvailableTime(
+    static func snapToAvailableTime(
         candidate: Date,
         availability: AvailabilityInput,
         windows: [WindowInput],
-        calendar: Calendar
+        calendar: Calendar = .current
     ) -> Date? {
         let blocks = AvailabilityResolver.resolve(
             from: candidate,

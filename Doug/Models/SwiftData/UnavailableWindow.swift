@@ -31,7 +31,7 @@ final class UnavailableWindow {
         self.endHour = endHour
         self.endMinute = endMinute
         self.specificDate = specificDate
-        self.isActive = true
+        isActive = true
     }
 
     var startComponents: DateComponents {

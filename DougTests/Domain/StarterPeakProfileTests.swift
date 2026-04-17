@@ -1,6 +1,6 @@
-import Testing
-import Foundation
 @testable import Doug
+import Foundation
+import Testing
 
 struct StarterPeakProfileTests {
     // MARK: - Helpers
@@ -128,7 +128,7 @@ struct ScheduleBuilderPeakProfileTests {
     }
 
     private static func profileAveraging(_ minutes: Double) -> StarterPeakProfile {
-        let logs = (0..<3).map { _ in
+        let logs = (0 ..< 3).map { _ in
             FeedLogInput(
                 timestamp: Date(),
                 ratioStarter: 1,
@@ -151,7 +151,7 @@ struct ScheduleBuilderPeakProfileTests {
             peakProfile: Self.profileAveraging(210)
         )
 
-        guard case .success(let steps) = ScheduleBuilder.build(input) else {
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
             Issue.record("Expected success"); return
         }
 
@@ -169,7 +169,7 @@ struct ScheduleBuilderPeakProfileTests {
             peakProfile: nil
         )
 
-        guard case .success(let steps) = ScheduleBuilder.build(input) else {
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
             Issue.record("Expected success"); return
         }
 
@@ -180,7 +180,7 @@ struct ScheduleBuilderPeakProfileTests {
     }
 
     @Test func belowThresholdBucketFallsBackToGenericEstimate() {
-        let twoSampleLogs = (0..<2).map { _ in
+        let twoSampleLogs = (0 ..< 2).map { _ in
             FeedLogInput(
                 timestamp: Date(),
                 ratioStarter: 1,
@@ -199,7 +199,7 @@ struct ScheduleBuilderPeakProfileTests {
             peakProfile: StarterPeakProfile(feedLogs: twoSampleLogs)
         )
 
-        guard case .success(let steps) = ScheduleBuilder.build(input) else {
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
             Issue.record("Expected success"); return
         }
 

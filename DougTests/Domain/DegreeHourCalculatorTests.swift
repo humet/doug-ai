@@ -1,6 +1,6 @@
-import Testing
-import Foundation
 @testable import Doug
+import Foundation
+import Testing
 
 struct DegreeHourCalculatorTests {
     // MARK: - Accumulation
@@ -55,7 +55,7 @@ struct DegreeHourCalculatorTests {
 
     // MARK: - Estimation
 
-    @Test func estimatesRemainingTime() {
+    @Test func estimatesRemainingTime() throws {
         let remaining = DegreeHourCalculator.estimatedMinutesRemaining(
             currentDegreeHours: 60,
             targetDegreeHours: 80,
@@ -64,7 +64,7 @@ struct DegreeHourCalculatorTests {
         // Need 20 more degree-hours at (24-4)=20 effective °C
         // 20 / 20 = 1 hour = 60 minutes
         #expect(remaining != nil)
-        #expect(abs(remaining! - 60.0) < 0.01)
+        #expect(try abs(#require(remaining) - 60.0) < 0.01)
     }
 
     @Test func alreadyReachedTargetReturnsZero() {

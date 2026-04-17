@@ -1,7 +1,7 @@
-import Testing
+@testable import Doug
 import Foundation
 import SwiftData
-@testable import Doug
+import Testing
 
 @MainActor
 struct ScheduleViewModelApplyOptionTests {
@@ -23,9 +23,9 @@ struct ScheduleViewModelApplyOptionTests {
         // ScheduleBuilder's single-shot local resolution fails: the shape
         // can't fit in its tentative evening slot AND can't shift earlier
         // into the narrow 15-minute gap between the blocks.
-        let saturday = Calendar.current.date(
+        let saturday = try #require(Calendar.current.date(
             from: DateComponents(year: 2026, month: 4, day: 18)
-        )!
+        ))
         let blockEarly = UnavailableWindow(
             name: "Saturday afternoon errand",
             isRecurring: false,
@@ -48,11 +48,11 @@ struct ScheduleViewModelApplyOptionTests {
         // Target: Sunday 2026-04-19 09:00 → shape lands Saturday evening
         // in blockLate; resolution shifts it to just-before blockLate where
         // it overlaps blockEarly → .conflict.
-        let sunday9am = Calendar.current.date(
+        let sunday9am = try #require(Calendar.current.date(
             from: DateComponents(
                 year: 2026, month: 4, day: 19, hour: 9, minute: 0
             )
-        )!
+        ))
 
         let viewModel = ScheduleViewModel()
         viewModel.selectedRecipeID = .countryLoaf

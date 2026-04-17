@@ -1,6 +1,6 @@
-import Testing
-import Foundation
 @testable import Doug
+import Foundation
+import Testing
 
 struct StarterHealthTests {
     private static let fridgeProfile = StarterProfileInput(

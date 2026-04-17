@@ -1,7 +1,7 @@
 import Foundation
 
 /// Represents a concrete time block where hands-on work cannot happen.
-struct UnavailableBlock: Sendable {
+struct UnavailableBlock {
     let start: Date
     let end: Date
 }
@@ -70,13 +70,12 @@ enum AvailabilityResolver {
             let weekday = calendar.component(.weekday, from: currentDay)
 
             for window in windows where window.isActive {
-                let matches: Bool
-                if window.isRecurring {
-                    matches = window.daysOfWeek.contains(weekday)
+                let matches: Bool = if window.isRecurring {
+                    window.daysOfWeek.contains(weekday)
                 } else if let specificDate = window.specificDate {
-                    matches = calendar.isDate(specificDate, inSameDayAs: currentDay)
+                    calendar.isDate(specificDate, inSameDayAs: currentDay)
                 } else {
-                    matches = false
+                    false
                 }
 
                 if matches {
@@ -141,22 +140,15 @@ enum AvailabilityResolver {
 // MARK: - Lightweight input types (decoupled from SwiftData)
 
 /// Availability input decoupled from the SwiftData UserAvailability model.
-struct AvailabilityInput: Sendable {
+struct AvailabilityInput {
     let startHour: Int
     let startMinute: Int
     let endHour: Int
     let endMinute: Int
-
-    init(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int) {
-        self.startHour = startHour
-        self.startMinute = startMinute
-        self.endHour = endHour
-        self.endMinute = endMinute
-    }
 }
 
 /// Window input decoupled from the SwiftData UnavailableWindow model.
-struct WindowInput: Sendable {
+struct WindowInput {
     let name: String
     let isRecurring: Bool
     let daysOfWeek: [Int]
@@ -194,23 +186,23 @@ struct WindowInput: Sendable {
 
 extension AvailabilityInput {
     init(from model: UserAvailability) {
-        self.startHour = model.dailyStartHour
-        self.startMinute = model.dailyStartMinute
-        self.endHour = model.dailyEndHour
-        self.endMinute = model.dailyEndMinute
+        startHour = model.dailyStartHour
+        startMinute = model.dailyStartMinute
+        endHour = model.dailyEndHour
+        endMinute = model.dailyEndMinute
     }
 }
 
 extension WindowInput {
     init(from model: UnavailableWindow) {
-        self.name = model.name
-        self.isRecurring = model.isRecurring
-        self.daysOfWeek = model.daysOfWeek
-        self.startHour = model.startHour
-        self.startMinute = model.startMinute
-        self.endHour = model.endHour
-        self.endMinute = model.endMinute
-        self.specificDate = model.specificDate
-        self.isActive = model.isActive
+        name = model.name
+        isRecurring = model.isRecurring
+        daysOfWeek = model.daysOfWeek
+        startHour = model.startHour
+        startMinute = model.startMinute
+        endHour = model.endHour
+        endMinute = model.endMinute
+        specificDate = model.specificDate
+        isActive = model.isActive
     }
 }

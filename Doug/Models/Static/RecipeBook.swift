@@ -18,7 +18,7 @@ enum RecipeBook {
         description: "The standard. 70% hydration, white bread flour, mild tang, open crumb. The recipe most users will start with.",
         difficulty: .beginner,
         hydrationPercent: 70,
-        approximateTotalHours: 18...26,
+        approximateTotalHours: 18 ... 26,
         ingredients: Ingredients(
             flourGrams: 500,
             waterGrams: 350,
@@ -39,7 +39,7 @@ enum RecipeBook {
             MethodStep(stepTypeID: .shape),
             MethodStep(
                 stepTypeID: .coldRetard,
-                flexRangeOverride: 480...1080
+                flexRangeOverride: 480 ... 1080
             ),
             MethodStep(stepTypeID: .preheat),
             MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
@@ -58,7 +58,7 @@ enum RecipeBook {
         description: "80% hydration. Lacier crumb, more extensible dough, requires more confident handling. Longer bulk ferment and cold retard.",
         difficulty: .advanced,
         hydrationPercent: 80,
-        approximateTotalHours: 20...30,
+        approximateTotalHours: 20 ... 30,
         ingredients: Ingredients(
             flourGrams: 500,
             waterGrams: 400,
@@ -79,7 +79,7 @@ enum RecipeBook {
             MethodStep(stepTypeID: .shape),
             MethodStep(
                 stepTypeID: .coldRetard,
-                flexRangeOverride: 600...1080
+                flexRangeOverride: 600 ... 1080
             ),
             MethodStep(stepTypeID: .preheat),
             MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
@@ -98,7 +98,7 @@ enum RecipeBook {
         description: "40% whole wheat flour, 68% hydration, with 30g honey. Denser crumb, slightly sweet, great for toast. Shorter bulk ferment.",
         difficulty: .intermediate,
         hydrationPercent: 68,
-        approximateTotalHours: 16...24,
+        approximateTotalHours: 16 ... 24,
         ingredients: Ingredients(
             flourGrams: 500,
             waterGrams: 340,
@@ -122,7 +122,7 @@ enum RecipeBook {
             MethodStep(stepTypeID: .shape),
             MethodStep(
                 stepTypeID: .coldRetard,
-                flexRangeOverride: 480...1080
+                flexRangeOverride: 480 ... 1080
             ),
             MethodStep(stepTypeID: .preheat),
             MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
@@ -141,7 +141,7 @@ enum RecipeBook {
         description: "10% whole wheat, 69% hydration, with halved olives and fresh rosemary. Savoury, pairs well with soup and cheese.",
         difficulty: .intermediate,
         hydrationPercent: 69,
-        approximateTotalHours: 18...26,
+        approximateTotalHours: 18 ... 26,
         ingredients: Ingredients(
             flourGrams: 500,
             waterGrams: 345,
@@ -168,7 +168,7 @@ enum RecipeBook {
             MethodStep(stepTypeID: .shape),
             MethodStep(
                 stepTypeID: .coldRetard,
-                flexRangeOverride: 480...1080
+                flexRangeOverride: 480 ... 1080
             ),
             MethodStep(stepTypeID: .preheat),
             MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),

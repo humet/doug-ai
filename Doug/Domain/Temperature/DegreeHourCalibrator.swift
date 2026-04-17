@@ -42,7 +42,7 @@ enum DegreeHourCalibrator {
 }
 
 /// Lightweight input for calibration, decoupled from SwiftData.
-struct BakeProfileInput: Sendable {
+struct BakeProfileInput {
     let recipeID: RecipeID
     let finalDegreeHours: Double
     let outcomeNote: String?

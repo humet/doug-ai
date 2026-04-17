@@ -1,5 +1,5 @@
-import Testing
 @testable import Doug
+import Testing
 
 struct RecipeTests {
     @Test func allRecipesExist() {
@@ -82,7 +82,7 @@ struct MethodStepTests {
     }
 
     @Test func effectiveFlexRangeUsesOverride() {
-        let step = MethodStep(stepTypeID: .coldRetard, flexRangeOverride: 600...1080)
-        #expect(step.effectiveFlexRange == 600...1080)
+        let step = MethodStep(stepTypeID: .coldRetard, flexRangeOverride: 600 ... 1080)
+        #expect(step.effectiveFlexRange == 600 ... 1080)
     }
 }

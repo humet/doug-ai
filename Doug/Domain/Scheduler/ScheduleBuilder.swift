@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Input / Output Types
 
-struct ScheduleBuilderInput: Sendable {
+struct ScheduleBuilderInput {
     let recipe: Recipe
     let targetBreadReadyTime: Date
     let kitchenTemperatureCelsius: Double
@@ -31,7 +31,7 @@ struct ScheduleBuilderInput: Sendable {
 }
 
 /// A single step in the generated schedule.
-struct ScheduledStep: Identifiable, Sendable {
+struct ScheduledStep: Identifiable {
     let id: UUID
     let methodStepID: UUID
     let stepTypeID: StepTypeID
@@ -54,7 +54,7 @@ struct ScheduledStep: Identifiable, Sendable {
         subSteps: [ScheduledStep] = [],
         requiresTempReading: Bool = false
     ) {
-        self.id = UUID()
+        id = UUID()
         self.methodStepID = methodStepID
         self.stepTypeID = stepTypeID
         self.label = label
@@ -67,12 +67,12 @@ struct ScheduledStep: Identifiable, Sendable {
     }
 }
 
-enum ScheduleResult: Sendable {
+enum ScheduleResult {
     case success([ScheduledStep])
     case conflict(ScheduleConflict)
 }
 
-struct ScheduleConflict: Sendable {
+struct ScheduleConflict {
     let conflictingStepLabel: String
     let conflictingWindowName: String
     let message: String
@@ -226,7 +226,7 @@ enum ScheduleBuilder {
 
         var folds: [ScheduledStep] = []
 
-        for i in 1...foldCount {
+        for i in 1 ... foldCount {
             let idealTime = bulkStart.addingTimeInterval(spacingSeconds * Double(i))
             let idealEnd = idealTime.addingTimeInterval(foldDurationMinutes * 60)
 
@@ -287,7 +287,7 @@ enum ScheduleBuilder {
         duration: TimeInterval,
         tolerance: TimeInterval,
         blocks: [UnavailableBlock],
-        calendar: Calendar
+        calendar _: Calendar
     ) -> Date? {
         // Try every minute within ±tolerance
         let stepSeconds = 60.0
@@ -325,8 +325,8 @@ enum ScheduleBuilder {
     /// Returns a ScheduleResult.conflict on failure.
     private static func resolveConflict(
         step: MethodStep,
-        tentativeStart: Date,
-        tentativeEnd: Date,
+        tentativeStart _: Date,
+        tentativeEnd _: Date,
         duration: Double,
         conflicts: [UnavailableBlock],
         scheduledSteps: inout [ScheduledStep],

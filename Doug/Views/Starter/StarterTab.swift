@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct StarterTab: View {
     @State private var viewModel = StarterViewModel()
@@ -17,7 +17,10 @@ struct StarterTab: View {
 
     @Environment(\.modelContext) private var modelContext
 
-    private var profile: StarterProfile? { profiles.first }
+    private var profile: StarterProfile? {
+        profiles.first
+    }
+
     private var activeRevivalPlan: RevivalPlan? {
         revivalPlans.first(where: { $0.revivalStatus == .active })
     }
@@ -67,6 +70,14 @@ struct StarterTab: View {
             .sheet(isPresented: $viewModel.showLogFeed) {
                 LogFeedSheet(viewModel: viewModel, modelContext: modelContext)
             }
+            .sheet(isPresented: $viewModel.showStartRevival) {
+                StartRevivalSheet(
+                    viewModel: viewModel,
+                    profile: profile,
+                    availability: availabilities.first,
+                    windows: Array(windows)
+                )
+            }
             .task(id: nextFeed) {
                 await viewModel.syncFeedReminder(
                     nextFeed: nextFeed,
@@ -78,20 +89,32 @@ struct StarterTab: View {
 
     // MARK: - Sections
 
-    @ViewBuilder
     private var healthSection: some View {
         Section {
-            let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
             HStack {
-                Image(systemName: healthIcon(status))
-                    .foregroundStyle(healthColor(status))
-                    .font(.title2)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(healthLabel(status))
-                        .font(.headline)
-                    Text(healthDescription(status))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                if activeRevivalPlan != nil {
+                    Image(systemName: "arrow.trianglehead.2.clockwise.circle.fill")
+                        .foregroundStyle(.tint)
+                        .font(.title2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("In Revival")
+                            .font(.headline)
+                        Text("Your starter is rebuilding strength. Follow the revival plan below.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
+                    Image(systemName: healthIcon(status))
+                        .foregroundStyle(healthColor(status))
+                        .font(.title2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(healthLabel(status))
+                            .font(.headline)
+                        Text(healthDescription(status))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .padding(.vertical, 4)
@@ -110,24 +133,12 @@ struct StarterTab: View {
                     NavigationLink {
                         RevivalPlanView(plan: plan)
                     } label: {
-                        HStack {
-                            Label("Revival in progress", systemImage: "arrow.trianglehead.2.clockwise")
-                            Spacer()
-                            if let bakeReady = plan.estimatedBakeReadyDate {
-                                Text(bakeReady, style: .relative)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        RevivalInProgressRow(plan: plan)
                     }
+                    .listRowBackground(Color.accentColor.opacity(0.08))
                 } else {
                     Button {
-                        _ = viewModel.startRevival(
-                            profile: profile,
-                            availability: availabilities.first,
-                            windows: Array(windows),
-                            modelContext: modelContext
-                        )
+                        viewModel.showStartRevival = true
                     } label: {
                         Label("Start Revival Plan", systemImage: "arrow.trianglehead.2.clockwise")
                     }
@@ -142,12 +153,12 @@ struct StarterTab: View {
 
     @ViewBuilder
     private var nextFeedSection: some View {
-        if let nextFeed {
+        if activeRevivalPlan == nil, let nextFeed {
             Section {
                 HStack {
                     Label("Next feed", systemImage: "clock")
                     Spacer()
-                    Text(nextFeed, style: .relative)
+                    RelativeTimeLabel(date: nextFeed)
                         .foregroundStyle(.secondary)
                 }
                 HStack {
@@ -231,7 +242,7 @@ struct FeedLogRow: View {
                 Text(log.ratioDescription)
                     .font(.headline)
                 Spacer()
-                Text(log.timestamp, style: .relative)
+                RelativeTimeLabel(date: log.timestamp)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -259,6 +270,78 @@ struct FeedLogRow: View {
     }
 }
 
+// MARK: - Revival In-Progress Row
+
+/// A live-feeling summary of an active revival plan.
+///
+/// Animates the symbol so the row reads as actively working, surfaces the
+/// current step index, and picks a status subtitle appropriate to the
+/// current step's state (pending future / ready to mix / rising / done).
+private struct RevivalInProgressRow: View {
+    let plan: RevivalPlan
+
+    private var sortedSteps: [RevivalFeedStep] {
+        plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+    }
+
+    private var currentStep: RevivalFeedStep? {
+        sortedSteps.first(where: { $0.sequenceIndex == plan.currentStepIndex })
+            ?? sortedSteps.last
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "arrow.trianglehead.2.clockwise")
+                .font(.title3)
+                .foregroundStyle(.tint)
+                .symbolEffect(.rotate, options: .repeat(.continuous))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(titleText)
+                    .font(.subheadline.bold())
+                if let subtitle = subtitleText {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            if let bakeReady = plan.estimatedBakeReadyDate {
+                RelativeTimeLabel(date: bakeReady)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var titleText: String {
+        let total = sortedSteps.count
+        let current = min(plan.currentStepIndex + 1, max(total, 1))
+        return "Revival — Step \(current) of \(total)"
+    }
+
+    private var subtitleText: String? {
+        guard let step = currentStep else { return nil }
+        switch step.feedStatus {
+        case .pending:
+            if step.scheduledTime > Date() {
+                return "Mix at \(step.scheduledTime.formatted(date: .omitted, time: .shortened))"
+            }
+            return "Ready to mix"
+        case .inProgress:
+            let peak = (step.startedAt ?? step.scheduledTime)
+                .addingTimeInterval(step.expectedPeakMinutes * 60)
+            return "Rising — peak around \(peak.formatted(date: .omitted, time: .shortened))"
+        case .completed:
+            return "Feed complete"
+        }
+    }
+}
+
 // MARK: - Log Feed Sheet
 
 struct LogFeedSheet: View {
@@ -270,10 +353,48 @@ struct LogFeedSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                howToFeedSection
+
                 Section("Ratio") {
-                    Stepper("Starter: \(viewModel.feedRatioStarter)", value: $viewModel.feedRatioStarter, in: 1...10)
-                    Stepper("Flour: \(viewModel.feedRatioFlour)", value: $viewModel.feedRatioFlour, in: 1...20)
-                    Stepper("Water: \(viewModel.feedRatioWater)", value: $viewModel.feedRatioWater, in: 1...20)
+                    Stepper("Starter: \(viewModel.feedRatioStarter)", value: $viewModel.feedRatioStarter, in: 1 ... 10)
+                    Stepper("Flour: \(viewModel.feedRatioFlour)", value: $viewModel.feedRatioFlour, in: 1 ... 20)
+                    Stepper("Water: \(viewModel.feedRatioWater)", value: $viewModel.feedRatioWater, in: 1 ... 20)
+                }
+
+                Section {
+                    HStack {
+                        Text("Starter amount")
+                        Spacer()
+                        TextField("optional", text: $viewModel.logFeedStarterGrams)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 100)
+                        Text("g")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let grams = starterGrams {
+                        HStack {
+                            Text("Flour")
+                            Spacer()
+                            Text(
+                                "\(gramString(grams * Double(viewModel.feedRatioFlour) / Double(viewModel.feedRatioStarter))) g"
+                            )
+                            .foregroundStyle(.secondary)
+                        }
+                        HStack {
+                            Text("Water")
+                            Spacer()
+                            Text(
+                                "\(gramString(grams * Double(viewModel.feedRatioWater) / Double(viewModel.feedRatioStarter))) g"
+                            )
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Amount")
+                } footer: {
+                    Text("Enter how many grams of starter you're keeping. We'll calculate flour and water for you.")
                 }
 
                 Section("Details") {
@@ -289,7 +410,7 @@ struct LogFeedSheet: View {
                         Text("\(Int(viewModel.feedKitchenTemp))°C")
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $viewModel.feedKitchenTemp, in: 16...32, step: 1)
+                    Slider(value: $viewModel.feedKitchenTemp, in: 16 ... 32, step: 1)
                 }
 
                 Section {
@@ -311,6 +432,55 @@ struct LogFeedSheet: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var howToFeedSection: some View {
+        let retain = starterGrams ?? 20
+        let flour = retain * Double(viewModel.feedRatioFlour) / Double(viewModel.feedRatioStarter)
+        let water = retain * Double(viewModel.feedRatioWater) / Double(viewModel.feedRatioStarter)
+
+        let instruction = FeedInstructions.instruction(
+            for: FeedInstructionInput(
+                retainGrams: retain,
+                addFlourGrams: flour,
+                addWaterGrams: water,
+                flourType: viewModel.feedFlourType,
+                kitchenTempC: viewModel.feedKitchenTemp,
+                expectedPeakMinutes: 300,
+                kind: .maintenance,
+                hadHooch: false,
+                neglect: nil
+            )
+        )
+
+        Section {
+            ForEach(Array(instruction.steps.enumerated()), id: \.offset) { idx, line in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(idx + 1).")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Text(line)
+                        .font(.caption)
+                }
+            }
+        } header: {
+            Text("How to feed")
+        }
+    }
+
+    private var starterGrams: Double? {
+        let trimmed = viewModel.logFeedStarterGrams.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, let v = Double(trimmed), v > 0 else { return nil }
+        return v
+    }
+
+    private func gramString(_ grams: Double) -> String {
+        let rounded = grams.rounded()
+        if abs(rounded - grams) < 0.05 {
+            return "\(Int(rounded))"
+        }
+        return String(format: "%.1f", grams)
     }
 }
 

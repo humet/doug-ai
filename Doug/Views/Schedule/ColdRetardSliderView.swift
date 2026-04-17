@@ -16,7 +16,7 @@ struct ColdRetardSliderView: View {
         self.coldRetardStep = coldRetardStep
         self.flexRange = flexRange
         self.onAdjust = onAdjust
-        self._durationMinutes = State(initialValue: coldRetardStep.computedDurationMinutes)
+        _durationMinutes = State(initialValue: coldRetardStep.computedDurationMinutes)
     }
 
     private var durationHours: Double {

@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ScheduleConfigSheet: View {
     @Bindable var viewModel: ScheduleViewModel
@@ -45,7 +45,7 @@ struct ScheduleConfigSheet: View {
                     }
                     Slider(
                         value: $viewModel.kitchenTemperature,
-                        in: 16...32,
+                        in: 16 ... 32,
                         step: 1
                     ) {
                         Text("Temperature")
