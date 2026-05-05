@@ -172,11 +172,7 @@ final class StarterViewModel {
 
         let plan = RevivalPlan()
         plan.startDate = startTime
-        plan.estimatedBakeReadyDate = RevivalPlanGenerator.estimatedBakeReadyDate(
-            startTime: startTime,
-            neglect: neglect,
-            kitchenTempC: revivalKitchenTemp
-        )
+        plan.estimatedBakeReadyDate = RevivalPlanGenerator.estimatedBakeReadyDate(from: feedPlans)
         plan.initialStarterGrams = grams
         plan.flourType = revivalFlourType
         plan.kitchenTemperatureCelsius = revivalKitchenTemp
@@ -336,6 +332,7 @@ final class StarterViewModel {
         let windowInputs = windows.map { WindowInput(from: $0) }
 
         let sortedSteps = plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        let planID = plan.persistentModelID.hashValue.description
         for step in sortedSteps where step.sequenceIndex >= startIndex && step.feedStatus == .pending {
             let shifted = step.scheduledTime.addingTimeInterval(delta)
             let snapped = FeedScheduler.snapToAvailableTime(
@@ -344,10 +341,23 @@ final class StarterViewModel {
                 windows: windowInputs
             ) ?? shifted
             step.scheduledTime = snapped
+
+            let stepIndex = step.sequenceIndex
+            let title = step.instructionTitle ?? "Feed \(stepIndex + 1)"
+            let newTime = snapped
+            Task {
+                await NotificationService.shared.rescheduleRevivalMixReminderIfPending(
+                    at: newTime,
+                    planID: planID,
+                    stepIndex: stepIndex,
+                    title: title
+                )
+            }
         }
 
-        if let bakeReady = plan.estimatedBakeReadyDate {
-            plan.estimatedBakeReadyDate = bakeReady.addingTimeInterval(delta)
+        if let lastPending = sortedSteps.last(where: { $0.feedStatus != .completed }) {
+            plan.estimatedBakeReadyDate = lastPending.scheduledTime
+                .addingTimeInterval(lastPending.expectedPeakMinutes * 60)
         }
     }
 
@@ -375,6 +385,7 @@ final class StarterViewModel {
             step.instructionBody = instruction.steps.joined(separator: "\n")
             step.instructionWatchFor = instruction.watchFor
             step.instructionExpectedWait = instruction.expectedWait
+            step.instructionPeakGuidance = instruction.peakGuidance
         }
     }
 

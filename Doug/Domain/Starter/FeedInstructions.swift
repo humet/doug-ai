@@ -27,6 +27,7 @@ struct FeedInstruction {
     let steps: [String]
     let watchFor: String
     let expectedWait: String
+    let peakGuidance: String
 }
 
 /// Offline fallback copy for every kind of feed.
@@ -68,18 +69,24 @@ enum FeedInstructions {
         steps.append("Stir until no dry flour remains; scrape down the sides.")
         steps.append("Cover loosely and rest at \(tempString(input.kitchenTempC)).")
 
-        let watchFor = switch input.neglect ?? .mild {
+        let watchFor: String
+        let peakGuidance: String
+
+        switch input.neglect ?? .mild {
         case .severe:
-            "Even some bubbles and a faint rise is a good sign this round. Full doubling may take another feed or two."
+            watchFor = "Even some bubbles and a faint rise is a good sign this round. Full doubling may take another feed or two."
+            peakGuidance = "Your starter may barely rise this round — that's normal after long neglect. Any bubbles at all, even small ones near the surface, count as progress. If activity slows or the expected time passes, you can move on."
         default:
-            "Domed top, bubbles throughout, roughly doubled in volume. Tangy smell, not sharp."
+            watchFor = "Domed top, bubbles throughout, roughly doubled in volume. Tangy smell, not sharp."
+            peakGuidance = "Watch for a domed top with bubbles throughout. When it stops rising and starts to flatten or pull away from the jar, that's peak."
         }
 
         return FeedInstruction(
             title: "Feed 1 — wake it up",
             steps: steps,
             watchFor: watchFor,
-            expectedWait: waitString(input.expectedPeakMinutes)
+            expectedWait: waitString(input.expectedPeakMinutes),
+            peakGuidance: peakGuidance
         )
     }
 
@@ -93,7 +100,8 @@ enum FeedInstructions {
                 "Cover loosely and rest.",
             ],
             watchFor: "Bubbles visible within 90 minutes, faster rise than last time.",
-            expectedWait: waitString(input.expectedPeakMinutes)
+            expectedWait: waitString(input.expectedPeakMinutes),
+            peakGuidance: "Bubbles should appear faster this time. Mark peak when the rise stalls — it should be quicker than last feed."
         )
     }
 
@@ -106,7 +114,8 @@ enum FeedInstructions {
                 "Mix and mark the starting line.",
             ],
             watchFor: "Reliable double in the expected window, glossy domed top. If it hits, you're bake-ready.",
-            expectedWait: waitString(input.expectedPeakMinutes)
+            expectedWait: waitString(input.expectedPeakMinutes),
+            peakGuidance: "This is the confirmation feed. Look for a reliable double within the expected window — glossy dome, bubbly throughout. That means you're bake-ready."
         )
     }
 
@@ -122,7 +131,8 @@ enum FeedInstructions {
                 "Cover loosely. Expect peak in \(waitString(input.expectedPeakMinutes)) at \(tempString(input.kitchenTempC)).",
             ],
             watchFor: "Domed top, bubbles throughout, roughly doubled.",
-            expectedWait: waitString(input.expectedPeakMinutes)
+            expectedWait: waitString(input.expectedPeakMinutes),
+            peakGuidance: "Watch for a domed top with bubbles throughout. When it stops rising, that's peak."
         )
     }
 

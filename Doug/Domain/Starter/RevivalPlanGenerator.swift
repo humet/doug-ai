@@ -87,16 +87,12 @@ enum RevivalPlanGenerator {
         return feeds
     }
 
-    /// Estimates when the starter will be bake-ready after completing revival.
-    static func estimatedBakeReadyDate(
-        startTime: Date,
-        neglect: StarterNeglectLevel,
-        kitchenTempC: Double = referenceKitchenTempC,
-        calendar _: Calendar = .current
-    ) -> Date {
-        let peaks = expectedPeakMinutes(for: neglect, kitchenTempC: kitchenTempC)
-        let totalMinutes = peaks.reduce(0, +) + Double(peaks.count - 1) * 30
-        return startTime.addingTimeInterval(totalMinutes * 60)
+    /// Estimates when the starter will be bake-ready from the actual generated feed plan.
+    /// Uses the last feed's scheduled time plus its expected peak, which accounts for
+    /// availability snapping that the raw formula ignores.
+    static func estimatedBakeReadyDate(from feeds: [RevivalFeedPlan]) -> Date? {
+        guard let lastFeed = feeds.last else { return nil }
+        return lastFeed.scheduledTime.addingTimeInterval(lastFeed.expectedPeakMinutes * 60)
     }
 
     /// Maps a step index to the instruction kind used for copy templates.

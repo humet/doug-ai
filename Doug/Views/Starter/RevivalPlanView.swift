@@ -41,6 +41,10 @@ struct RevivalPlanView: View {
             if plan.revivalStatus == .active {
                 Section {
                     Button("Cancel Revival", role: .destructive) {
+                        NotificationService.shared.cancelAllRevivalReminders(
+                            planID: notificationPlanID,
+                            stepCount: sortedSteps.count
+                        )
                         plan.revivalStatus = .cancelled
                     }
                 }
@@ -83,79 +87,257 @@ struct RevivalPlanView: View {
                         .font(.title3.bold())
                 }
 
-                scheduledTimeRow(step)
-
-                gramsPanel(step)
-
-                if let bulletsText = step.instructionBody, !bulletsText.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(bulletLines(bulletsText).enumerated()), id: \.offset) { idx, line in
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Text("\(idx + 1).")
-                                    .font(.subheadline.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                                Text(line)
-                                    .font(.subheadline)
-                            }
-                        }
-                    }
+                switch step.feedStatus {
+                case .pending:
+                    pendingContent(step)
+                case .inProgress:
+                    inProgressContent(step)
+                case .completed:
+                    Label("Completed", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                        .frame(maxWidth: .infinity)
                 }
-
-                if let watch = step.instructionWatchFor, !watch.isEmpty {
-                    Label {
-                        Text(watch)
-                            .font(.footnote)
-                    } icon: {
-                        Image(systemName: "eye")
-                    }
-                    .foregroundStyle(.secondary)
-                }
-
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                    Text("Expected wait: \(step.instructionExpectedWait ?? "")")
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-                latenessCallout(step)
-
-                actionButton(for: step)
             }
             .padding(.vertical, 4)
         }
     }
 
     @ViewBuilder
-    private func scheduledTimeRow(_ step: RevivalFeedStep) -> some View {
-        if step.feedStatus == .pending {
-            let isFuture = step.scheduledTime > Date()
-            HStack(spacing: 8) {
-                Image(systemName: isFuture ? "calendar.badge.clock" : "calendar")
-                VStack(alignment: .leading, spacing: 2) {
-                    if isFuture {
-                        Text("Mix at \(step.scheduledTime, format: .dateTime.weekday(.wide).hour().minute())")
-                            .font(.subheadline.bold())
-                        RelativeTimeLabel(date: step.scheduledTime)
-                            .font(.caption)
+    private func pendingContent(_ step: RevivalFeedStep) -> some View {
+        scheduledTimeRow(step)
+
+        gramsPanel(step)
+
+        if let bulletsText = step.instructionBody, !bulletsText.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(bulletLines(bulletsText).enumerated()), id: \.offset) { idx, line in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("\(idx + 1).")
+                            .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
-                    } else {
-                        Text("Scheduled for \(step.scheduledTime, format: .dateTime.weekday(.abbreviated).hour().minute())")
-                            .font(.footnote)
-                        Text("Passed — mix when ready")
-                            .font(.caption2)
+                        Text(line)
+                            .font(.subheadline)
                     }
                 }
-                Spacer()
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
+        }
+
+        if let watch = step.instructionWatchFor, !watch.isEmpty {
+            Label {
+                Text(watch)
+                    .font(.footnote)
+            } icon: {
+                Image(systemName: "eye")
+            }
+            .foregroundStyle(.secondary)
+        }
+
+        HStack(spacing: 6) {
+            Image(systemName: "clock")
+            Text("Expected wait: \(step.instructionExpectedWait ?? "")")
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+
+        whatToDoCard
+
+        latenessCallout(step)
+
+        actionButton(for: step)
+    }
+
+    private var whatToDoCard: some View {
+        Label {
+            Text("Mix the feed above, then tap the button below to start. You'll watch for peak and mark it when your starter stops rising.")
+                .font(.footnote)
+        } icon: {
+            Image(systemName: "hand.point.up")
+        }
+        .foregroundStyle(.secondary)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(.tertiarySystemBackground))
+        )
+    }
+
+    @ViewBuilder
+    private func inProgressContent(_ step: RevivalFeedStep) -> some View {
+        if let startedAt = step.startedAt {
+            HStack(spacing: 6) {
+                Image(systemName: "timer")
+                Text("Rising for ")
+                Text(startedAt, style: .timer)
+            }
+            .font(.footnote.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+
+        peakWindowCard(step)
+
+        let guidance = step.instructionPeakGuidance ?? step.instructionWatchFor
+        if let guidance, !guidance.isEmpty {
+            Label {
+                Text(guidance)
+                    .font(.subheadline)
+            } icon: {
+                Image(systemName: "eye.fill")
+                    .foregroundStyle(Color.accentColor)
+            }
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isFuture ? Color.accentColor.opacity(0.12) : Color(.tertiarySystemBackground))
+                    .fill(Color.accentColor.opacity(0.10))
             )
-            .foregroundStyle(isFuture ? Color.accentColor : .secondary)
+        }
+
+        latenessCallout(step)
+
+        timeFallbackCard(step)
+
+        Button {
+            viewModel.markRevivalStepPeak(
+                step: step,
+                plan: plan,
+                availability: availabilities.first,
+                windows: Array(windows)
+            )
+        } label: {
+            Label("Mark peak now", systemImage: "arrow.up.to.line")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+    }
+
+    @ViewBuilder
+    private func peakWindowCard(_ step: RevivalFeedStep) -> some View {
+        if let startedAt = step.startedAt {
+            let minTime = startedAt.addingTimeInterval((step.minPeakMinutes ?? step.expectedPeakMinutes * 0.75) * 60)
+            let maxTime = startedAt.addingTimeInterval((step.maxPeakMinutes ?? step.expectedPeakMinutes * 1.5) * 60)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Expected peak window")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Text("\(minTime, format: .dateTime.hour().minute()) – \(maxTime, format: .dateTime.hour().minute())")
+                        .font(.subheadline.bold())
+                    Spacer()
+                    peakWindowBadge(startedAt: startedAt, step: step)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(.secondarySystemBackground))
+            )
+        }
+    }
+
+    private func peakWindowBadge(startedAt: Date, step: RevivalFeedStep) -> some View {
+        let elapsed = Date().timeIntervalSince(startedAt) / 60
+        let min = step.minPeakMinutes ?? step.expectedPeakMinutes * 0.75
+        let max = step.maxPeakMinutes ?? step.expectedPeakMinutes * 1.5
+
+        let (text, color): (String, Color) = if elapsed < min {
+            ("Too early", .secondary)
+        } else if elapsed <= max {
+            ("In the window", .green)
+        } else {
+            ("Past expected", .orange)
+        }
+
+        return Text(text)
+            .font(.caption.bold())
+            .foregroundStyle(color)
+    }
+
+    @ViewBuilder
+    private func timeFallbackCard(_ step: RevivalFeedStep) -> some View {
+        if let startedAt = step.startedAt {
+            let elapsed = Date().timeIntervalSince(startedAt) / 60
+            let max = step.maxPeakMinutes ?? step.expectedPeakMinutes * 1.5
+            let isSevere = plan.assessedNeglect == StarterNeglectLevel.severe.rawValue
+            let threshold = isSevere ? step.expectedPeakMinutes * 1.1 : max
+
+            if elapsed > threshold {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label {
+                        Text(isSevere
+                            ? "Your starter may not show a clear peak yet — that's normal after long neglect. You can move to the next feed."
+                            : "It's been longer than expected. If activity has slowed, you can move on.")
+                            .font(.footnote)
+                    } icon: {
+                        Image(systemName: "info.circle.fill")
+                    }
+                    .foregroundStyle(.orange)
+
+                    Button {
+                        viewModel.markRevivalStepPeak(
+                            step: step,
+                            plan: plan,
+                            availability: availabilities.first,
+                            windows: Array(windows)
+                        )
+                    } label: {
+                        Text("Move to next feed")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.orange.opacity(0.10))
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func scheduledTimeRow(_ step: RevivalFeedStep) -> some View {
+        if step.feedStatus == .pending {
+            let now = Date()
+            let isFuture = step.scheduledTime > now
+            let isRecent = !isFuture && now.timeIntervalSince(step.scheduledTime) < 5 * 60
+
+            if isRecent {
+                // Just created or very recent — no stale time display needed
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: isFuture ? "calendar.badge.clock" : "calendar")
+                    VStack(alignment: .leading, spacing: 2) {
+                        if isFuture {
+                            Text("Mix at \(step.scheduledTime, format: .dateTime.weekday(.wide).hour().minute())")
+                                .font(.subheadline.bold())
+                            RelativeTimeLabel(date: step.scheduledTime)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Scheduled for \(step.scheduledTime, format: .dateTime.weekday(.abbreviated).hour().minute())")
+                                .font(.footnote)
+                            Text("Passed — mix when ready")
+                                .font(.caption2)
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(isFuture ? Color.accentColor.opacity(0.12) : Color(.tertiarySystemBackground))
+                )
+                .foregroundStyle(isFuture ? Color.accentColor : .secondary)
+            }
         }
     }
 
@@ -297,52 +479,34 @@ struct RevivalPlanView: View {
 
     @ViewBuilder
     private func actionButton(for step: RevivalFeedStep) -> some View {
-        switch step.feedStatus {
-        case .pending:
-            if step.scheduledTime > Date() {
-                VStack(spacing: 10) {
-                    if isReminderPending {
-                        reminderSetCard(for: step)
+        if step.scheduledTime > Date() {
+            VStack(spacing: 10) {
+                if isReminderPending {
+                    reminderSetCard(for: step)
 
-                        Button(role: .destructive) {
-                            cancelMixReminder(for: step)
-                        } label: {
-                            Text("Cancel reminder")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                    } else {
-                        Button {
-                            Task { await scheduleMixReminder(for: step) }
-                        } label: {
-                            Text("Remind me at \(step.scheduledTime, format: .dateTime.hour().minute())")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                    }
-
-                    Button {
-                        if isReminderPending {
-                            cancelMixReminder(for: step)
-                        }
-                        viewModel.markRevivalStepStarted(
-                            step: step,
-                            plan: plan,
-                            availability: availabilities.first,
-                            windows: Array(windows)
-                        )
+                    Button(role: .destructive) {
+                        cancelMixReminder(for: step)
                     } label: {
-                        Text("I've already mixed")
+                        Text("Cancel reminder")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
+                } else {
+                    Button {
+                        Task { await scheduleMixReminder(for: step) }
+                    } label: {
+                        Text("Remind me at \(step.scheduledTime, format: .dateTime.hour().minute())")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                 }
-                .sensoryFeedback(.success, trigger: isReminderPending)
-            } else {
+
                 Button {
+                    if isReminderPending {
+                        cancelMixReminder(for: step)
+                    }
                     viewModel.markRevivalStepStarted(
                         step: step,
                         plan: plan,
@@ -350,43 +514,27 @@ struct RevivalPlanView: View {
                         windows: Array(windows)
                     )
                 } label: {
-                    Text("I've mixed & covered")
+                    Text("I've already mixed")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
                 .controlSize(.large)
             }
-
-        case .inProgress:
-            VStack(spacing: 8) {
-                if let startedAt = step.startedAt {
-                    HStack(spacing: 6) {
-                        Image(systemName: "timer")
-                        Text("Rising for ")
-                        Text(startedAt, style: .timer)
-                    }
-                    .font(.footnote.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                }
-                Button {
-                    viewModel.markRevivalStepPeak(
-                        step: step,
-                        plan: plan,
-                        availability: availabilities.first,
-                        windows: Array(windows)
-                    )
-                } label: {
-                    Text("Mark peak now")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+            .sensoryFeedback(.success, trigger: isReminderPending)
+        } else {
+            Button {
+                viewModel.markRevivalStepStarted(
+                    step: step,
+                    plan: plan,
+                    availability: availabilities.first,
+                    windows: Array(windows)
+                )
+            } label: {
+                Text("I've mixed & covered")
+                    .frame(maxWidth: .infinity)
             }
-
-        case .completed:
-            Label("Completed", systemImage: "checkmark.seal.fill")
-                .foregroundStyle(.green)
-                .frame(maxWidth: .infinity)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
         }
     }
 

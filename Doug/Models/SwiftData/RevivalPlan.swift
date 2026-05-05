@@ -57,6 +57,7 @@ final class RevivalFeedStep {
     var instructionBody: String?
     var instructionWatchFor: String?
     var instructionExpectedWait: String?
+    var instructionPeakGuidance: String?
 
     init(
         sequenceIndex: Int,

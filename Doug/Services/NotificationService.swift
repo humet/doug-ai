@@ -267,4 +267,27 @@ final class NotificationService {
         let pending = await center.pendingNotificationRequests()
         return pending.contains { $0.identifier == target }
     }
+
+    /// Reschedules a revival mix reminder only if one was already pending.
+    /// Returns true if a reminder was found and rescheduled.
+    @discardableResult
+    func rescheduleRevivalMixReminderIfPending(
+        at date: Date,
+        planID: String,
+        stepIndex: Int,
+        title: String
+    ) async -> Bool {
+        let target = Self.revivalMixIdentifier(planID: planID, stepIndex: stepIndex)
+        let pending = await center.pendingNotificationRequests()
+        guard pending.contains(where: { $0.identifier == target }) else { return false }
+        cancelRevivalMixReminder(planID: planID, stepIndex: stepIndex)
+        await scheduleRevivalMixReminder(at: date, planID: planID, stepIndex: stepIndex, title: title)
+        return true
+    }
+
+    /// Cancels all revival mix reminders for a plan.
+    func cancelAllRevivalReminders(planID: String, stepCount: Int) {
+        let identifiers = (0 ..< stepCount).map { Self.revivalMixIdentifier(planID: planID, stepIndex: $0) }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
 }
