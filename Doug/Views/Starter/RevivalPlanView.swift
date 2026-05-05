@@ -18,6 +18,7 @@ struct RevivalPlanView: View {
 
     @State private var viewModel = StarterViewModel()
     @State private var isReminderPending = false
+    @State private var showCompletionCheck = false
 
     var body: some View {
         List {
@@ -53,6 +54,9 @@ struct RevivalPlanView: View {
         .navigationTitle("Revival")
         .task(id: plan.currentStepIndex) {
             await refreshReminderState()
+        }
+        .sheet(isPresented: $showCompletionCheck) {
+            completionCheckSheet
         }
     }
 
@@ -198,12 +202,7 @@ struct RevivalPlanView: View {
         timeFallbackCard(step)
 
         Button {
-            viewModel.markRevivalStepPeak(
-                step: step,
-                plan: plan,
-                availability: availabilities.first,
-                windows: Array(windows)
-            )
+            markPeakOrCheck(step)
         } label: {
             Label("Mark peak now", systemImage: "arrow.up.to.line")
                 .frame(maxWidth: .infinity)
@@ -278,12 +277,7 @@ struct RevivalPlanView: View {
                     .foregroundStyle(.orange)
 
                     Button {
-                        viewModel.markRevivalStepPeak(
-                            step: step,
-                            plan: plan,
-                            availability: availabilities.first,
-                            windows: Array(windows)
-                        )
+                        markPeakOrCheck(step)
                     } label: {
                         Text("Move to next feed")
                             .frame(maxWidth: .infinity)
@@ -582,6 +576,98 @@ struct RevivalPlanView: View {
                 .foregroundStyle(.secondary)
             }
         }
+    }
+
+    // MARK: - Completion Check
+
+    private var isFinalStep: Bool {
+        guard let step = currentStep else { return false }
+        return step.sequenceIndex >= sortedSteps.count - 1
+    }
+
+    private func markPeakOrCheck(_ step: RevivalFeedStep) {
+        if isFinalStep {
+            showCompletionCheck = true
+        } else {
+            viewModel.markRevivalStepPeak(
+                step: step,
+                plan: plan,
+                availability: availabilities.first,
+                windows: Array(windows)
+            )
+        }
+    }
+
+    private var completionCheckSheet: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("Your final feed has peaked. Does your starter look ready to bake with?")
+                        .font(.subheadline)
+                }
+
+                Section {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Doubled reliably, domed top, bubbly")
+                                .font(.subheadline)
+                            Text("Tangy smell, not sharp or acetone-y")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "checkmark.circle")
+                            .foregroundStyle(.green)
+                    }
+                } header: {
+                    Text("Signs it's ready")
+                }
+
+                Section {
+                    Button {
+                        if let step = currentStep {
+                            viewModel.markRevivalStepPeak(
+                                step: step,
+                                plan: plan,
+                                availability: availabilities.first,
+                                windows: Array(windows)
+                            )
+                        }
+                        showCompletionCheck = false
+                    } label: {
+                        Label("Yes — it's bake-ready", systemImage: "flame")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .tint(.green)
+
+                    Button {
+                        if let step = currentStep {
+                            viewModel.extendRevival(
+                                step: step,
+                                plan: plan,
+                                availability: availabilities.first,
+                                windows: Array(windows)
+                            )
+                        }
+                        showCompletionCheck = false
+                    } label: {
+                        Label("Not yet — add another feed", systemImage: "arrow.clockwise")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .tint(.orange)
+                }
+            }
+            .navigationTitle("How does it look?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showCompletionCheck = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 
     // MARK: - Helpers

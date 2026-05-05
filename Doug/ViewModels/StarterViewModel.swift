@@ -318,6 +318,67 @@ final class StarterViewModel {
         }
     }
 
+    /// Records peak on the final step but adds an extension feed instead of completing.
+    func extendRevival(
+        step: RevivalFeedStep,
+        plan: RevivalPlan,
+        availability: UserAvailability?,
+        windows: [UnavailableWindow]
+    ) {
+        let now = Date()
+        step.peakTimestamp = now
+        let reference = step.startedAt ?? step.scheduledTime
+        step.timeToPeakMinutes = now.timeIntervalSince(reference) / 60
+        step.feedStatus = .completed
+
+        let actualPeakMinutes = step.timeToPeakMinutes ?? step.expectedPeakMinutes
+        let extensionPeak = max(actualPeakMinutes * 0.85, 180)
+
+        let avail = availability.map { AvailabilityInput(from: $0) }
+            ?? AvailabilityInput(startHour: 6, startMinute: 30, endHour: 21, endMinute: 0)
+        let windowInputs = windows.map { WindowInput(from: $0) }
+        let candidate = now.addingTimeInterval(30 * 60)
+        let feedTime = FeedScheduler.snapToAvailableTime(
+            candidate: candidate,
+            availability: avail,
+            windows: windowInputs
+        ) ?? candidate
+
+        let newIndex = step.sequenceIndex + 1
+        let newStep = RevivalFeedStep(
+            sequenceIndex: newIndex,
+            scheduledTime: feedTime,
+            expectedPeakMinutes: extensionPeak
+        )
+        newStep.plan = plan
+        newStep.retainStarterGrams = step.retainStarterGrams
+        newStep.addFlourGrams = step.addFlourGrams
+        newStep.addWaterGrams = step.addWaterGrams
+        newStep.minPeakMinutes = extensionPeak * 0.75
+        newStep.maxPeakMinutes = extensionPeak * 1.5
+        newStep.originalScheduledTime = feedTime
+
+        let instruction = FeedInstructions.instruction(for: FeedInstructionInput(
+            retainGrams: step.retainStarterGrams ?? 0,
+            addFlourGrams: step.addFlourGrams ?? 0,
+            addWaterGrams: step.addWaterGrams ?? 0,
+            flourType: plan.flourType ?? "white",
+            kitchenTempC: plan.kitchenTemperatureCelsius ?? 22,
+            expectedPeakMinutes: extensionPeak,
+            kind: .revivalFinal,
+            hadHooch: false,
+            neglect: plan.assessedNeglect.flatMap(StarterNeglectLevel.init(rawValue:))
+        ))
+        newStep.instructionTitle = instruction.title
+        newStep.instructionBody = instruction.steps.joined(separator: "\n")
+        newStep.instructionWatchFor = instruction.watchFor
+        newStep.instructionExpectedWait = instruction.expectedWait
+        newStep.instructionPeakGuidance = instruction.peakGuidance
+
+        plan.currentStepIndex = newIndex
+        plan.estimatedBakeReadyDate = feedTime.addingTimeInterval(extensionPeak * 60)
+    }
+
     // MARK: - Private
 
     private func applyRevivalDelta(
