@@ -246,8 +246,8 @@ final class StarterViewModel {
             }
         }
 
-        // Reset wizard form.
         resetRevivalForm()
+        syncRevivalActivity(plan: plan)
         return plan
     }
 
@@ -276,6 +276,7 @@ final class StarterViewModel {
                 windows: windows
             )
         }
+        syncRevivalActivity(plan: plan)
     }
 
     /// Records peak, advances to the next step, and cascades a delta if the peak
@@ -316,6 +317,7 @@ final class StarterViewModel {
         } else {
             plan.currentStepIndex = step.sequenceIndex + 1
         }
+        syncRevivalActivity(plan: plan)
     }
 
     /// Records peak on the final step but adds an extension feed instead of completing.
@@ -377,6 +379,7 @@ final class StarterViewModel {
 
         plan.currentStepIndex = newIndex
         plan.estimatedBakeReadyDate = feedTime.addingTimeInterval(extensionPeak * 60)
+        syncRevivalActivity(plan: plan)
     }
 
     // MARK: - Private
@@ -459,5 +462,24 @@ final class StarterViewModel {
         revivalNotes = ""
         revivalStarterGrams = "20"
         showStartRevival = false
+    }
+
+    // MARK: - Live Activity
+
+    private func syncRevivalActivity(plan: RevivalPlan) {
+        guard plan.revivalStatus == .active else {
+            LiveActivityService.shared.endRevivalActivity()
+            return
+        }
+
+        let state = LiveActivityService.buildRevivalState(from: plan)
+        if LiveActivityService.shared.hasRevivalActivity {
+            LiveActivityService.shared.updateRevivalActivity(state: state)
+        } else {
+            LiveActivityService.shared.startRevivalActivity(
+                planStartDate: plan.startDate,
+                state: state
+            )
+        }
     }
 }

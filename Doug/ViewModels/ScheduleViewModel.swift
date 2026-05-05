@@ -165,10 +165,10 @@ final class ScheduleViewModel {
 
         activeSchedule = schedule
 
-        // Schedule notifications
         Task {
             await NotificationService.shared.scheduleNotifications(for: persistedSteps)
         }
+        syncLiveActivity()
     }
 
     // MARK: - Cold Retard Adjustment
@@ -189,6 +189,7 @@ final class ScheduleViewModel {
         coldRetardStep.computedDurationMinutes = newDurationMinutes
 
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
+        syncLiveActivity()
     }
 
     // MARK: - Degree-Hour Schedule Correction
@@ -227,6 +228,7 @@ final class ScheduleViewModel {
         bulkStep.computedDurationMinutes = newBulkEnd.timeIntervalSince(bulkStep.computedStartTime) / 60
 
         cascade(afterEnd: oldBulkEnd, delta: delta, in: schedule)
+        syncLiveActivity()
     }
 
     // MARK: - Cold Retard Step Lookup
@@ -254,6 +256,7 @@ final class ScheduleViewModel {
             step.actualEndTime = Date()
         }
         promoteNextUpcoming(in: schedule)
+        syncLiveActivity()
     }
 
     /// Reverts the most-recently-completed step to active without moving any times.
@@ -261,7 +264,6 @@ final class ScheduleViewModel {
         guard let schedule = activeSchedule else { return }
         guard step.stepStatus == .done || step.stepStatus == .skipped else { return }
 
-        // Demote whichever step is currently active back to upcoming so only one step is active.
         let steps = allSteps(in: schedule)
         for candidate in steps where candidate.stepStatus == .active {
             candidate.stepStatus = .upcoming
@@ -269,6 +271,7 @@ final class ScheduleViewModel {
 
         step.stepStatus = .active
         step.actualEndTime = nil
+        syncLiveActivity()
     }
 
     /// Walks steps in sequence and auto-progresses passive steps whose end time has passed.
@@ -276,27 +279,31 @@ final class ScheduleViewModel {
     func advanceIfReady(now: Date, modelContext _: ModelContext) {
         guard let schedule = activeSchedule, schedule.pausedAt == nil else { return }
         let steps = orderedTopLevelSteps(in: schedule)
+        var didChange = false
 
         for step in steps {
             switch step.stepStatus {
             case .done, .skipped:
                 continue
             case .upcoming:
-                // First not-yet-done step — flip it to active if its start has arrived.
                 if step.computedStartTime <= now {
                     step.stepStatus = .active
+                    didChange = true
                 }
+                if didChange { syncLiveActivity() }
                 return
             case .active:
-                // Passive steps auto-progress when their end time has passed.
                 if step.stepType.classification != .handsOn, step.computedEndTime <= now {
                     step.stepStatus = .done
                     step.actualEndTime = step.computedEndTime
+                    didChange = true
                     continue
                 }
+                if didChange { syncLiveActivity() }
                 return
             }
         }
+        if didChange { syncLiveActivity() }
     }
 
     // MARK: - Pause / Resume
@@ -306,6 +313,7 @@ final class ScheduleViewModel {
         schedule.pausedAt = Date()
         let steps = allSteps(in: schedule)
         NotificationService.shared.cancelNotifications(for: steps)
+        syncLiveActivity()
     }
 
     func resumeSchedule(modelContext _: ModelContext) {
@@ -315,6 +323,7 @@ final class ScheduleViewModel {
         guard delta > 0 else {
             let steps = allSteps(in: schedule)
             Task { await NotificationService.shared.rescheduleNotifications(for: steps) }
+            syncLiveActivity()
             return
         }
         let steps = allSteps(in: schedule)
@@ -324,6 +333,7 @@ final class ScheduleViewModel {
         }
         schedule.targetBreadReadyTime = schedule.targetBreadReadyTime.addingTimeInterval(delta)
         Task { await NotificationService.shared.rescheduleNotifications(for: steps) }
+        syncLiveActivity()
     }
 
     // MARK: - Finish Early / Start Now / Extend / Shorten
@@ -333,7 +343,7 @@ final class ScheduleViewModel {
         let now = Date()
         let oldEnd = step.computedEndTime
         let delta = now.timeIntervalSince(oldEnd)
-        guard delta < 0 else { return } // Only makes sense when finishing before scheduled end.
+        guard delta < 0 else { return }
 
         step.stepStatus = .done
         step.actualEndTime = now
@@ -342,6 +352,7 @@ final class ScheduleViewModel {
 
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
         promoteNextUpcoming(in: schedule)
+        syncLiveActivity()
     }
 
     func startStepNow(_ step: ScheduleStep, modelContext _: ModelContext) {
@@ -349,13 +360,12 @@ final class ScheduleViewModel {
         let now = Date()
         let delta = now.timeIntervalSince(step.computedStartTime)
         let oldStart = step.computedStartTime
-        guard delta > 0 else { return } // Only makes sense when starting late.
+        guard delta > 0 else { return }
 
         step.computedStartTime = now
         step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
         step.stepStatus = .active
 
-        // Demote anything that was active before.
         for candidate in allSteps(in: schedule)
             where candidate !== step && candidate.stepStatus == .active
         {
@@ -363,6 +373,7 @@ final class ScheduleViewModel {
         }
 
         cascade(afterEnd: oldStart, delta: delta, in: schedule, excluding: step)
+        syncLiveActivity()
     }
 
     func extendStep(_ step: ScheduleStep, byMinutes minutes: Double, modelContext _: ModelContext) {
@@ -375,6 +386,7 @@ final class ScheduleViewModel {
         step.computedDurationMinutes += minutes
 
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
+        syncLiveActivity()
     }
 
     func shortenStep(_ step: ScheduleStep, byMinutes minutes: Double, modelContext _: ModelContext) {
@@ -383,13 +395,13 @@ final class ScheduleViewModel {
         let delta = -minutes * 60
         let oldEnd = step.computedEndTime
         let newEnd = step.computedEndTime.addingTimeInterval(delta)
-        // Never shorten below a 1-minute floor from the start time.
         guard newEnd > step.computedStartTime.addingTimeInterval(60) else { return }
 
         step.computedEndTime = newEnd
         step.computedDurationMinutes = max(1, step.computedDurationMinutes - minutes)
 
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
+        syncLiveActivity()
     }
 
     // MARK: - Finish / Cancel bake
@@ -408,6 +420,7 @@ final class ScheduleViewModel {
         NotificationService.shared.cancelNotifications(for: steps)
         schedule.scheduleStatus = .complete
         activeSchedule = nil
+        LiveActivityService.shared.endBakeActivity()
     }
 
     // MARK: - Cascade helper
@@ -453,6 +466,35 @@ final class ScheduleViewModel {
 
     private func allSteps(in schedule: Schedule) -> [ScheduleStep] {
         schedule.steps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+    }
+
+    // MARK: - Live Activity
+
+    private func syncLiveActivity() {
+        guard let schedule = activeSchedule, schedule.scheduleStatus == .active else {
+            LiveActivityService.shared.endBakeActivityImmediately()
+            return
+        }
+
+        let steps = orderedTopLevelSteps(in: schedule)
+        let activeStep = steps.first { $0.stepStatus == .active }
+        let isColdRetard = activeStep.flatMap { StepTypeID(rawValue: $0.stepTypeID) } == .coldRetard
+
+        if isColdRetard {
+            LiveActivityService.shared.endBakeActivity()
+            return
+        }
+
+        let state = LiveActivityService.buildBakeState(from: schedule)
+        if LiveActivityService.shared.hasBakeActivity {
+            LiveActivityService.shared.updateBakeActivity(state: state)
+        } else {
+            LiveActivityService.shared.startBakeActivity(
+                recipeName: schedule.recipe.name,
+                recipeID: schedule.recipeID,
+                state: state
+            )
+        }
     }
 }
 

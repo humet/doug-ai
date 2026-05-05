@@ -40,8 +40,40 @@ struct DougApp: App {
                 .task {
                     NotificationService.shared.registerCategories()
                     UNUserNotificationCenter.current().delegate = notificationHandler
+                    reconcileLiveActivities()
                 }
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    @MainActor
+    private func reconcileLiveActivities() {
+        let context = sharedModelContainer.mainContext
+        let activeSchedule: Schedule? = {
+            let descriptor = FetchDescriptor<Schedule>(
+                predicate: #Predicate { $0.status == "active" }
+            )
+            do {
+                return try context.fetch(descriptor).first
+            } catch {
+                print("Failed to fetch active schedule for Live Activity reconciliation: \(error)")
+                return nil
+            }
+        }()
+        let activeRevivalPlan: RevivalPlan? = {
+            let descriptor = FetchDescriptor<RevivalPlan>(
+                predicate: #Predicate { $0.status == "active" }
+            )
+            do {
+                return try context.fetch(descriptor).first
+            } catch {
+                print("Failed to fetch active revival plan for Live Activity reconciliation: \(error)")
+                return nil
+            }
+        }()
+        LiveActivityService.shared.reconcileOnLaunch(
+            activeSchedule: activeSchedule,
+            activeRevivalPlan: activeRevivalPlan
+        )
     }
 }

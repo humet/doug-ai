@@ -6,7 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		10AA100E2FA10000003679E8 /* DougLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 10AA10012FA10000003679E8 /* DougLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		10AA100C2FA10000003679E8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 10DB37BD2F912E00003679E8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 10AA10072FA10000003679E8;
+			remoteInfo = DougLiveActivity;
+		};
 		10DB37D52F912E00003679E8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 10DB37BD2F912E00003679E8 /* Project object */;
@@ -23,7 +34,25 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		10AA100D2FA10000003679E8 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				10AA100E2FA10000003679E8 /* DougLiveActivity.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		10AA10012FA10000003679E8 /* DougLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DougLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		10CF465E2FA9FCE600843F8F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		10CF53F62FAA0DE900843F8F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		10CF55A22FAA163F00843F8F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10DB37C52F912E00003679E8 /* Doug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Doug.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		10DB37D42F912E00003679E8 /* DougTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DougTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		10DB37DE2F912E00003679E8 /* DougUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DougUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -31,7 +60,30 @@
 		10E457D72F9238E900F78144 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		10AA100F2FA10000003679E8 /* Exceptions for "DougLiveActivity" folder in "DougLiveActivity" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 10AA10072FA10000003679E8 /* DougLiveActivity */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		10AA10022FA10000003679E8 /* DougLiveActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				10AA100F2FA10000003679E8 /* Exceptions for "DougLiveActivity" folder in "DougLiveActivity" target */,
+			);
+			path = DougLiveActivity;
+			sourceTree = "<group>";
+		};
+		10AA10032FA10000003679E8 /* DougLiveActivityShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DougLiveActivityShared;
+			sourceTree = "<group>";
+		};
 		10DB37C72F912E00003679E8 /* Doug */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Doug;
@@ -50,6 +102,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		10AA10052FA10000003679E8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		10DB37C22F912E00003679E8 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -74,10 +133,27 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		10CF46602FA9FCE600843F8F /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		10CF53F82FAA0DE900843F8F /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		10CF55A42FAA163F00843F8F /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 		10DB37BC2F912E00003679E8 = {
 			isa = PBXGroup;
 			children = (
 				10DB37C72F912E00003679E8 /* Doug */,
+				10AA10022FA10000003679E8 /* DougLiveActivity */,
+				10AA10032FA10000003679E8 /* DougLiveActivityShared */,
 				10DB37D72F912E00003679E8 /* DougTests */,
 				10DB37E12F912E00003679E8 /* DougUITests */,
 				10DB37C62F912E00003679E8 /* Products */,
@@ -88,6 +164,7 @@
 			isa = PBXGroup;
 			children = (
 				10DB37C52F912E00003679E8 /* Doug.app */,
+				10AA10012FA10000003679E8 /* DougLiveActivity.appex */,
 				10DB37D42F912E00003679E8 /* DougTests.xctest */,
 				10DB37DE2F912E00003679E8 /* DougUITests.xctest */,
 			);
@@ -107,6 +184,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		10AA10072FA10000003679E8 /* DougLiveActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 10AA100A2FA10000003679E8 /* Build configuration list for PBXNativeTarget "DougLiveActivity" */;
+			buildPhases = (
+				10AA10042FA10000003679E8 /* Sources */,
+				10AA10052FA10000003679E8 /* Frameworks */,
+				10AA10062FA10000003679E8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				10AA10022FA10000003679E8 /* DougLiveActivity */,
+				10AA10032FA10000003679E8 /* DougLiveActivityShared */,
+			);
+			name = DougLiveActivity;
+			packageProductDependencies = (
+			);
+			productName = DougLiveActivity;
+			productReference = 10AA10012FA10000003679E8 /* DougLiveActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		10DB37C42F912E00003679E8 /* Doug */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 10DB37E82F912E00003679E8 /* Build configuration list for PBXNativeTarget "Doug" */;
@@ -114,12 +214,15 @@
 				10DB37C12F912E00003679E8 /* Sources */,
 				10DB37C22F912E00003679E8 /* Frameworks */,
 				10DB37C32F912E00003679E8 /* Resources */,
+				10AA100D2FA10000003679E8 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				10AA100B2FA10000003679E8 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
+				10AA10032FA10000003679E8 /* DougLiveActivityShared */,
 				10DB37C72F912E00003679E8 /* Doug */,
 			);
 			name = Doug;
@@ -185,6 +288,9 @@
 				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					10AA10072FA10000003679E8 = {
+						CreatedOnToolsVersion = 26.4;
+					};
 					10DB37C42F912E00003679E8 = {
 						CreatedOnToolsVersion = 26.4;
 					};
@@ -216,13 +322,26 @@
 					ProjectRef = 10E457D72F9238E900F78144 /* Doug.xcodeproj */;
 				},
 				{
+					ProductGroup = 10CF55A42FAA163F00843F8F /* Products */;
+					ProjectRef = 10CF55A22FAA163F00843F8F /* Doug.xcodeproj */;
+				},
+				{
+					ProductGroup = 10CF53F82FAA0DE900843F8F /* Products */;
+					ProjectRef = 10CF53F62FAA0DE900843F8F /* Doug.xcodeproj */;
+				},
+				{
 					ProductGroup = 10DB381B2F9130F7003679E8 /* Products */;
 					ProjectRef = 10DB38192F9130F7003679E8 /* Doug.xcodeproj */;
+				},
+				{
+					ProductGroup = 10CF46602FA9FCE600843F8F /* Products */;
+					ProjectRef = 10CF465E2FA9FCE600843F8F /* Doug.xcodeproj */;
 				},
 			);
 			projectRoot = "";
 			targets = (
 				10DB37C42F912E00003679E8 /* Doug */,
+				10AA10072FA10000003679E8 /* DougLiveActivity */,
 				10DB37D32F912E00003679E8 /* DougTests */,
 				10DB37DD2F912E00003679E8 /* DougUITests */,
 			);
@@ -230,6 +349,13 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		10AA10062FA10000003679E8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		10DB37C32F912E00003679E8 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -254,6 +380,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		10AA10042FA10000003679E8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		10DB37C12F912E00003679E8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -278,6 +411,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		10AA100B2FA10000003679E8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 10AA10072FA10000003679E8 /* DougLiveActivity */;
+			targetProxy = 10AA100C2FA10000003679E8 /* PBXContainerItemProxy */;
+		};
 		10DB37D62F912E00003679E8 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 10DB37C42F912E00003679E8 /* Doug */;
@@ -291,6 +429,60 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		10AA10082FA10000003679E8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B989TTSYN5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DougLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DougLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.robfraserhumar.Doug.DougLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		10AA10092FA10000003679E8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B989TTSYN5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DougLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DougLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.robfraserhumar.Doug.DougLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		10DB37E62F912E00003679E8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -422,6 +614,7 @@
 				DEVELOPMENT_TEAM = B989TTSYN5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -454,6 +647,7 @@
 				DEVELOPMENT_TEAM = B989TTSYN5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -563,6 +757,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		10AA100A2FA10000003679E8 /* Build configuration list for PBXNativeTarget "DougLiveActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				10AA10082FA10000003679E8 /* Debug */,
+				10AA10092FA10000003679E8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		10DB37C02F912E00003679E8 /* Build configuration list for PBXProject "Doug" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
