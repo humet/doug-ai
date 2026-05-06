@@ -131,14 +131,16 @@ struct RevivalPlanView: View {
 
     @ViewBuilder
     private func pendingContent(_ step: RevivalFeedStep) -> some View {
-        let isWaiting = step.scheduledTime > Date()
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            let isWaiting = step.scheduledTime > context.date
 
-        scheduledTimeRow(step)
+            scheduledTimeRow(step, now: context.date)
 
-        if isWaiting {
-            waitingContent(step)
-        } else {
-            readyToMixContent(step)
+            if isWaiting {
+                waitingContent(step)
+            } else {
+                readyToMixContent(step)
+            }
         }
     }
 
@@ -557,42 +559,44 @@ struct RevivalPlanView: View {
     }
 
     @ViewBuilder
-    private func scheduledTimeRow(_ step: RevivalFeedStep) -> some View {
+    private func scheduledTimeRow(_ step: RevivalFeedStep, now: Date = Date()) -> some View {
         if step.feedStatus == .pending {
-            let now = Date()
             let isFuture = step.scheduledTime > now
-            let isRecent = !isFuture && now.timeIntervalSince(step.scheduledTime) < 5 * 60
+            let minutesPast = now.timeIntervalSince(step.scheduledTime) / 60
 
-            if isRecent {
-                // Just created or very recent — no stale time display needed
-            } else {
-                HStack(spacing: 8) {
-                    Image(systemName: isFuture ? "calendar.badge.clock" : "calendar")
+            HStack(spacing: 8) {
+                if isFuture {
+                    Image(systemName: "calendar.badge.clock")
                     VStack(alignment: .leading, spacing: 2) {
-                        if isFuture {
-                            Text("Feed at \(step.scheduledTime, format: .dateTime.weekday(.wide).hour().minute())")
-                                .font(.subheadline.bold())
-                            RelativeTimeLabel(date: step.scheduledTime)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("Scheduled for \(step.scheduledTime, format: .dateTime.weekday(.abbreviated).hour().minute())")
-                                .font(.footnote)
-                            Text("Passed — feed when ready")
-                                .font(.caption2)
-                        }
+                        Text("Feed at \(step.scheduledTime, format: .dateTime.weekday(.wide).hour().minute())")
+                            .font(.subheadline.bold())
+                        RelativeTimeLabel(date: step.scheduledTime)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    Spacer()
+                } else if minutesPast < 30 {
+                    Image(systemName: "exclamationmark.circle.fill")
+                    Text("Time to feed your starter")
+                        .font(.subheadline.bold())
+                } else {
+                    Image(systemName: "clock.arrow.circlepath")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Feed now")
+                            .font(.subheadline.bold())
+                        Text("Scheduled for \(step.scheduledTime, format: .dateTime.hour().minute()) — \(Int(minutesPast))min ago")
+                            .font(.caption)
+                    }
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isFuture ? Color.accentColor.opacity(0.12) : Color(.tertiarySystemBackground))
-                )
-                .foregroundStyle(isFuture ? Color.accentColor : .secondary)
+                Spacer()
             }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isFuture ? Color.accentColor.opacity(0.12) : Color.orange.opacity(0.15))
+            )
+            .foregroundStyle(isFuture ? Color.accentColor : .orange)
         }
     }
 
