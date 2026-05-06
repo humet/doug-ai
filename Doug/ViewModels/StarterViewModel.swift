@@ -248,6 +248,7 @@ final class StarterViewModel {
 
         resetRevivalForm()
         syncRevivalActivity(plan: plan)
+        scheduleNextRevivalReminder(plan: plan)
         return plan
     }
 
@@ -321,6 +322,7 @@ final class StarterViewModel {
         }
 
         syncRevivalActivity(plan: plan)
+        scheduleNextRevivalReminder(plan: plan)
     }
 
     /// Evaluates bake-readiness on the final step after the user reports whether
@@ -402,6 +404,7 @@ final class StarterViewModel {
 
         plan.estimatedBakeReadyDate = feedTime.addingTimeInterval(extensionPeak * 60)
         syncRevivalActivity(plan: plan)
+        scheduleNextRevivalReminder(plan: plan)
     }
 
     // MARK: - Private
@@ -484,6 +487,28 @@ final class StarterViewModel {
         revivalNotes = ""
         revivalStarterGrams = "20"
         showStartRevival = false
+    }
+
+    // MARK: - Revival Notifications
+
+    private func scheduleNextRevivalReminder(plan: RevivalPlan) {
+        let steps = plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        guard let next = steps.first(where: { $0.feedStatus == .pending }),
+              next.scheduledTime > Date()
+        else { return }
+
+        let planID = plan.persistentModelID.hashValue.description
+        let stepIndex = next.sequenceIndex
+        let title = next.instructionTitle ?? "Feed \(stepIndex + 1)"
+        let date = next.scheduledTime
+        Task {
+            await NotificationService.shared.scheduleRevivalMixReminder(
+                at: date,
+                planID: planID,
+                stepIndex: stepIndex,
+                title: title
+            )
+        }
     }
 
     // MARK: - Live Activity
