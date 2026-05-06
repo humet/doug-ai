@@ -93,7 +93,7 @@ struct StarterTab: View {
         Section {
             HStack {
                 if activeRevivalPlan != nil {
-                    Image(systemName: "arrow.trianglehead.2.clockwise.circle.fill")
+                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
                         .foregroundStyle(.tint)
                         .font(.title2)
                     VStack(alignment: .leading, spacing: 2) {
