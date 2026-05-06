@@ -288,30 +288,19 @@ final class StarterViewModel {
         syncRevivalActivity(plan: plan)
     }
 
-    enum PeakVerdict {
-        case peaked
-        case bakeReady(peakDurationMinutes: Double)
-        case needsAnotherFeed(peakDurationMinutes: Double)
-    }
-
-    /// Records peak. On non-final steps, moves to `.peaked`. On the final step,
-    /// evaluates whether the starter is bake-ready based on whether the peak
-    /// landed within the expected window.
-    @discardableResult
+    /// Records peak timing and moves the step to `.peaked`. Does not evaluate
+    /// bake-readiness — that happens when the user answers the doubling question.
     func markRevivalStepPeak(
         step: RevivalFeedStep,
         plan: RevivalPlan,
         availability: UserAvailability?,
         windows: [UnavailableWindow]
-    ) -> PeakVerdict {
+    ) {
         let now = Date()
         step.peakTimestamp = now
         let reference = step.startedAt ?? step.scheduledTime
-        let peakMinutes = now.timeIntervalSince(reference) / 60
-        step.timeToPeakMinutes = peakMinutes
-
-        let sortedSteps = plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
-        let isFinal = step.sequenceIndex >= sortedSteps.count - 1
+        step.timeToPeakMinutes = now.timeIntervalSince(reference) / 60
+        step.feedStatus = .peaked
 
         let delta = RevivalRescheduler.peakDelta(
             scheduledTime: step.scheduledTime,
@@ -331,25 +320,31 @@ final class StarterViewModel {
             )
         }
 
-        guard isFinal else {
-            step.feedStatus = .peaked
-            syncRevivalActivity(plan: plan)
-            return .peaked
-        }
+        syncRevivalActivity(plan: plan)
+    }
 
+    /// Evaluates bake-readiness on the final step after the user reports whether
+    /// the starter doubled. Completes the plan or adds an extension feed.
+    func evaluateBakeReadiness(
+        step: RevivalFeedStep,
+        plan: RevivalPlan,
+        doubled: Bool,
+        availability: UserAvailability?,
+        windows: [UnavailableWindow]
+    ) -> Bool {
+        let peakMinutes = step.timeToPeakMinutes ?? step.expectedPeakMinutes
         let maxPeak = step.maxPeakMinutes ?? step.expectedPeakMinutes * 1.5
         let peakedInWindow = peakMinutes <= maxPeak
 
-        if peakedInWindow {
+        if doubled && peakedInWindow {
             step.feedStatus = .completed
             plan.revivalStatus = .completed
             syncRevivalActivity(plan: plan)
-            return .bakeReady(peakDurationMinutes: peakMinutes)
+            return true
         } else {
-            step.feedStatus = .peaked
             addExtensionFeed(after: step, plan: plan, availability: availability, windows: windows)
             syncRevivalActivity(plan: plan)
-            return .needsAnotherFeed(peakDurationMinutes: peakMinutes)
+            return false
         }
     }
 

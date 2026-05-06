@@ -18,7 +18,7 @@ struct RevivalPlanView: View {
 
     @State private var viewModel = StarterViewModel()
     @State private var isReminderPending = false
-    @State private var peakVerdict: StarterViewModel.PeakVerdict?
+    @State private var bakeReady: Bool?
 
     var body: some View {
         List {
@@ -56,6 +56,7 @@ struct RevivalPlanView: View {
         .navigationTitle("Revival")
         .task(id: currentStep?.status) {
             await refreshReminderState()
+            bakeReady = nil
         }
 
 
@@ -219,12 +220,11 @@ struct RevivalPlanView: View {
 
         let guidance = step.instructionPeakGuidance ?? step.instructionWatchFor
         if let guidance, !guidance.isEmpty {
-            Label {
-                Text(guidance)
-                    .font(.subheadline)
-            } icon: {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "eye.fill")
                     .foregroundStyle(Color.accentColor)
+                Text(guidance)
+                    .font(.subheadline)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,7 +239,7 @@ struct RevivalPlanView: View {
         timeFallbackCard(step)
 
         Button {
-            peakVerdict = viewModel.markRevivalStepPeak(
+            viewModel.markRevivalStepPeak(
                 step: step,
                 plan: plan,
                 availability: availabilities.first,
@@ -299,20 +299,23 @@ struct RevivalPlanView: View {
         .tint(.green)
         .disabled(true)
 
-        if case .needsAnotherFeed = peakVerdict {
-            Label {
-                Text("Getting stronger but not quite there — one more feed.")
-                    .font(.subheadline)
-            } icon: {
-                Image(systemName: "arrow.clockwise")
-                    .foregroundStyle(.orange)
+        if let nextStep = nextStep(after: step) {
+            if bakeReady == false {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "arrow.clockwise")
+                        .foregroundStyle(.orange)
+                    Text("Getting stronger — one more feed.")
+                        .font(.subheadline)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.orange.opacity(0.10))
+                )
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.orange.opacity(0.10))
-            )
+        } else {
+            doublingQuestion(step)
         }
 
         if let nextStep = nextStep(after: step) {
@@ -380,6 +383,46 @@ struct RevivalPlanView: View {
                 .foregroundStyle(.secondary)
 
                 nextStepActionButton(nextStep)
+            }
+        }
+    }
+
+    private func doublingQuestion(_ step: RevivalFeedStep) -> some View {
+        VStack(spacing: 6) {
+            Text("Did it double?")
+                .font(.subheadline.bold())
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 12) {
+                Button {
+                    bakeReady = viewModel.evaluateBakeReadiness(
+                        step: step,
+                        plan: plan,
+                        doubled: true,
+                        availability: availabilities.first,
+                        windows: Array(windows)
+                    )
+                } label: {
+                    Text("Yes, it doubled")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+
+                Button {
+                    bakeReady = viewModel.evaluateBakeReadiness(
+                        step: step,
+                        plan: plan,
+                        doubled: false,
+                        availability: availabilities.first,
+                        windows: Array(windows)
+                    )
+                } label: {
+                    Text("No, it didn't")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
             }
         }
     }
@@ -476,22 +519,21 @@ struct RevivalPlanView: View {
             let elapsed = Date().timeIntervalSince(startedAt) / 60
             let max = step.maxPeakMinutes ?? step.expectedPeakMinutes * 1.5
             let isSevere = plan.assessedNeglect == StarterNeglectLevel.severe.rawValue
-            let threshold = isSevere ? step.expectedPeakMinutes * 1.1 : max
+            let threshold = max
 
             if elapsed > threshold {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label {
-                        Text(isSevere
-                            ? "Your starter may not show a clear peak yet — that's normal after long neglect. You can move to the next feed."
-                            : "It's been longer than expected. If activity has slowed, you can move on.")
-                            .font(.footnote)
-                    } icon: {
+                    HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "info.circle.fill")
+                        Text(isSevere
+                            ? "No clear peak yet — that's normal after long neglect."
+                            : "It's been longer than expected. If activity has slowed, move on.")
+                            .font(.footnote)
                     }
                     .foregroundStyle(.orange)
 
                     Button {
-                        peakVerdict = viewModel.markRevivalStepPeak(
+                        viewModel.markRevivalStepPeak(
                             step: step,
                             plan: plan,
                             availability: availabilities.first,
@@ -560,11 +602,10 @@ struct RevivalPlanView: View {
         if step.feedStatus == .pending,
            now.timeIntervalSince(step.scheduledTime) > 30 * 60
         {
-            Label {
-                Text("You're running a little late — when you feed, the next step will shift to fit.")
-                    .font(.footnote)
-            } icon: {
+            HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "clock.arrow.circlepath")
+                Text("You're running late — the next step will shift when you feed.")
+                    .font(.footnote)
             }
             .foregroundStyle(.orange)
         } else if step.feedStatus == .inProgress,
@@ -572,11 +613,10 @@ struct RevivalPlanView: View {
                   let max = step.maxPeakMinutes,
                   now.timeIntervalSince(startedAt) > max * 60
         {
-            Label {
-                Text("Peak is slower than expected — that's okay. Marking peak now will push the next feed back.")
-                    .font(.footnote)
-            } icon: {
+            HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "hourglass")
+                Text("Peak is slower than expected — that's okay. The next feed will shift.")
+                    .font(.footnote)
             }
             .foregroundStyle(.orange)
         }
@@ -588,16 +628,15 @@ struct RevivalPlanView: View {
     private func overnightPeakCallout(_ step: RevivalFeedStep) -> some View {
         if step.feedStatus != .completed, step.feedStatus != .peaked, peakFallsOvernight(step) {
             let peakTime = expectedPeakTime(step)
-            Label {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "moon.zzz")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Peak likely around \(peakTime, format: .dateTime.hour().minute()) — while you'd usually be asleep.")
+                    Text("Peak likely around \(peakTime, format: .dateTime.hour().minute()) — while you'd be asleep.")
                         .font(.footnote)
-                    Text("Mark peak when you wake up. The rest of the plan will shift to fit your day.")
+                    Text("Mark peak when you wake up.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-            } icon: {
-                Image(systemName: "moon.zzz")
             }
             .foregroundStyle(.orange)
         }
