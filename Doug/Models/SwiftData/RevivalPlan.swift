@@ -91,5 +91,6 @@ enum RevivalStatus: String, Codable {
 enum RevivalFeedStatus: String, Codable {
     case pending
     case inProgress
+    case peaked
     case completed
 }

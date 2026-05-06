@@ -251,14 +251,23 @@ final class StarterViewModel {
         return plan
     }
 
-    /// Marks the current revival step as mixed & covered. Cascades a delta to later
-    /// steps when the user is more than a grace window late.
+    /// Marks a revival step as mixed & rising. If the previous step was peaked,
+    /// completes it and advances `currentStepIndex` so the new step becomes current.
     func markRevivalStepStarted(
         step: RevivalFeedStep,
         plan: RevivalPlan,
         availability: UserAvailability?,
         windows: [UnavailableWindow]
     ) {
+        let sortedSteps = plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        if let previous = sortedSteps.first(where: { $0.sequenceIndex == step.sequenceIndex - 1 }),
+           previous.feedStatus == .peaked
+        {
+            previous.feedStatus = .completed
+        }
+
+        plan.currentStepIndex = step.sequenceIndex
+
         let now = Date()
         step.startedAt = now
         step.feedStatus = .inProgress
@@ -279,19 +288,30 @@ final class StarterViewModel {
         syncRevivalActivity(plan: plan)
     }
 
-    /// Records peak, advances to the next step, and cascades a delta if the peak
-    /// landed outside the step's tolerance band.
+    enum PeakVerdict {
+        case peaked
+        case bakeReady(peakDurationMinutes: Double)
+        case needsAnotherFeed(peakDurationMinutes: Double)
+    }
+
+    /// Records peak. On non-final steps, moves to `.peaked`. On the final step,
+    /// evaluates whether the starter is bake-ready based on whether the peak
+    /// landed within the expected window.
+    @discardableResult
     func markRevivalStepPeak(
         step: RevivalFeedStep,
         plan: RevivalPlan,
         availability: UserAvailability?,
         windows: [UnavailableWindow]
-    ) {
+    ) -> PeakVerdict {
         let now = Date()
         step.peakTimestamp = now
         let reference = step.startedAt ?? step.scheduledTime
-        step.timeToPeakMinutes = now.timeIntervalSince(reference) / 60
-        step.feedStatus = .completed
+        let peakMinutes = now.timeIntervalSince(reference) / 60
+        step.timeToPeakMinutes = peakMinutes
+
+        let sortedSteps = plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        let isFinal = step.sequenceIndex >= sortedSteps.count - 1
 
         let delta = RevivalRescheduler.peakDelta(
             scheduledTime: step.scheduledTime,
@@ -311,28 +331,36 @@ final class StarterViewModel {
             )
         }
 
-        let sortedSteps = plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
-        if step.sequenceIndex >= sortedSteps.count - 1 {
-            plan.revivalStatus = .completed
-        } else {
-            plan.currentStepIndex = step.sequenceIndex + 1
+        guard isFinal else {
+            step.feedStatus = .peaked
+            syncRevivalActivity(plan: plan)
+            return .peaked
         }
-        syncRevivalActivity(plan: plan)
+
+        let maxPeak = step.maxPeakMinutes ?? step.expectedPeakMinutes * 1.5
+        let peakedInWindow = peakMinutes <= maxPeak
+
+        if peakedInWindow {
+            step.feedStatus = .completed
+            plan.revivalStatus = .completed
+            syncRevivalActivity(plan: plan)
+            return .bakeReady(peakDurationMinutes: peakMinutes)
+        } else {
+            step.feedStatus = .peaked
+            addExtensionFeed(after: step, plan: plan, availability: availability, windows: windows)
+            syncRevivalActivity(plan: plan)
+            return .needsAnotherFeed(peakDurationMinutes: peakMinutes)
+        }
     }
 
-    /// Records peak on the final step but adds an extension feed instead of completing.
-    func extendRevival(
-        step: RevivalFeedStep,
+    /// Adds an extension feed after the given step.
+    private func addExtensionFeed(
+        after step: RevivalFeedStep,
         plan: RevivalPlan,
         availability: UserAvailability?,
         windows: [UnavailableWindow]
     ) {
         let now = Date()
-        step.peakTimestamp = now
-        let reference = step.startedAt ?? step.scheduledTime
-        step.timeToPeakMinutes = now.timeIntervalSince(reference) / 60
-        step.feedStatus = .completed
-
         let actualPeakMinutes = step.timeToPeakMinutes ?? step.expectedPeakMinutes
         let extensionPeak = max(actualPeakMinutes * 0.85, 180)
 
@@ -371,13 +399,12 @@ final class StarterViewModel {
             hadHooch: false,
             neglect: plan.assessedNeglect.flatMap(StarterNeglectLevel.init(rawValue:))
         ))
-        newStep.instructionTitle = instruction.title
+        newStep.instructionTitle = "Feed \(newIndex + 1)"
         newStep.instructionBody = instruction.steps.joined(separator: "\n")
         newStep.instructionWatchFor = instruction.watchFor
         newStep.instructionExpectedWait = instruction.expectedWait
         newStep.instructionPeakGuidance = instruction.peakGuidance
 
-        plan.currentStepIndex = newIndex
         plan.estimatedBakeReadyDate = feedTime.addingTimeInterval(extensionPeak * 60)
         syncRevivalActivity(plan: plan)
     }
@@ -419,7 +446,7 @@ final class StarterViewModel {
             }
         }
 
-        if let lastPending = sortedSteps.last(where: { $0.feedStatus != .completed }) {
+        if let lastPending = sortedSteps.last(where: { $0.feedStatus == .pending }) {
             plan.estimatedBakeReadyDate = lastPending.scheduledTime
                 .addingTimeInterval(lastPending.expectedPeakMinutes * 60)
         }

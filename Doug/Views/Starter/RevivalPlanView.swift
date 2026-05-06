@@ -18,7 +18,7 @@ struct RevivalPlanView: View {
 
     @State private var viewModel = StarterViewModel()
     @State private var isReminderPending = false
-    @State private var showCompletionCheck = false
+    @State private var peakVerdict: StarterViewModel.PeakVerdict?
 
     var body: some View {
         List {
@@ -32,6 +32,8 @@ struct RevivalPlanView: View {
             }
 
             headerSection
+
+            completedStepsSection
 
             if let step = currentStep {
                 currentStepSection(step)
@@ -52,15 +54,35 @@ struct RevivalPlanView: View {
             }
         }
         .navigationTitle("Revival")
-        .task(id: plan.currentStepIndex) {
+        .task(id: currentStep?.status) {
             await refreshReminderState()
         }
-        .sheet(isPresented: $showCompletionCheck) {
-            completionCheckSheet
-        }
+
+
     }
 
     // MARK: - Sections
+
+    @ViewBuilder
+    private var completedStepsSection: some View {
+        let completed = sortedSteps.filter { $0.feedStatus == .completed }
+        if !completed.isEmpty {
+            Section {
+                ForEach(completed) { step in
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text(step.instructionTitle ?? "Feed \(step.sequenceIndex + 1)")
+                            .font(.subheadline)
+                        Spacer()
+                        Text(peakDurationLabel(step))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
 
     private var headerSection: some View {
         Section {
@@ -96,10 +118,10 @@ struct RevivalPlanView: View {
                     pendingContent(step)
                 case .inProgress:
                     inProgressContent(step)
+                case .peaked:
+                    peakedContent(step)
                 case .completed:
-                    Label("Completed", systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(.green)
-                        .frame(maxWidth: .infinity)
+                    completedContent(step)
                 }
             }
             .padding(.vertical, 4)
@@ -108,7 +130,52 @@ struct RevivalPlanView: View {
 
     @ViewBuilder
     private func pendingContent(_ step: RevivalFeedStep) -> some View {
+        let isWaiting = step.scheduledTime > Date()
+
         scheduledTimeRow(step)
+
+        if isWaiting {
+            waitingContent(step)
+        } else {
+            readyToMixContent(step)
+        }
+    }
+
+    @ViewBuilder
+    private func waitingContent(_ step: RevivalFeedStep) -> some View {
+        gramsPanel(step)
+
+        HStack(spacing: 6) {
+            Image(systemName: "clock")
+            Text("Expected wait after feeding: \(step.instructionExpectedWait ?? "")")
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+
+        actionButton(for: step)
+
+        if let bulletsText = step.instructionBody, !bulletsText.isEmpty {
+            DisclosureGroup("View instructions") {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(bulletLines(bulletsText).enumerated()), id: \.offset) { idx, line in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text("\(idx + 1).")
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Text(line)
+                                .font(.subheadline)
+                        }
+                    }
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func readyToMixContent(_ step: RevivalFeedStep) -> some View {
+        latenessCallout(step)
 
         gramsPanel(step)
 
@@ -126,16 +193,6 @@ struct RevivalPlanView: View {
             }
         }
 
-        if let watch = step.instructionWatchFor, !watch.isEmpty {
-            Label {
-                Text(watch)
-                    .font(.footnote)
-            } icon: {
-                Image(systemName: "eye")
-            }
-            .foregroundStyle(.secondary)
-        }
-
         HStack(spacing: 6) {
             Image(systemName: "clock")
             Text("Expected wait: \(step.instructionExpectedWait ?? "")")
@@ -143,27 +200,7 @@ struct RevivalPlanView: View {
         .font(.footnote)
         .foregroundStyle(.secondary)
 
-        whatToDoCard
-
-        latenessCallout(step)
-
         actionButton(for: step)
-    }
-
-    private var whatToDoCard: some View {
-        Label {
-            Text("Mix the feed above, then tap the button below to start. You'll watch for peak and mark it when your starter stops rising.")
-                .font(.footnote)
-        } icon: {
-            Image(systemName: "hand.point.up")
-        }
-        .foregroundStyle(.secondary)
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(.tertiarySystemBackground))
-        )
     }
 
     @ViewBuilder
@@ -202,13 +239,190 @@ struct RevivalPlanView: View {
         timeFallbackCard(step)
 
         Button {
-            markPeakOrCheck(step)
+            peakVerdict = viewModel.markRevivalStepPeak(
+                step: step,
+                plan: plan,
+                availability: availabilities.first,
+                windows: Array(windows)
+            )
         } label: {
             Label("Mark peak now", systemImage: "arrow.up.to.line")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
+    }
+
+    @ViewBuilder
+    private func completedContent(_ step: RevivalFeedStep) -> some View {
+        if plan.revivalStatus == .completed {
+            VStack(spacing: 12) {
+                Image(systemName: "flame.fill")
+                    .font(.largeTitle)
+                    .foregroundStyle(.orange)
+
+                Text("Your starter is back")
+                    .font(.headline)
+
+                Text("Doubled in \(formattedDuration(step.timeToPeakMinutes)) — you're good to bake.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        } else {
+            Label("Completed", systemImage: "checkmark.seal.fill")
+                .foregroundStyle(.green)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func formattedDuration(_ minutes: Double?) -> String {
+        guard let minutes else { return "—" }
+        let totalMinutes = Int(minutes.rounded())
+        let hours = totalMinutes / 60
+        let mins = totalMinutes % 60
+        if hours == 0 { return "\(mins)m" }
+        if mins == 0 { return "\(hours)h" }
+        return "\(hours)h \(mins)m"
+    }
+
+    @ViewBuilder
+    private func peakedContent(_ step: RevivalFeedStep) -> some View {
+        Button {} label: {
+            Label(peakDurationLabel(step), systemImage: "checkmark.circle.fill")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+        .tint(.green)
+        .disabled(true)
+
+        if case .needsAnotherFeed = peakVerdict {
+            Label {
+                Text("Getting stronger but not quite there — one more feed.")
+                    .font(.subheadline)
+            } icon: {
+                Image(systemName: "arrow.clockwise")
+                    .foregroundStyle(.orange)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.orange.opacity(0.10))
+            )
+        }
+
+        if let nextStep = nextStep(after: step) {
+            Divider()
+                .padding(.vertical, 4)
+
+            if let title = nextStep.instructionTitle, !title.isEmpty {
+                Text(title)
+                    .font(.title3.bold())
+            }
+
+            let isWaiting = nextStep.scheduledTime > Date()
+
+            nextStepScheduleRow(nextStep)
+
+            gramsPanel(nextStep)
+
+            if isWaiting {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                    Text("Expected wait after feeding: \(nextStep.instructionExpectedWait ?? "")")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                nextStepActionButton(nextStep)
+
+                if let bulletsText = nextStep.instructionBody, !bulletsText.isEmpty {
+                    DisclosureGroup("View instructions") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(bulletLines(bulletsText).enumerated()), id: \.offset) { idx, line in
+                                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                    Text("\(idx + 1).")
+                                        .font(.subheadline.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                    Text(line)
+                                        .font(.subheadline)
+                                }
+                            }
+                        }
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
+            } else {
+                if let bulletsText = nextStep.instructionBody, !bulletsText.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(bulletLines(bulletsText).enumerated()), id: \.offset) { idx, line in
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Text("\(idx + 1).")
+                                    .font(.subheadline.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                Text(line)
+                                    .font(.subheadline)
+                            }
+                        }
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                    Text("Expected wait: \(nextStep.instructionExpectedWait ?? "")")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                nextStepActionButton(nextStep)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func nextStepScheduleRow(_ step: RevivalFeedStep) -> some View {
+        let now = Date()
+        let isFuture = step.scheduledTime > now
+
+        if isFuture {
+            HStack(spacing: 8) {
+                Image(systemName: "calendar.badge.clock")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Feed at \(step.scheduledTime, format: .dateTime.weekday(.wide).hour().minute())")
+                        .font(.subheadline.bold())
+                    RelativeTimeLabel(date: step.scheduledTime)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.accentColor.opacity(0.12))
+            )
+            .foregroundStyle(Color.accentColor)
+        }
+    }
+
+    @ViewBuilder
+    private func nextStepActionButton(_ step: RevivalFeedStep) -> some View {
+        mixFeedButton(step)
+    }
+
+    private func nextStep(after step: RevivalFeedStep) -> RevivalFeedStep? {
+        sortedSteps.first(where: { $0.sequenceIndex == step.sequenceIndex + 1 })
+    }
+
+    private func peakDurationLabel(_ step: RevivalFeedStep) -> String {
+        "Peaked in \(formattedDuration(step.timeToPeakMinutes))"
     }
 
     @ViewBuilder
@@ -277,7 +491,12 @@ struct RevivalPlanView: View {
                     .foregroundStyle(.orange)
 
                     Button {
-                        markPeakOrCheck(step)
+                        peakVerdict = viewModel.markRevivalStepPeak(
+                            step: step,
+                            plan: plan,
+                            availability: availabilities.first,
+                            windows: Array(windows)
+                        )
                     } label: {
                         Text("Move to next feed")
                             .frame(maxWidth: .infinity)
@@ -309,7 +528,7 @@ struct RevivalPlanView: View {
                     Image(systemName: isFuture ? "calendar.badge.clock" : "calendar")
                     VStack(alignment: .leading, spacing: 2) {
                         if isFuture {
-                            Text("Mix at \(step.scheduledTime, format: .dateTime.weekday(.wide).hour().minute())")
+                            Text("Feed at \(step.scheduledTime, format: .dateTime.weekday(.wide).hour().minute())")
                                 .font(.subheadline.bold())
                             RelativeTimeLabel(date: step.scheduledTime)
                                 .font(.caption)
@@ -317,7 +536,7 @@ struct RevivalPlanView: View {
                         } else {
                             Text("Scheduled for \(step.scheduledTime, format: .dateTime.weekday(.abbreviated).hour().minute())")
                                 .font(.footnote)
-                            Text("Passed — mix when ready")
+                            Text("Passed — feed when ready")
                                 .font(.caption2)
                         }
                     }
@@ -342,7 +561,7 @@ struct RevivalPlanView: View {
            now.timeIntervalSince(step.scheduledTime) > 30 * 60
         {
             Label {
-                Text("You're running a little late — when you mix, the next feed will shift to fit.")
+                Text("You're running a little late — when you feed, the next step will shift to fit.")
                     .font(.footnote)
             } icon: {
                 Image(systemName: "clock.arrow.circlepath")
@@ -367,7 +586,7 @@ struct RevivalPlanView: View {
 
     @ViewBuilder
     private func overnightPeakCallout(_ step: RevivalFeedStep) -> some View {
-        if step.feedStatus != .completed, peakFallsOvernight(step) {
+        if step.feedStatus != .completed, step.feedStatus != .peaked, peakFallsOvernight(step) {
             let peakTime = expectedPeakTime(step)
             Label {
                 VStack(alignment: .leading, spacing: 2) {
@@ -447,94 +666,40 @@ struct RevivalPlanView: View {
         return retain + flour + water
     }
 
-    private func reminderSetCard(for step: RevivalFeedStep) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.title3)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Reminder set")
-                    .font(.subheadline.bold())
-                Text("We'll ping you at \(step.scheduledTime, format: .dateTime.hour().minute())")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.green.opacity(0.12))
-        )
-        .accessibilityElement(children: .combine)
-    }
+
 
     @ViewBuilder
     private func actionButton(for step: RevivalFeedStep) -> some View {
-        if step.scheduledTime > Date() {
-            VStack(spacing: 10) {
-                if isReminderPending {
-                    reminderSetCard(for: step)
+        mixFeedButton(step)
+    }
 
-                    Button(role: .destructive) {
-                        cancelMixReminder(for: step)
-                    } label: {
-                        Text("Cancel reminder")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                } else {
-                    Button {
-                        Task { await scheduleMixReminder(for: step) }
-                    } label: {
-                        Text("Remind me at \(step.scheduledTime, format: .dateTime.hour().minute())")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                }
-
-                Button {
-                    if isReminderPending {
-                        cancelMixReminder(for: step)
-                    }
-                    viewModel.markRevivalStepStarted(
-                        step: step,
-                        plan: plan,
-                        availability: availabilities.first,
-                        windows: Array(windows)
-                    )
-                } label: {
-                    Text("I've already mixed")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-            }
-            .sensoryFeedback(.success, trigger: isReminderPending)
-        } else {
-            Button {
-                viewModel.markRevivalStepStarted(
-                    step: step,
-                    plan: plan,
-                    availability: availabilities.first,
-                    windows: Array(windows)
-                )
-            } label: {
-                Text("I've mixed & covered")
-                    .frame(maxWidth: .infinity)
-            }
+    private func mixFeedButton(_ step: RevivalFeedStep) -> some View {
+        mixButton(step)
             .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+    }
+
+    private func mixButton(_ step: RevivalFeedStep) -> some View {
+        Button {
+            cancelMixReminder(for: step)
+            viewModel.markRevivalStepStarted(
+                step: step,
+                plan: plan,
+                availability: availabilities.first,
+                windows: Array(windows)
+            )
+        } label: {
+            Text("I've fed the starter")
+                .frame(maxWidth: .infinity)
         }
+        .controlSize(.large)
     }
 
     @ViewBuilder
     private var upcomingStepsSection: some View {
-        let pending = sortedSteps.filter { $0.sequenceIndex > plan.currentStepIndex }
+        let skipThrough = currentStep?.feedStatus == .peaked
+            ? plan.currentStepIndex + 1
+            : plan.currentStepIndex
+        let pending = sortedSteps.filter { $0.sequenceIndex > skipThrough }
         if !pending.isEmpty, plan.revivalStatus == .active {
             Section {
                 ForEach(pending) { step in
@@ -578,97 +743,7 @@ struct RevivalPlanView: View {
         }
     }
 
-    // MARK: - Completion Check
 
-    private var isFinalStep: Bool {
-        guard let step = currentStep else { return false }
-        return step.sequenceIndex >= sortedSteps.count - 1
-    }
-
-    private func markPeakOrCheck(_ step: RevivalFeedStep) {
-        if isFinalStep {
-            showCompletionCheck = true
-        } else {
-            viewModel.markRevivalStepPeak(
-                step: step,
-                plan: plan,
-                availability: availabilities.first,
-                windows: Array(windows)
-            )
-        }
-    }
-
-    private var completionCheckSheet: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text("Your final feed has peaked. Does your starter look ready to bake with?")
-                        .font(.subheadline)
-                }
-
-                Section {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Doubled reliably, domed top, bubbly")
-                                .font(.subheadline)
-                            Text("Tangy smell, not sharp or acetone-y")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "checkmark.circle")
-                            .foregroundStyle(.green)
-                    }
-                } header: {
-                    Text("Signs it's ready")
-                }
-
-                Section {
-                    Button {
-                        if let step = currentStep {
-                            viewModel.markRevivalStepPeak(
-                                step: step,
-                                plan: plan,
-                                availability: availabilities.first,
-                                windows: Array(windows)
-                            )
-                        }
-                        showCompletionCheck = false
-                    } label: {
-                        Label("Yes — it's bake-ready", systemImage: "flame")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .tint(.green)
-
-                    Button {
-                        if let step = currentStep {
-                            viewModel.extendRevival(
-                                step: step,
-                                plan: plan,
-                                availability: availabilities.first,
-                                windows: Array(windows)
-                            )
-                        }
-                        showCompletionCheck = false
-                    } label: {
-                        Label("Not yet — add another feed", systemImage: "arrow.clockwise")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .tint(.orange)
-                }
-            }
-            .navigationTitle("How does it look?")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        showCompletionCheck = false
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
 
     // MARK: - Helpers
 
@@ -731,14 +806,24 @@ struct RevivalPlanView: View {
     }
 
     private func refreshReminderState() async {
-        guard let step = currentStep, step.scheduledTime > Date() else {
+        let reminderStep: RevivalFeedStep?
+        if let step = currentStep, step.feedStatus == .peaked {
+            reminderStep = nextStep(after: step)
+        } else {
+            reminderStep = currentStep
+        }
+        guard let reminderStep, reminderStep.feedStatus == .pending, reminderStep.scheduledTime > Date() else {
             isReminderPending = false
             return
         }
-        isReminderPending = await NotificationService.shared.hasPendingRevivalMixReminder(
+        let alreadySet = await NotificationService.shared.hasPendingRevivalMixReminder(
             planID: notificationPlanID,
-            stepIndex: step.sequenceIndex
+            stepIndex: reminderStep.sequenceIndex
         )
+        if !alreadySet {
+            await scheduleMixReminder(for: reminderStep)
+        }
+        isReminderPending = true
     }
 
     private func bulletLines(_ body: String) -> [String] {

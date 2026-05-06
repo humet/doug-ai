@@ -329,13 +329,15 @@ private struct RevivalInProgressRow: View {
         switch step.feedStatus {
         case .pending:
             if step.scheduledTime > Date() {
-                return "Mix at \(step.scheduledTime.formatted(date: .omitted, time: .shortened))"
+                return "Feed at \(step.scheduledTime.formatted(date: .omitted, time: .shortened))"
             }
-            return "Ready to mix"
+            return "Ready to feed"
         case .inProgress:
             let peak = (step.startedAt ?? step.scheduledTime)
                 .addingTimeInterval(step.expectedPeakMinutes * 60)
             return "Rising — peak around \(peak.formatted(date: .omitted, time: .shortened))"
+        case .peaked:
+            return "Peaked — resting until next feed"
         case .completed:
             return "Feed complete"
         }

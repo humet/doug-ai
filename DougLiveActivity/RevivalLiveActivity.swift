@@ -37,21 +37,14 @@ struct RevivalLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack {
-                        if context.state.feedStatus == "inProgress",
-                           let minPeak = context.state.minPeakTime,
-                           let maxPeak = context.state.maxPeakTime
-                        {
-                            Text("Peak: \(minPeak, format: .dateTime.hour().minute())–\(maxPeak, format: .dateTime.hour().minute())")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if let bakeReady = context.state.estimatedBakeReadyDate {
-                            Text("Bake-ready ~\(bakeReady, format: .dateTime.month().day().hour().minute())")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                    if context.state.feedStatus == "inProgress",
+                       let minPeak = context.state.minPeakTime,
+                       let maxPeak = context.state.maxPeakTime
+                    {
+                        Text("Peak window: \(minPeak, format: .dateTime.hour().minute())–\(maxPeak, format: .dateTime.hour().minute())")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             } compactLeading: {
@@ -123,7 +116,7 @@ private struct RevivalLockScreenView: View {
                         .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
                     } else if let mixTime = state.scheduledMixTime {
                         HStack(spacing: 4) {
-                            Text("Mix at \(mixTime, format: .dateTime.hour().minute())")
+                            Text("Feed at \(mixTime, format: .dateTime.hour().minute())")
                             Text("(\(mixTime, style: .relative))")
                         }
                         .font(.caption)
@@ -136,21 +129,13 @@ private struct RevivalLockScreenView: View {
                     .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
             }
 
-            HStack {
-                if state.feedStatus == "inProgress",
-                   let minPeak = state.minPeakTime,
-                   let maxPeak = state.maxPeakTime
-                {
-                    Text("Peak window: \(minPeak, format: .dateTime.hour().minute())–\(maxPeak, format: .dateTime.hour().minute())")
-                        .font(.caption)
-                        .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
-                }
-                Spacer()
-                if let bakeReady = state.estimatedBakeReadyDate {
-                    Text("Bake-ready ~\(bakeReady, format: .dateTime.month().day().hour().minute())")
-                        .font(.caption)
-                        .foregroundStyle(LiveActivityColors.crustGold)
-                }
+            if state.feedStatus == "inProgress",
+               let minPeak = state.minPeakTime,
+               let maxPeak = state.maxPeakTime
+            {
+                Text("Peak window: \(minPeak, format: .dateTime.hour().minute())–\(maxPeak, format: .dateTime.hour().minute())")
+                    .font(.caption)
+                    .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
             }
         }
         .padding()

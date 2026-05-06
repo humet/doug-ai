@@ -230,7 +230,7 @@ struct StartRevivalSheet: View {
                 .padding(.vertical, 2)
 
                 Picker("", selection: $startMode) {
-                    Text("Mix now").tag(StartMode.now)
+                    Text("Feed now").tag(StartMode.now)
                     if let suggested {
                         let suggestedPeak = suggested.addingTimeInterval(peakMinutes * 60)
                         Text("Start at \(suggested, format: .dateTime.weekday(.abbreviated).hour().minute()) (peak at \(suggestedPeak, format: .dateTime.hour().minute()))")
@@ -242,7 +242,7 @@ struct StartRevivalSheet: View {
             } header: {
                 Text("Timing")
             } footer: {
-                Text("If you mix now, you can mark peak whenever you wake up — the rest of the plan will shift to fit your day.")
+                Text("If you feed now, you can mark peak whenever you wake up — the rest of the plan will shift to fit your day.")
             }
         }
     }
