@@ -32,7 +32,7 @@ struct CompletedStepsDisclosure: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+                    .background(DougTheme.cardBackground, in: .rect(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
 

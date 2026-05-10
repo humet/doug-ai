@@ -37,7 +37,7 @@ struct CompactStepRow: View {
             .background(
                 hasConflict
                     ? Color.orange.opacity(0.08)
-                    : Color(.secondarySystemBackground),
+                    : DougTheme.cardBackground,
                 in: .rect(cornerRadius: 12)
             )
         }

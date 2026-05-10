@@ -39,7 +39,7 @@ struct NowStepHero: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+        .background(DougTheme.cardBackground, in: .rect(cornerRadius: 18))
         .overlay(
             RoundedRectangle(cornerRadius: 18)
                 .strokeBorder(accentTint.opacity(0.35), lineWidth: 1.5)

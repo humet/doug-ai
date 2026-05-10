@@ -82,7 +82,7 @@ struct StepDetailSheet: View {
             .foregroundStyle(.secondary)
         }
         .padding()
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
+        .background(DougTheme.cardBackground, in: .rect(cornerRadius: 16))
     }
 
     private var statusBadge: some View {
@@ -124,7 +124,7 @@ struct StepDetailSheet: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 14))
+        .background(DougTheme.cardBackground, in: .rect(cornerRadius: 14))
     }
 
     // MARK: - Primary actions
@@ -196,7 +196,7 @@ struct StepDetailSheet: View {
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 14))
+        .background(DougTheme.cardBackground, in: .rect(cornerRadius: 14))
     }
 
     // MARK: - Derived

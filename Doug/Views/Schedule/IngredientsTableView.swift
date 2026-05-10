@@ -35,7 +35,7 @@ struct IngredientsTableView: View {
             }
         }
         .padding(.vertical, 6)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 14))
+        .background(DougTheme.cardBackground, in: .rect(cornerRadius: 14))
     }
 
     private func row(name: String, grams: Double, percent: Double, note: String? = nil) -> some View {

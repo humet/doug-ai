@@ -11,6 +11,10 @@ enum DougTheme {
     static let warmParchment = Color(red: 0.95, green: 0.92, blue: 0.85)
     static let warmWheat = Color(red: 0.91, green: 0.87, blue: 0.78)
 
+    // MARK: - Surface Colors
+
+    static let cardBackground = warmParchment
+
     // MARK: - Accent Colors
 
     static let sourdoughBrown = Color(red: 0.55, green: 0.38, blue: 0.22)

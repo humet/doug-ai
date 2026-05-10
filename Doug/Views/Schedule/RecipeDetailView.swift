@@ -53,7 +53,7 @@ struct RecipeDetailView: View {
         if reduceTransparency {
             content.background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
         } else {
-            content.background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
+            content.background(DougTheme.cardBackground, in: .rect(cornerRadius: 16))
         }
     }
 

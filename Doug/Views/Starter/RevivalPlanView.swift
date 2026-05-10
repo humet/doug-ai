@@ -492,7 +492,7 @@ struct RevivalPlanView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(DougTheme.cardBackground)
             )
         }
     }
@@ -685,7 +685,7 @@ struct RevivalPlanView: View {
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(.secondarySystemBackground))
+                .fill(DougTheme.cardBackground)
         )
     }
 

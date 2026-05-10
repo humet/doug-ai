@@ -33,7 +33,7 @@ struct MethodStepCard: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 14))
+        .background(DougTheme.cardBackground, in: .rect(cornerRadius: 14))
     }
 
     private var header: some View {
