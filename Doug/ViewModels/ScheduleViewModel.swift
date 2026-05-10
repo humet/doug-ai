@@ -352,7 +352,7 @@ final class ScheduleViewModel {
     }
 
     /// Walks steps in sequence and auto-progresses passive steps whose end time has passed.
-    /// Hands-on steps block progression until `markStepDone` is called. Idempotent.
+    /// Hands-on steps require explicit user action via `startStepNow` or `markStepDone`.
     func advanceIfReady(now: Date, modelContext _: ModelContext) {
         guard let schedule = activeSchedule, schedule.pausedAt == nil else { return }
         let steps = orderedTopLevelSteps(in: schedule)
@@ -363,7 +363,9 @@ final class ScheduleViewModel {
             case .done, .skipped:
                 continue
             case .upcoming:
-                if step.computedStartTime <= now {
+                if step.computedStartTime <= now,
+                   step.stepType.classification != .handsOn
+                {
                     step.stepStatus = .active
                     didChange = true
                 }

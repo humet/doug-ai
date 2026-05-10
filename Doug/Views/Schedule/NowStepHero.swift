@@ -112,6 +112,16 @@ struct NowStepHero: View {
                         .padding(.vertical, 10)
                 }
                 .adaptiveGlassButtonStyle(prominent: true)
+            } else if showsStart {
+                Button {
+                    viewModel.startStepNow(step, modelContext: modelContext)
+                } label: {
+                    Label("Start", systemImage: "play.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .adaptiveGlassButtonStyle(prominent: true)
             } else if showsMarkDone {
                 Button {
                     viewModel.markStepDone(step, modelContext: modelContext)
@@ -186,6 +196,12 @@ struct NowStepHero: View {
 
     private var accentTint: Color {
         StepTypeIcon.tint(for: stepTypeIDEnum)
+    }
+
+    private var showsStart: Bool {
+        step.stepStatus == .upcoming
+            && step.stepType.classification == .handsOn
+            && referenceDate >= step.computedStartTime
     }
 
     private var showsMarkDone: Bool {
