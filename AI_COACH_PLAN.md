@@ -50,16 +50,24 @@ doug/
 
 ### Model Strategy — Vercel AI Gateway
 
-Use Vercel AI Gateway as the provider layer — model-agnostic, swap with a string change. No lock-in to any single provider.
+Use Vercel AI Gateway as the provider layer — model-agnostic, swap with a string change. No lock-in.
 
-| Tier | Model | Use case | Why |
-|------|-------|----------|-----|
-| **Fast/cheap** | Gemini 2.5 Flash or GPT-4.1 mini | Most chat turns, simple advice, follow-up questions | Low latency (~0.5s), cheap ($0.15–0.40/M input), solid tool calling |
-| **Reasoning** | Claude Sonnet 4.6 or GPT-4.1 | Conflict resolution, bake rescue with schedule mutations, post-bake analysis | Better nuanced reasoning for multi-step adjustments |
+**Primary model: Gemini 3 Flash** (`google/gemini-3-flash`)
+- $0.50/M input, $3/M output — viable for a consumer app
+- Tool calling + structured output built in
+- 1M context window — can receive full bake history
+- Configurable thinking levels: `minimal` for chat, `high` for schedule mutations
+- One model, one prompt to tune — simpler than a two-model strategy
 
-The agent selects tier based on the request: if the user's message triggers tools that mutate the schedule, use the reasoning tier. For conversational turns and simple advice, use fast/cheap. This is a routing decision in the API route, not visible to the user.
+Instead of routing between models, we route between thinking levels on the same model:
 
-All models must support tool calling and structured output — the AI Gateway validates this.
+| Thinking level | Use case |
+|----------------|----------|
+| `minimal` | Conversational turns, simple advice, follow-up questions |
+| `medium` | Starter assessment, condition adaptation |
+| `high` | Conflict resolution, bake rescue with schedule mutations, post-bake analysis |
+
+If Gemini 3 Flash underperforms on specific tasks (complex multi-step schedule reasoning), we can escalate individual calls to Claude Sonnet or GPT-4.1 via the gateway — same code, different model string.
 
 ### API Route: `POST /api/chat`
 
@@ -203,16 +211,16 @@ const tools = {
 ```typescript
 import { gateway } from "ai"
 
-// Model selection based on request complexity
-const fastModel = gateway("vercel", "gemini-2.5-flash")
-const reasoningModel = gateway("vercel", "claude-sonnet-4-6")
+const model = gateway("vercel", "google/gemini-3-flash")
 
-function selectModel(requiresToolUse: boolean) {
-  return requiresToolUse ? reasoningModel : fastModel
-}
+// Thinking level based on request complexity
+type ThinkingLevel = "minimal" | "medium" | "high"
 
 const coach = new ToolLoopAgent({
-  model: selectModel(requiresTools),
+  model,
+  providerOptions: {
+    google: { thinkingLevel },  // Set per request
+  },
   instructions: systemPrompt,
   tools,
   output: Output.object({
@@ -343,7 +351,7 @@ Each action has a checkbox — the user can deselect individual items before app
 ## Environment & Deployment
 
 - **Vercel project:** `doug-coach` in the Dexerto Vercel org
-- **AI Gateway:** Vercel AI Gateway handles provider keys and model routing — no individual provider API keys needed in the project env vars
+- **AI Gateway:** Vercel AI Gateway handles provider keys and model routing — configure Google API key in the gateway dashboard, not in project env vars
 - **API URL:** Configured in iOS via xcconfig (`COACH_API_URL`)
 - **Auth:** API key or short-lived token from the app to authenticate requests (prevents abuse). Simple approach for v1: a shared secret in xcconfig sent as a Bearer token.
 - **Rate limiting:** Vercel edge middleware, per-device rate limit
