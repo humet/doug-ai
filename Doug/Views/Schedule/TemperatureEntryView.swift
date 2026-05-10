@@ -86,9 +86,9 @@ struct TemperatureEntryView: View {
                 Section {
                     ProgressView(value: progress) {
                         HStack {
-                            Text("Degree-hours")
+                            Text("Fermentation progress")
                             Spacer()
-                            Text(String(format: "%.1f / %.0f", currentDegreeHours, targetDegreeHours))
+                            Text(String(format: "%.0f%%", min(progress * 100, 100)))
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
