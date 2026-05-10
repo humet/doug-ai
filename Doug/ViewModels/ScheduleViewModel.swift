@@ -5,6 +5,7 @@ import SwiftData
 struct ActiveConflict: Identifiable {
     let id = UUID()
     let stepLabel: String
+    let stepSequenceIndex: Int
     let scheduledStart: Date
     let scheduledEnd: Date
 }
@@ -611,6 +612,7 @@ final class ScheduleViewModel {
             if !overlaps.isEmpty {
                 conflicts.append(ActiveConflict(
                     stepLabel: step.stepType.label,
+                    stepSequenceIndex: step.sequenceIndex,
                     scheduledStart: step.computedStartTime,
                     scheduledEnd: step.computedEndTime
                 ))

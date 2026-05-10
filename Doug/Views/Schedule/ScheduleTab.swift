@@ -308,6 +308,8 @@ struct ScheduleTab: View {
         let focus = focusStep(in: schedule)
         let rest = upcomingAndActive.filter { $0 !== focus }
 
+        let conflictIndices = Set(viewModel.activeConflicts.map(\.stepSequenceIndex))
+
         return VStack(alignment: .leading, spacing: 10) {
             if !rest.isEmpty {
                 Text("Coming up")
@@ -320,6 +322,7 @@ struct ScheduleTab: View {
                     step: step,
                     referenceDate: now,
                     isSubStep: false,
+                    hasConflict: conflictIndices.contains(step.sequenceIndex),
                     onTap: { detailStep = step }
                 )
 

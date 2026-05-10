@@ -6,6 +6,7 @@ struct CompactStepRow: View {
     let step: ScheduleStep
     let referenceDate: Date
     var isSubStep: Bool = false
+    var hasConflict: Bool = false
     let onTap: () -> Void
 
     var body: some View {
@@ -19,16 +20,26 @@ struct CompactStepRow: View {
                     StepCountdownLabel(step: step, referenceDate: referenceDate)
                 }
                 Spacer()
+                if hasConflict {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 Text(step.computedStartTime, style: .time)
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(hasConflict ? .orange : .secondary)
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+            .background(
+                hasConflict
+                    ? Color.orange.opacity(0.08)
+                    : Color(.secondarySystemBackground),
+                in: .rect(cornerRadius: 12)
+            )
         }
         .buttonStyle(.plain)
         .padding(.leading, isSubStep ? 24 : 0)
