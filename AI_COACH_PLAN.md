@@ -48,6 +48,19 @@ doug/
 
 ## Backend — Vercel AI SDK 6
 
+### Model Strategy — Vercel AI Gateway
+
+Use Vercel AI Gateway as the provider layer — model-agnostic, swap with a string change. No lock-in to any single provider.
+
+| Tier | Model | Use case | Why |
+|------|-------|----------|-----|
+| **Fast/cheap** | Gemini 2.5 Flash or GPT-4.1 mini | Most chat turns, simple advice, follow-up questions | Low latency (~0.5s), cheap ($0.15–0.40/M input), solid tool calling |
+| **Reasoning** | Claude Sonnet 4.6 or GPT-4.1 | Conflict resolution, bake rescue with schedule mutations, post-bake analysis | Better nuanced reasoning for multi-step adjustments |
+
+The agent selects tier based on the request: if the user's message triggers tools that mutate the schedule, use the reasoning tier. For conversational turns and simple advice, use fast/cheap. This is a routing decision in the API route, not visible to the user.
+
+All models must support tool calling and structured output — the AI Gateway validates this.
+
 ### API Route: `POST /api/chat`
 
 Request body from the iOS app:
@@ -188,13 +201,23 @@ const tools = {
 ### Agent Configuration
 
 ```typescript
+import { gateway } from "ai"
+
+// Model selection based on request complexity
+const fastModel = gateway("vercel", "gemini-2.5-flash")
+const reasoningModel = gateway("vercel", "claude-sonnet-4-6")
+
+function selectModel(requiresToolUse: boolean) {
+  return requiresToolUse ? reasoningModel : fastModel
+}
+
 const coach = new ToolLoopAgent({
-  model: anthropic("claude-sonnet-4-5-20250514"),
-  instructions: systemPrompt,   // Sourdough expert, knows the app's data model
+  model: selectModel(requiresTools),
+  instructions: systemPrompt,
   tools,
   output: Output.object({
     schema: z.object({
-      message: z.string(),      // The conversational response
+      message: z.string(),
       actions: z.array(z.object({
         toolName: z.string(),
         parameters: z.record(z.unknown()),
@@ -320,10 +343,11 @@ Each action has a checkbox — the user can deselect individual items before app
 ## Environment & Deployment
 
 - **Vercel project:** `doug-coach` in the Dexerto Vercel org
-- **Environment variables:** `ANTHROPIC_API_KEY` (server-side only — not in the iOS app for coach calls)
+- **AI Gateway:** Vercel AI Gateway handles provider keys and model routing — no individual provider API keys needed in the project env vars
 - **API URL:** Configured in iOS via xcconfig (`COACH_API_URL`)
 - **Auth:** API key or short-lived token from the app to authenticate requests (prevents abuse). Simple approach for v1: a shared secret in xcconfig sent as a Bearer token.
 - **Rate limiting:** Vercel edge middleware, per-device rate limit
+- **Model switching:** Change the model string in `agent.ts` to test alternatives — no code changes needed. Monitor cost/quality via Vercel AI Gateway dashboard.
 
 ## Key Principles
 
