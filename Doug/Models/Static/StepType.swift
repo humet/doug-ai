@@ -24,6 +24,14 @@ enum StepClassification: String, Codable {
     case passiveFixed
 }
 
+// MARK: - Staleness Info
+
+struct StalenessInfo {
+    let thresholdMinutes: Double
+    let warning: String
+    let salvageAdvice: String
+}
+
 // MARK: - Step Type (Template)
 
 struct StepType: Identifiable {
@@ -38,4 +46,5 @@ struct StepType: Identifiable {
     let instructionText: String
     let notificationText: String
     let successSignal: String
+    var staleness: StalenessInfo?
 }

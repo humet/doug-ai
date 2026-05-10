@@ -27,7 +27,12 @@ enum StepTypeRegistry {
             requiresTempReading: false,
             instructionText: "Mix flour and water until no dry flour remains. Cover and rest. Do not add salt or levain yet.",
             notificationText: "Time to autolyse — mix flour and water, then rest. No salt or levain yet.",
-            successSignal: "Dough has relaxed into a shaggy, hydrated mass with no dry flour visible."
+            successSignal: "Dough has relaxed into a shaggy, hydrated mass with no dry flour visible.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 180,
+                warning: "Your levain has been sitting well past its peak. It'll be weaker and more acidic — expect a denser, more sour loaf with less oven spring.",
+                salvageAdvice: "Pop the levain in the fridge and feed it tomorrow. Your flour is untouched — nothing wasted."
+            )
         ),
 
         .mix: StepType(
@@ -41,7 +46,12 @@ enum StepTypeRegistry {
             requiresTempReading: true,
             instructionText: "Add levain and salt to the autolysed dough. Pinch and fold until fully incorporated. Take a dough temperature reading.",
             notificationText: "Time to mix — add levain and salt, pinch and fold until incorporated. Take a dough temp reading.",
-            successSignal: "Dough is smooth, even, and cohesive — no streaks of unmixed levain or salt remain."
+            successSignal: "Dough is smooth, even, and cohesive — no streaks of unmixed levain or salt remain.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 120,
+                warning: "A very long autolyse can break down gluten, making the dough slack and hard to shape. Shorter is better beyond 2 hours.",
+                salvageAdvice: "The dough is still fine — just continue. If it's very slack at shaping, handle it gently and consider a shorter bulk ferment."
+            )
         ),
 
         .bulkFerment: StepType(
@@ -69,7 +79,12 @@ enum StepTypeRegistry {
             requiresTempReading: true,
             instructionText: "Wet your hands. Stretch one side of the dough up and fold it over. Rotate 90° and repeat 3 more times. Take a dough temp reading.",
             notificationText: "Time for a stretch & fold — wet hands, stretch and fold four sides. Log your dough temperature.",
-            successSignal: "Dough resists the stretch more than last time and holds a neater package shape."
+            successSignal: "Dough resists the stretch more than last time and holds a neater package shape.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 45,
+                warning: "Missing a fold won't ruin the bread, but the dough may be less structured. Skip it and let bulk continue — don't try to fold a dough that's already fermented past this point.",
+                salvageAdvice: "Skip this fold and carry on. If you've missed several folds, expect a flatter, more open crumb."
+            )
         ),
 
         .addInclusions: StepType(
@@ -83,7 +98,12 @@ enum StepTypeRegistry {
             requiresTempReading: false,
             instructionText: "Spread the dough out gently and distribute inclusions evenly. Fold the dough over to enclose them, then perform a stretch and fold.",
             notificationText: "Time to add inclusions — spread dough, distribute evenly, fold to enclose.",
-            successSignal: "Inclusions are evenly distributed through the dough, not clustered in pockets."
+            successSignal: "Inclusions are evenly distributed through the dough, not clustered in pockets.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 30,
+                warning: "The dough has fermented further since this step was due. Adding inclusions now means more handling on a gassier dough — you'll lose some rise.",
+                salvageAdvice: "You can still add them — be gentle. Or skip inclusions entirely and bake a plain loaf."
+            )
         ),
 
         .shape: StepType(
@@ -97,7 +117,12 @@ enum StepTypeRegistry {
             requiresTempReading: false,
             instructionText: "Pre-shape into a round. Rest 15 minutes. Final shape into a tight ball or batard. Place seam-side up in a floured banneton.",
             notificationText: "Time to shape — pre-shape, bench rest 15 min, then final shape into banneton.",
-            successSignal: "Dough holds a taut surface and bounces back slowly when poked — not slack, not over-tight."
+            successSignal: "Dough holds a taut surface and bounces back slowly when poked — not slack, not over-tight.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 60,
+                warning: "The dough has been bulk fermenting longer than planned. It may be over-proofed — expect it to be loose, sticky, and hard to shape, with a flat, dense result.",
+                salvageAdvice: "If the dough is still holding some structure, shape it gently and go straight to the fridge. If it's a puddle, use it for focaccia or flatbread — press it into an oiled tray, dimple, top, and bake at 220\u{00B0}C for 20 minutes."
+            )
         ),
 
         .coldRetard: StepType(
@@ -111,7 +136,12 @@ enum StepTypeRegistry {
             requiresTempReading: false,
             instructionText: "Cover the banneton and place in the fridge. The dough will slowly ferment and develop flavour. Longer retards give more sour flavour.",
             notificationText: "Into the fridge — your dough will cold retard. You can adjust the duration if life gets in the way.",
-            successSignal: "Dough feels firm and cold to the touch, with a slightly tacky surface — ready to score straight from the fridge."
+            successSignal: "Dough feels firm and cold to the touch, with a slightly tacky surface — ready to score straight from the fridge.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 45,
+                warning: "Your shaped dough has been sitting at room temperature. It's proofing fast — the longer it waits, the more likely it over-proofs and loses oven spring.",
+                salvageAdvice: "Get it in the fridge immediately if it still has some tension. If it's very puffy and jiggly, it's over-proofed — bake it straight away instead of retarding, or use it as flatbread dough."
+            )
         ),
 
         .preheat: StepType(
@@ -139,7 +169,12 @@ enum StepTypeRegistry {
             requiresTempReading: false,
             instructionText: "Score the dough and carefully load it into the hot dutch oven. Cover with the lid and bake.",
             notificationText: "Time to bake — score your dough, load into the hot dutch oven, and bake with the lid on.",
-            successSignal: "Loaf has sprung up tall and the score has opened into an ear — crust is pale but set."
+            successSignal: "Loaf has sprung up tall and the score has opened into an ear — crust is pale but set.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 30,
+                warning: "Your oven has been at temperature for a long time — wasting energy, but the dough in the fridge is fine. No harm to the bread.",
+                salvageAdvice: "Turn the oven off and try again when you're ready. The dough will keep in the fridge."
+            )
         ),
 
         .bakeUncovered: StepType(
@@ -153,7 +188,12 @@ enum StepTypeRegistry {
             requiresTempReading: false,
             instructionText: "Remove the lid and continue baking until the crust is deep golden brown. The internal temperature should reach 96–98°C.",
             notificationText: "Remove the lid — bake uncovered until deep golden brown. Your bread is almost ready!",
-            successSignal: "Crust is deep mahogany, the loaf sounds hollow when tapped underneath, and internal temperature reads 96–98°C."
+            successSignal: "Crust is deep mahogany, the loaf sounds hollow when tapped underneath, and internal temperature reads 96–98°C.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 10,
+                warning: "Your bread has been baking covered for too long. The crust may be thick and the inside slightly dried out, but it's still edible.",
+                salvageAdvice: "Remove the lid now and check the colour. If it's already dark, pull it out. If pale, give it 10–15 minutes uncovered."
+            )
         ),
     ]
 

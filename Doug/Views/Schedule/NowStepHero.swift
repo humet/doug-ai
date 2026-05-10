@@ -13,21 +13,27 @@ struct NowStepHero: View {
 
     @Environment(\.modelContext) private var modelContext
     @State private var showTemperatureEntry = false
+    @State private var showAbandonConfirm = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
-            Text(step.stepType.instructionText)
-                .font(.subheadline)
 
-            if !step.stepType.successSignal.isEmpty {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "checkmark.seal")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                    Text(step.stepType.successSignal)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            if let info = stalenessInfo {
+                stalenessWarning(info)
+            } else {
+                Text(step.stepType.instructionText)
+                    .font(.subheadline)
+
+                if !step.stepType.successSignal.isEmpty {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "checkmark.seal")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                        Text(step.stepType.successSignal)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -44,6 +50,20 @@ struct NowStepHero: View {
         .sheet(isPresented: $showTemperatureEntry) {
             if let schedule = step.schedule {
                 TemperatureEntryView(schedule: schedule, foldStep: step)
+            }
+        }
+        .confirmationDialog(
+            "Abandon this bake?",
+            isPresented: $showAbandonConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Abandon Bake", role: .destructive) {
+                viewModel.cancelBake(modelContext: modelContext)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let info = stalenessInfo {
+                Text(info.salvageAdvice)
             }
         }
     }
@@ -81,13 +101,6 @@ struct NowStepHero: View {
                         Label("Add 30m", systemImage: "plus")
                     }
                 }
-                if step.stepStatus == .upcoming, Date() > step.computedStartTime {
-                    Button {
-                        viewModel.startStepNow(step, modelContext: modelContext)
-                    } label: {
-                        Label("Set start to now", systemImage: "clock.arrow.circlepath")
-                    }
-                }
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.title3)
@@ -96,6 +109,30 @@ struct NowStepHero: View {
                     .contentShape(.rect)
             }
         }
+    }
+
+    // MARK: - Staleness
+
+    @ViewBuilder
+    private func stalenessWarning(_ info: StalenessInfo) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(info.warning)
+                    .font(.subheadline)
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundStyle(.yellow)
+                Text(info.salvageAdvice)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(.orange.opacity(0.1), in: .rect(cornerRadius: 12))
     }
 
     // MARK: - Primary actions
@@ -112,6 +149,25 @@ struct NowStepHero: View {
                         .padding(.vertical, 10)
                 }
                 .adaptiveGlassButtonStyle(prominent: true)
+            } else if showsStart, stalenessInfo != nil {
+                Button {
+                    viewModel.startStepNow(step, modelContext: modelContext)
+                } label: {
+                    Label("Start Anyway", systemImage: "play.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .adaptiveGlassButtonStyle()
+                Button {
+                    showAbandonConfirm = true
+                } label: {
+                    Label("Abandon", systemImage: "xmark.circle")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .adaptiveGlassButtonStyle()
             } else if showsStart {
                 Button {
                     viewModel.startStepNow(step, modelContext: modelContext)
@@ -198,9 +254,17 @@ struct NowStepHero: View {
         StepTypeIcon.tint(for: stepTypeIDEnum)
     }
 
+    private var stalenessInfo: StalenessInfo? {
+        guard showsStart,
+              let staleness = step.stepType.staleness
+        else { return nil }
+        let delay = referenceDate.timeIntervalSince(step.computedStartTime) / 60
+        guard delay >= staleness.thresholdMinutes else { return nil }
+        return staleness
+    }
+
     private var showsStart: Bool {
         step.stepStatus == .upcoming
-            && step.stepType.classification == .handsOn
             && referenceDate >= step.computedStartTime
     }
 
