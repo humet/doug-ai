@@ -30,6 +30,10 @@ final class ScheduleViewModel {
     var pendingFoldEntry: PendingFoldEntry?
     var pendingStepDetail: PendingStepDetail?
 
+    // Levain-in-progress detection
+    var detectedLevain: LevainContext?
+    var useActiveLevain = false
+
     init() {
         NotificationRouter.shared.registerScheduleViewModel(self)
     }
@@ -53,13 +57,16 @@ final class ScheduleViewModel {
             ? nil
             : StarterPeakProfile(feedLogs: feedLogs.map { FeedLogInput(from: $0) })
 
+        detectActiveLevain(feedLogs: feedLogs, peakProfile: peakProfile)
+
         let input = ScheduleBuilderInput(
             recipe: selectedRecipe,
             targetBreadReadyTime: targetDate,
             kitchenTemperatureCelsius: kitchenTemperature,
             availability: avail,
             unavailableWindows: windowInputs,
-            peakProfile: peakProfile
+            peakProfile: peakProfile,
+            levainContext: useActiveLevain ? detectedLevain : nil
         )
 
         let result = ScheduleBuilder.build(input)
@@ -73,6 +80,49 @@ final class ScheduleViewModel {
             conflict = scheduleConflict
             showConflictSheet = true
         }
+    }
+
+    private func detectActiveLevain(
+        feedLogs: [StarterFeedLog],
+        peakProfile: StarterPeakProfile?
+    ) {
+        guard let latest = feedLogs.first,
+              latest.peakTimestamp == nil
+        else {
+            detectedLevain = nil
+            return
+        }
+
+        let tempBracket = TemperatureBracket.bracket(celsius: latest.kitchenTemperatureCelsius)
+        let ratioBucket = FeedRatioBucket.bucket(
+            starter: latest.ratioStarter,
+            flour: latest.ratioFlour,
+            water: latest.ratioWater
+        )
+
+        let expectedPeak: Double
+        if let bucket = ratioBucket,
+           let profile = peakProfile,
+           let observed = profile.averageMinutes(ratio: bucket, tempBracket: tempBracket)
+        {
+            expectedPeak = observed
+        } else {
+            expectedPeak = TemperatureCalculator.levainBuildMinutes(
+                kitchenTemp: latest.kitchenTemperatureCelsius
+            )
+        }
+
+        let elapsed = Date().timeIntervalSince(latest.timestamp) / 60.0
+        guard elapsed < expectedPeak * 1.5 else {
+            detectedLevain = nil
+            return
+        }
+
+        detectedLevain = LevainContext(
+            fedAt: latest.timestamp,
+            expectedPeakMinutes: expectedPeak,
+            kitchenTemperatureCelsius: latest.kitchenTemperatureCelsius
+        )
     }
 
     // MARK: - Apply Conflict Resolution Option

@@ -10,6 +10,7 @@ struct ScheduleBuilderInput {
     let unavailableWindows: [WindowInput]
     let calendar: Calendar
     let peakProfile: StarterPeakProfile?
+    let levainContext: LevainContext?
 
     init(
         recipe: Recipe,
@@ -18,7 +19,8 @@ struct ScheduleBuilderInput {
         availability: AvailabilityInput,
         unavailableWindows: [WindowInput] = [],
         calendar: Calendar = .current,
-        peakProfile: StarterPeakProfile? = nil
+        peakProfile: StarterPeakProfile? = nil,
+        levainContext: LevainContext? = nil
     ) {
         self.recipe = recipe
         self.targetBreadReadyTime = targetBreadReadyTime
@@ -27,6 +29,7 @@ struct ScheduleBuilderInput {
         self.unavailableWindows = unavailableWindows
         self.calendar = calendar
         self.peakProfile = peakProfile
+        self.levainContext = levainContext
     }
 }
 
@@ -42,6 +45,7 @@ struct ScheduledStep: Identifiable {
     let durationMinutes: Double
     let subSteps: [ScheduledStep]
     let requiresTempReading: Bool
+    let levainElapsedMinutes: Double?
 
     init(
         methodStepID: UUID,
@@ -52,7 +56,8 @@ struct ScheduledStep: Identifiable {
         endTime: Date,
         durationMinutes: Double,
         subSteps: [ScheduledStep] = [],
-        requiresTempReading: Bool = false
+        requiresTempReading: Bool = false,
+        levainElapsedMinutes: Double? = nil
     ) {
         id = UUID()
         self.methodStepID = methodStepID
@@ -64,6 +69,7 @@ struct ScheduledStep: Identifiable {
         self.durationMinutes = durationMinutes
         self.subSteps = subSteps
         self.requiresTempReading = requiresTempReading
+        self.levainElapsedMinutes = levainElapsedMinutes
     }
 }
 
@@ -108,11 +114,19 @@ enum ScheduleBuilder {
         let method = input.recipe.method
         for methodStep in method.reversed() {
             let stepType = methodStep.stepType
-            let duration = TemperatureCalculator.effectiveDuration(
+
+            var duration = TemperatureCalculator.effectiveDuration(
                 for: methodStep,
                 kitchenTemp: input.kitchenTemperatureCelsius,
                 peakProfile: input.peakProfile
             )
+
+            var levainElapsed: Double?
+            if methodStep.stepTypeID == .buildLevain, let ctx = input.levainContext {
+                let remaining = ctx.remainingMinutes()
+                levainElapsed = ctx.elapsedMinutes()
+                duration = remaining
+            }
 
             let tentativeEnd = cursor
             let tentativeStart = calendar.date(
@@ -132,7 +146,8 @@ enum ScheduleBuilder {
                     startTime: tentativeStart,
                     endTime: tentativeEnd,
                     durationMinutes: duration,
-                    requiresTempReading: stepType.requiresTempReading
+                    requiresTempReading: stepType.requiresTempReading,
+                    levainElapsedMinutes: levainElapsed
                 )
 
                 // Sub-schedule folds within bulk ferment
