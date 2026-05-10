@@ -13,7 +13,6 @@ struct TemperatureEntryView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var temperatureCelsius: Double = 24.0
-    @State private var aliquotRisePercent: String = ""
 
     private var existingReadings: [DoughTemperatureReading] {
         (schedule.temperatureReadings).sorted { $0.timestamp < $1.timestamp }
@@ -75,15 +74,6 @@ struct TemperatureEntryView: View {
                 }
 
                 Section {
-                    TextField("Rise % (optional)", text: $aliquotRisePercent)
-                        .keyboardType(.decimalPad)
-                } header: {
-                    Text("Aliquot Jar")
-                } footer: {
-                    Text("Optional — log estimated dough rise percentage if using an aliquot jar.")
-                }
-
-                Section {
                     ProgressView(value: progress) {
                         HStack {
                             Text("Fermentation progress")
@@ -135,15 +125,12 @@ struct TemperatureEntryView: View {
         allPairs.append((timestamp: Date(), temperatureCelsius: temperatureCelsius))
         let accumulated = DegreeHourCalculator.accumulatedDegreeHours(readings: allPairs)
 
-        let rise = Double(aliquotRisePercent)
-
         let reading = DoughTemperatureReading(
             timestamp: Date(),
             temperatureCelsius: temperatureCelsius,
             sequenceNumber: sequenceNumber,
             accumulatedDegreeHours: accumulated,
-            associatedStepTypeID: foldStep.map { StepTypeID(rawValue: $0.stepTypeID) } ?? nil,
-            aliquotRisePercent: rise
+            associatedStepTypeID: foldStep.map { StepTypeID(rawValue: $0.stepTypeID) } ?? nil
         )
         reading.schedule = schedule
         modelContext.insert(reading)

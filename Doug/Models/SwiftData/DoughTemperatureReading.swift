@@ -9,21 +9,18 @@ final class DoughTemperatureReading {
     var associatedStepTypeID: String?
     var sequenceNumber: Int
     var accumulatedDegreeHours: Double
-    var aliquotRisePercent: Double?
 
     init(
         timestamp: Date,
         temperatureCelsius: Double,
         sequenceNumber: Int,
         accumulatedDegreeHours: Double,
-        associatedStepTypeID: StepTypeID? = nil,
-        aliquotRisePercent: Double? = nil
+        associatedStepTypeID: StepTypeID? = nil
     ) {
         self.timestamp = timestamp
         self.temperatureCelsius = temperatureCelsius
         self.sequenceNumber = sequenceNumber
         self.accumulatedDegreeHours = accumulatedDegreeHours
         self.associatedStepTypeID = associatedStepTypeID?.rawValue
-        self.aliquotRisePercent = aliquotRisePercent
     }
 }
