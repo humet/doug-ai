@@ -6,6 +6,8 @@ This file provides guidance to Claude Code when working with this repository.
 
 See `AI_COACH_PLAN.md` for the AI baking coach feature — Vercel AI SDK 6 backend with Gemini 3 Flash, in-app chat with contextual buttons, structured action proposals with user confirmation.
 
+When building the `doug-coach/` backend, use the `/ai-sdk` skill (installed at `.claude/skills/ai-sdk`) for AI SDK 6 API reference — covers `ToolLoopAgent`, `generateText`, `streamText`, structured output, tool definitions, and provider configuration.
+
 ## Build & Run
 
 ```bash
