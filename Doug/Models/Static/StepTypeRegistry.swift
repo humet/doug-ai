@@ -29,7 +29,7 @@ enum StepTypeRegistry {
             notificationText: "Time to autolyse — mix flour and water, then rest. No salt or levain yet.",
             successSignal: "Dough has relaxed into a shaggy, hydrated mass with no dry flour visible.",
             staleness: StalenessInfo(
-                thresholdMinutes: 180,
+                thresholdMinutes: 120,
                 warning: "Your levain has been sitting well past its peak. It'll be weaker and more acidic — expect a denser, more sour loaf with less oven spring.",
                 salvageAdvice: "Pop the levain in the fridge and feed it tomorrow. Your flour is untouched — nothing wasted."
             )
@@ -48,9 +48,9 @@ enum StepTypeRegistry {
             notificationText: "Time to mix — add levain and salt, pinch and fold until incorporated. Take a dough temp reading.",
             successSignal: "Dough is smooth, even, and cohesive — no streaks of unmixed levain or salt remain.",
             staleness: StalenessInfo(
-                thresholdMinutes: 120,
-                warning: "A very long autolyse can break down gluten, making the dough slack and hard to shape. Shorter is better beyond 2 hours.",
-                salvageAdvice: "The dough is still fine — just continue. If it's very slack at shaping, handle it gently and consider a shorter bulk ferment."
+                thresholdMinutes: 180,
+                warning: "Your autolyse has been sitting a long time. Protease enzymes are breaking down the gluten network — the dough will feel slacker than normal, especially with whole grain flour.",
+                salvageAdvice: "Continue — the dough is still usable. Handle gently during shaping and expect a slightly more open, less structured crumb."
             )
         ),
 
@@ -65,7 +65,12 @@ enum StepTypeRegistry {
             requiresTempReading: false,
             instructionText: "Let the dough ferment at room temperature. Perform stretch and folds at intervals during the first portion.",
             notificationText: "Bulk ferment is underway — stretch and folds are scheduled within this window.",
-            successSignal: "Dough has risen 50–75%, feels airy, and shows bubbles on the surface and sides of the container."
+            successSignal: "Dough has risen 50–75%, feels airy, and shows bubbles on the surface and sides of the container.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 60,
+                warning: "Your dough has been fermenting since you mixed it — the timer doesn't account for the time that's already passed. A full bulk on top of this extra time risks over-fermenting.",
+                salvageAdvice: "Start the timer, but watch the dough rather than the clock. If it's already risen 50%+ and looks bubbly, consider shaping early."
+            )
         ),
 
         .stretchAndFold: StepType(
@@ -191,8 +196,8 @@ enum StepTypeRegistry {
             successSignal: "Crust is deep mahogany, the loaf sounds hollow when tapped underneath, and internal temperature reads 96–98°C.",
             staleness: StalenessInfo(
                 thresholdMinutes: 10,
-                warning: "Your bread has been baking covered for too long. The crust may be thick and the inside slightly dried out, but it's still edible.",
-                salvageAdvice: "Remove the lid now and check the colour. If it's already dark, pull it out. If pale, give it 10–15 minutes uncovered."
+                warning: "Your bread has been baking covered too long. The extra steam keeps the crust pale and chewy instead of crisp — and the loaf may be slightly over-baked inside.",
+                salvageAdvice: "Remove the lid now. The crust will be pale — give it a full 20–25 minutes uncovered to develop colour. Check it's not burning towards the end."
             )
         ),
     ]
