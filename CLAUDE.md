@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
+## Planned Work
+
+See `AI_COACH_PLAN.md` for the AI baking coach feature — Vercel AI SDK 6 backend with Gemini 3 Flash, in-app chat with contextual buttons, structured action proposals with user confirmation.
+
 ## Build & Run
 
 ```bash
