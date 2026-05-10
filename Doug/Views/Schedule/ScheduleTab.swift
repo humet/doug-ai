@@ -160,8 +160,12 @@ struct ScheduleTab: View {
                         )
                     }
                 }
+                .task {
+                    viewModel.restoreActiveSchedule(modelContext: modelContext)
+                }
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
+                        viewModel.restoreActiveSchedule(modelContext: modelContext)
                         viewModel.advanceIfReady(now: Date(), modelContext: modelContext)
                     }
                 }

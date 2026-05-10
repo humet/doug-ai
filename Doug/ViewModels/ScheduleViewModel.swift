@@ -42,6 +42,31 @@ final class ScheduleViewModel {
         RecipeBook.recipe(for: selectedRecipeID)
     }
 
+    // MARK: - Restoration
+
+    func restoreActiveSchedule(modelContext: ModelContext) {
+        guard activeSchedule == nil else { return }
+        let descriptor = FetchDescriptor<Schedule>(
+            predicate: #Predicate { $0.status == "active" }
+        )
+        activeSchedule = try? modelContext.fetch(descriptor).first
+        if activeSchedule != nil {
+            syncLiveActivity()
+        }
+    }
+
+    private func cleanupStaleSchedules(modelContext: ModelContext) {
+        let descriptor = FetchDescriptor<Schedule>(
+            predicate: #Predicate { $0.status != "complete" }
+        )
+        guard let stale = try? modelContext.fetch(descriptor) else { return }
+        for schedule in stale {
+            let steps = allSteps(in: schedule)
+            NotificationService.shared.cancelNotifications(for: steps)
+            modelContext.delete(schedule)
+        }
+    }
+
     // MARK: - Schedule Building
 
     func buildPreview(
@@ -177,6 +202,8 @@ final class ScheduleViewModel {
 
     func startBake(modelContext: ModelContext) {
         guard !previewSteps.isEmpty else { return }
+
+        cleanupStaleSchedules(modelContext: modelContext)
 
         let schedule = Schedule(
             recipeID: selectedRecipeID,
@@ -461,7 +488,12 @@ final class ScheduleViewModel {
     }
 
     func cancelBake(modelContext: ModelContext) {
-        endBake(modelContext: modelContext)
+        guard let schedule = activeSchedule else { return }
+        let steps = allSteps(in: schedule)
+        NotificationService.shared.cancelNotifications(for: steps)
+        activeSchedule = nil
+        modelContext.delete(schedule)
+        LiveActivityService.shared.endBakeActivity()
     }
 
     private func endBake(modelContext _: ModelContext) {
