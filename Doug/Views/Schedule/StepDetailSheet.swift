@@ -32,12 +32,8 @@ struct StepDetailSheet: View {
                                 reopenButton
                             }
                             historyBlock
-                        } else if step.stepStatus == .active {
-                            StepAdjustmentControls(
-                                step: step,
-                                viewModel: viewModel,
-                                onAction: { dismiss() }
-                            )
+                        } else if step.stepStatus == .upcoming {
+                            delayControls
                         }
                     }
                     .padding()
@@ -197,6 +193,40 @@ struct StepDetailSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(DougTheme.cardBackground, in: .rect(cornerRadius: 14))
+    }
+
+    // MARK: - Delay controls (upcoming steps)
+
+    private var delayControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Running late?")
+                .font(.subheadline.weight(.semibold))
+            Text("Push this step and everything after it forward.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                ForEach([15.0, 30.0, 60.0, 120.0], id: \.self) { minutes in
+                    Button {
+                        viewModel.delayStep(step, byMinutes: minutes, modelContext: modelContext)
+                        dismiss()
+                    } label: {
+                        Text(formatDelay(minutes))
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .adaptiveGlassButtonStyle()
+                }
+            }
+        }
+        .padding()
+        .background(DougTheme.cardBackground, in: .rect(cornerRadius: 14))
+    }
+
+    private func formatDelay(_ minutes: Double) -> String {
+        let m = Int(minutes)
+        if m >= 60 { return "+\(m / 60)h" }
+        return "+\(m)m"
     }
 
     // MARK: - Derived
