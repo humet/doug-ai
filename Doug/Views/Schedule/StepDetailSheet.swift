@@ -2,9 +2,9 @@ import SwiftData
 import SwiftUI
 
 /// Full-controls sheet for a `ScheduleStep`. Renders a mode-aware detail view:
-/// - Upcoming: instructions + all five adjustment controls
-/// - Active: instructions + Mark Step Done (hands-on) + temp-entry handoff + controls
-/// - Done / Skipped: summary + Reopen this step (if it's the most-recent)
+/// - Upcoming: instructions + adjustment controls
+/// - Active: instructions + Done + temp-entry handoff + controls
+/// - Done / Skipped: summary + Go Back (if it's the most-recent)
 struct StepDetailSheet: View {
     let step: ScheduleStep
     let viewModel: ScheduleViewModel
@@ -146,7 +146,7 @@ struct StepDetailSheet: View {
             viewModel.markStepDone(step, modelContext: modelContext)
             dismiss()
         } label: {
-            Label("Mark Step Done", systemImage: "checkmark.circle.fill")
+            Label("Done", systemImage: "checkmark.circle.fill")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding()
@@ -159,7 +159,7 @@ struct StepDetailSheet: View {
             viewModel.reopenStep(step, modelContext: modelContext)
             dismiss()
         } label: {
-            Label("Reopen this step", systemImage: "arrow.uturn.backward.circle")
+            Label("Go Back to This Step", systemImage: "arrow.uturn.backward.circle")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding()

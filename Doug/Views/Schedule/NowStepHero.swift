@@ -2,9 +2,6 @@ import SwiftData
 import SwiftUI
 
 /// Prominent hero card for the currently-active (or most-imminent upcoming) step.
-/// Shows icon, label, live countdown, instructions, success signal, and the common-case
-/// inline controls: Mark Done / Finish Early / Add Time / Pause. Full controls live in
-/// `StepDetailSheet`, reached via the "Step details…" menu item.
 struct NowStepHero: View {
     let step: ScheduleStep
     let viewModel: ScheduleViewModel
@@ -83,26 +80,10 @@ struct NowStepHero: View {
                     .font(.subheadline.monospacedDigit())
             }
             Spacer()
-            Menu {
-                Button {
-                    onOpenDetail(step)
-                } label: {
-                    Label("Step details…", systemImage: "text.alignleft")
-                }
-                if step.stepStatus == .active || step.stepStatus == .upcoming {
-                    Button {
-                        viewModel.extendStep(step, byMinutes: 15, modelContext: modelContext)
-                    } label: {
-                        Label("Add 15m", systemImage: "plus")
-                    }
-                    Button {
-                        viewModel.extendStep(step, byMinutes: 30, modelContext: modelContext)
-                    } label: {
-                        Label("Add 30m", systemImage: "plus")
-                    }
-                }
+            Button {
+                onOpenDetail(step)
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "info.circle")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .padding(6)
@@ -139,17 +120,7 @@ struct NowStepHero: View {
 
     private var primaryActions: some View {
         HStack(spacing: 10) {
-            if step.stepType.requiresTempReading, step.stepStatus == .active {
-                Button {
-                    showTemperatureEntry = true
-                } label: {
-                    Label("Enter Temp", systemImage: "thermometer.medium")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                }
-                .adaptiveGlassButtonStyle(prominent: true)
-            } else if showsStart, stalenessInfo != nil {
+            if showsStart, stalenessInfo != nil {
                 Button {
                     viewModel.startStepNow(step, modelContext: modelContext)
                 } label: {
@@ -178,21 +149,21 @@ struct NowStepHero: View {
                         .padding(.vertical, 10)
                 }
                 .adaptiveGlassButtonStyle(prominent: true)
-            } else if showsMarkDone {
+            } else if step.stepType.requiresTempReading, step.stepStatus == .active {
                 Button {
-                    viewModel.markStepDone(step, modelContext: modelContext)
+                    showTemperatureEntry = true
                 } label: {
-                    Label("Mark Done", systemImage: "checkmark.circle.fill")
+                    Label("Enter Temp", systemImage: "thermometer.medium")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                 }
                 .adaptiveGlassButtonStyle(prominent: true)
-            } else if showsFinishEarly {
+            } else if step.stepStatus == .active {
                 Button {
-                    viewModel.finishStepEarly(step, modelContext: modelContext)
+                    completeCurrent()
                 } label: {
-                    Label("Finish Early", systemImage: "checkmark")
+                    Label("Done", systemImage: "checkmark.circle.fill")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -204,34 +175,50 @@ struct NowStepHero: View {
 
     // MARK: - Secondary actions
 
+    @ViewBuilder
     private var secondaryActions: some View {
-        HStack(spacing: 10) {
+        if isPaused {
             Button {
-                viewModel.extendStep(step, byMinutes: 15, modelContext: modelContext)
+                viewModel.resumeSchedule(modelContext: modelContext)
             } label: {
-                Label("+15m", systemImage: "plus.circle")
+                Label("Resume", systemImage: "play.fill")
                     .font(.caption.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
             }
             .adaptiveGlassButtonStyle()
-
-            Button {
-                if isPaused {
-                    viewModel.resumeSchedule(modelContext: modelContext)
-                } else {
-                    viewModel.pauseSchedule(modelContext: modelContext)
+        } else if step.stepStatus == .active {
+            HStack(spacing: 10) {
+                Button {
+                    viewModel.extendStep(step, byMinutes: 15, modelContext: modelContext)
+                } label: {
+                    Label("+15m", systemImage: "plus.circle")
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
                 }
-            } label: {
-                Label(
-                    isPaused ? "Resume" : "Pause",
-                    systemImage: isPaused ? "play.fill" : "pause.fill"
-                )
-                .font(.caption.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .adaptiveGlassButtonStyle()
+
+                Button {
+                    viewModel.extendStep(step, byMinutes: 30, modelContext: modelContext)
+                } label: {
+                    Label("+30m", systemImage: "plus.circle")
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .adaptiveGlassButtonStyle()
+
+                Button {
+                    viewModel.pauseSchedule(modelContext: modelContext)
+                } label: {
+                    Label("Pause", systemImage: "pause.fill")
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .adaptiveGlassButtonStyle()
             }
-            .adaptiveGlassButtonStyle()
         }
     }
 
@@ -268,17 +255,15 @@ struct NowStepHero: View {
             && referenceDate >= step.computedStartTime
     }
 
-    private var showsMarkDone: Bool {
-        step.stepStatus == .active && step.stepType.classification == .handsOn
-    }
-
-    private var showsFinishEarly: Bool {
-        step.stepStatus == .active
-            && step.stepType.classification != .handsOn
-            && Date() < step.computedEndTime
-    }
-
     private var isPaused: Bool {
         step.schedule?.pausedAt != nil
+    }
+
+    private func completeCurrent() {
+        if step.stepType.classification == .handsOn {
+            viewModel.markStepDone(step, modelContext: modelContext)
+        } else {
+            viewModel.finishStepEarly(step, modelContext: modelContext)
+        }
     }
 }

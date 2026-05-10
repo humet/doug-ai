@@ -16,28 +16,19 @@ struct StepAdjustmentControls: View {
     var body: some View {
         VStack(spacing: 10) {
             row(
-                title: isPaused ? "Resume Making" : "Pause Making",
-                subtitle: isPaused ? "Un-pause the bake and shift downstream" : "Hold everything while life interrupts",
+                title: isPaused ? "Resume" : "Pause",
+                subtitle: isPaused ? "Un-pause the bake and shift remaining steps" : "Hold everything while life interrupts",
                 systemImage: isPaused ? "play.fill" : "pause.fill",
                 tint: .indigo
             ) { tapPauseResume() }
 
             if canFinishEarly {
                 row(
-                    title: "Finish Early",
+                    title: "Done",
                     subtitle: "This step is already done",
                     systemImage: "checkmark.circle",
                     tint: .green
                 ) { viewModel.finishStepEarly(step, modelContext: modelContext); onAction() }
-            }
-
-            if canStartNow {
-                row(
-                    title: "Set Start Time to Now",
-                    subtitle: "I'm starting this step late",
-                    systemImage: "clock.arrow.circlepath",
-                    tint: .blue
-                ) { viewModel.startStepNow(step, modelContext: modelContext); onAction() }
             }
 
             row(
@@ -52,7 +43,7 @@ struct StepAdjustmentControls: View {
 
             if canShorten {
                 row(
-                    title: "Shorten this Step",
+                    title: "Shorten",
                     subtitle: "Wrap up sooner than planned",
                     systemImage: "minus.circle",
                     tint: .pink
@@ -123,11 +114,6 @@ struct StepAdjustmentControls: View {
 
     private var canFinishEarly: Bool {
         step.stepStatus == .active && Date() < step.computedEndTime
-    }
-
-    private var canStartNow: Bool {
-        (step.stepStatus == .upcoming || step.stepStatus == .active)
-            && Date() > step.computedStartTime
     }
 
     private var canShorten: Bool {
