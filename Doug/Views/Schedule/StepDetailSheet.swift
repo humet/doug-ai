@@ -32,7 +32,7 @@ struct StepDetailSheet: View {
                                 reopenButton
                             }
                             historyBlock
-                        } else {
+                        } else if step.stepStatus == .active {
                             StepAdjustmentControls(
                                 step: step,
                                 viewModel: viewModel,
