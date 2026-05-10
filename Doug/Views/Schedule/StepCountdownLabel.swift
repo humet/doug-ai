@@ -12,16 +12,20 @@ struct StepCountdownLabel: View {
             .foregroundStyle(color)
     }
 
+    private var effectiveDate: Date {
+        step.schedule?.pausedAt ?? referenceDate
+    }
+
     private var phrase: String {
         switch step.stepStatus {
         case .upcoming:
-            let remaining = step.computedStartTime.timeIntervalSince(referenceDate)
+            let remaining = step.computedStartTime.timeIntervalSince(effectiveDate)
             if remaining > 0 {
                 return "starts in \(Self.format(seconds: remaining))"
             }
             return "starting now"
         case .active:
-            let remaining = step.computedEndTime.timeIntervalSince(referenceDate)
+            let remaining = step.computedEndTime.timeIntervalSince(effectiveDate)
             if remaining > 0 {
                 return "\(Self.format(seconds: remaining)) remaining"
             }
@@ -44,7 +48,7 @@ struct StepCountdownLabel: View {
         case .upcoming:
             return .secondary
         case .active:
-            let remaining = step.computedEndTime.timeIntervalSince(referenceDate)
+            let remaining = step.computedEndTime.timeIntervalSince(effectiveDate)
             if remaining < 0 { return .red }
             if remaining < 5 * 60 { return .red }
             return DougTheme.stepActive

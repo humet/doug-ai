@@ -346,8 +346,18 @@ final class ScheduleViewModel {
             candidate.stepStatus = .upcoming
         }
 
+        let now = Date()
+        let oldEnd = step.computedEndTime
         step.stepStatus = .active
         step.actualEndTime = nil
+
+        if step.computedEndTime <= now {
+            let duration = step.computedDurationMinutes * 60
+            step.computedStartTime = now
+            step.computedEndTime = now.addingTimeInterval(duration)
+            cascade(afterEnd: oldEnd, delta: step.computedEndTime.timeIntervalSince(oldEnd), in: schedule, excluding: step)
+        }
+
         syncLiveActivity()
     }
 
