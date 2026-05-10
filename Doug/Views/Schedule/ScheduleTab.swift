@@ -246,10 +246,12 @@ struct ScheduleTab: View {
                         )
                     }
 
-                    DegreeHoursChartView(
-                        readings: schedule.temperatureReadings,
-                        targetDegreeHours: schedule.recipe.degreeHourTarget
-                    )
+                    if !schedule.temperatureReadings.isEmpty {
+                        DegreeHoursChartView(
+                            readings: schedule.temperatureReadings,
+                            targetDegreeHours: schedule.recipe.degreeHourTarget
+                        )
+                    }
 
                     if let _ = viewModel.coldRetardStep {
                         Button {

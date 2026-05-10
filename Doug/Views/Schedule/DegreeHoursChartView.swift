@@ -29,18 +29,20 @@ struct DegreeHoursChartView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Progress bar
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Degree-hours")
+                    Text("Fermentation progress")
                         .font(.subheadline.bold())
                     Spacer()
-                    Text(String(format: "%.1f / %.0f", currentDegreeHours, targetDegreeHours))
+                    Text(String(format: "%.0f%%", min(progress * 100, 100)))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
                 ProgressView(value: progress)
                     .tint(progress >= 1.0 ? .green : .blue)
+                Text("Based on accumulated heat over time (degree-hours)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
 
             // Temperature curve chart
@@ -75,22 +77,18 @@ struct DegreeHoursChartView: View {
                 }
                 .frame(height: 180)
 
-            } else if sortedReadings.count == 1 {
+            } else {
                 HStack {
                     Label(
-                        String(format: "Mix temp: %.1f°C", sortedReadings[0].temperatureCelsius),
+                        String(format: "Dough temp: %.1f°C", sortedReadings[0].temperatureCelsius),
                         systemImage: "thermometer.medium"
                     )
                     .font(.subheadline)
                     Spacer()
-                    Text("Log more readings to see the curve")
+                    Text("More readings will show the curve")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-            } else {
-                Text("No temperature readings yet")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .padding()
