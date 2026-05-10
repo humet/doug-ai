@@ -227,6 +227,10 @@ struct ScheduleTab: View {
                         )
                     }
 
+                    if !viewModel.activeConflicts.isEmpty {
+                        ConflictBanner(conflicts: viewModel.activeConflicts)
+                    }
+
                     CompletedStepsDisclosure(
                         completedSteps: completedSteps(in: schedule),
                         referenceDate: now,

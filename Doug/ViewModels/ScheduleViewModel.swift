@@ -2,6 +2,13 @@ import Foundation
 import Observation
 import SwiftData
 
+struct ActiveConflict: Identifiable {
+    let id = UUID()
+    let stepLabel: String
+    let scheduledStart: Date
+    let scheduledEnd: Date
+}
+
 @Observable
 @MainActor
 final class ScheduleViewModel {
@@ -19,6 +26,7 @@ final class ScheduleViewModel {
     var isBuilding = false
 
     var activeSchedule: Schedule?
+    var activeConflicts: [ActiveConflict] = []
 
     // UI state
     var showConflictSheet = false
@@ -50,8 +58,9 @@ final class ScheduleViewModel {
             predicate: #Predicate { $0.status == "active" }
         )
         activeSchedule = try? modelContext.fetch(descriptor).first
-        if activeSchedule != nil {
+        if let schedule = activeSchedule {
             syncLiveActivity()
+            validateConflicts(in: schedule)
         }
     }
 
@@ -500,6 +509,7 @@ final class ScheduleViewModel {
         let steps = allSteps(in: schedule)
         NotificationService.shared.cancelNotifications(for: steps)
         activeSchedule = nil
+        activeConflicts = []
         modelContext.delete(schedule)
         LiveActivityService.shared.endBakeActivity()
     }
@@ -510,6 +520,7 @@ final class ScheduleViewModel {
         NotificationService.shared.cancelNotifications(for: steps)
         schedule.scheduleStatus = .complete
         activeSchedule = nil
+        activeConflicts = []
         LiveActivityService.shared.endBakeActivity()
     }
 
@@ -536,6 +547,63 @@ final class ScheduleViewModel {
         schedule.targetBreadReadyTime = schedule.targetBreadReadyTime.addingTimeInterval(delta)
 
         Task { await NotificationService.shared.rescheduleNotifications(for: steps) }
+        validateConflicts(in: schedule)
+    }
+
+    private func validateConflicts(in schedule: Schedule) {
+        guard let context = schedule.modelContext else {
+            activeConflicts = []
+            return
+        }
+
+        let availability: UserAvailability?
+        let windows: [UnavailableWindow]
+        do {
+            availability = try context.fetch(FetchDescriptor<UserAvailability>()).first
+            windows = try context.fetch(FetchDescriptor<UnavailableWindow>())
+        } catch {
+            activeConflicts = []
+            return
+        }
+
+        let avail = availability.map { AvailabilityInput(from: $0) }
+            ?? AvailabilityInput(startHour: 6, startMinute: 30, endHour: 21, endMinute: 0)
+        let windowInputs = windows.map { WindowInput(from: $0) }
+
+        let upcomingHandsOn = orderedTopLevelSteps(in: schedule).filter {
+            $0.stepStatus == .upcoming && $0.stepType.classification == .handsOn
+        }
+
+        guard !upcomingHandsOn.isEmpty else {
+            activeConflicts = []
+            return
+        }
+
+        let earliest = upcomingHandsOn.first!.computedStartTime
+        let latest = upcomingHandsOn.last!.computedEndTime
+        let blocks = AvailabilityResolver.resolve(
+            from: earliest,
+            to: latest,
+            availability: avail,
+            windows: windowInputs
+        )
+
+        var conflicts: [ActiveConflict] = []
+        for step in upcomingHandsOn {
+            let overlaps = AvailabilityResolver.overlaps(
+                start: step.computedStartTime,
+                end: step.computedEndTime,
+                blocks: blocks
+            )
+            if !overlaps.isEmpty {
+                conflicts.append(ActiveConflict(
+                    stepLabel: step.stepType.label,
+                    scheduledStart: step.computedStartTime,
+                    scheduledEnd: step.computedEndTime
+                ))
+            }
+        }
+        activeConflicts = conflicts
     }
 
     /// Marks the earliest still-upcoming step active. Leaves hands-on steps alone —
