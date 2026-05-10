@@ -449,6 +449,19 @@ final class ScheduleViewModel {
         syncLiveActivity()
     }
 
+    func delayStep(_ step: ScheduleStep, byMinutes minutes: Double, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        guard minutes > 0 else { return }
+        let delta = minutes * 60
+        let oldStart = step.computedStartTime
+
+        step.computedStartTime = step.computedStartTime.addingTimeInterval(delta)
+        step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
+
+        cascade(afterEnd: oldStart, delta: delta, in: schedule, excluding: step)
+        syncLiveActivity()
+    }
+
     func startStepNow(_ step: ScheduleStep, modelContext _: ModelContext) {
         guard let schedule = activeSchedule else { return }
         let now = Date()

@@ -187,6 +187,26 @@ struct NowStepHero: View {
                     .padding(.vertical, 8)
             }
             .adaptiveGlassButtonStyle()
+        } else if step.stepStatus == .upcoming, !showsStart {
+            VStack(spacing: 8) {
+                Text("Running late?")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 10) {
+                    ForEach([15.0, 30.0, 60.0], id: \.self) { minutes in
+                        Button {
+                            viewModel.delayStep(step, byMinutes: minutes, modelContext: modelContext)
+                        } label: {
+                            Text(minutes < 60 ? "+\(Int(minutes))m" : "+1h")
+                                .font(.caption.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .adaptiveGlassButtonStyle()
+                    }
+                }
+            }
         } else if step.stepStatus == .active {
             HStack(spacing: 10) {
                 Button {
