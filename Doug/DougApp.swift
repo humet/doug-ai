@@ -14,14 +14,22 @@ struct DougApp: App {
     }
 
     private static func makeContainer() -> ModelContainer {
-        let schema = Schema(versionedSchema: DougSchemaV2.self)
+        let schema = Schema([
+            Schedule.self,
+            ScheduleStep.self,
+            DoughTemperatureReading.self,
+            BakeFermentationProfile.self,
+            StarterFeedLog.self,
+            StarterProfile.self,
+            RevivalPlan.self,
+            RevivalFeedStep.self,
+            UserAvailability.self,
+            UnavailableWindow.self,
+            CoachMessage.self,
+        ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
-            return try ModelContainer(
-                for: schema,
-                migrationPlan: DougMigrationPlan.self,
-                configurations: [config]
-            )
+            return try ModelContainer(for: schema, configurations: [config])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
