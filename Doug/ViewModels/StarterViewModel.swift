@@ -204,47 +204,7 @@ final class StarterViewModel {
             stepsByIndex[feedPlan.sequenceIndex] = step
         }
 
-        // Populate offline-fallback copy first, so we always have something to show.
         applyFallbackInstructions(plan: plan, totalSteps: totalSteps)
-
-        // Then ask the LLM coach to personalise — overwrites fallback where successful.
-        revivalIsPreparing = true
-        defer { revivalIsPreparing = false }
-
-        let plannedSteps = feedPlans.map { feedPlan in
-            PlannedStep(
-                sequenceIndex: feedPlan.sequenceIndex,
-                retainGrams: feedPlan.retainStarterGrams,
-                addFlourGrams: feedPlan.addFlourGrams,
-                addWaterGrams: feedPlan.addWaterGrams,
-                expectedPeakMinutes: feedPlan.expectedPeakMinutes,
-                kind: RevivalPlanGenerator.stepKind(index: feedPlan.sequenceIndex, totalSteps: totalSteps)
-            )
-        }
-
-        let coaching = await LLMService().composeRevivalCoaching(
-            RevivalCoachingRequest(
-                neglect: neglect,
-                hadHooch: revivalHasHooch,
-                daysSinceLastFed: revivalDaysSinceLastFed,
-                initialStarterGrams: grams,
-                flourType: revivalFlourType,
-                kitchenTempC: revivalKitchenTemp,
-                userNotes: plan.userNotes,
-                steps: plannedSteps
-            )
-        )
-
-        if let coaching {
-            plan.coachOpeningRead = coaching.openingRead
-            for coached in coaching.steps {
-                guard let step = stepsByIndex[coached.sequenceIndex] else { continue }
-                step.instructionTitle = coached.title
-                step.instructionBody = coached.bullets.joined(separator: "\n")
-                step.instructionWatchFor = coached.watchFor
-                step.instructionExpectedWait = coached.expectedWait
-            }
-        }
 
         resetRevivalForm()
         syncRevivalActivity(plan: plan)

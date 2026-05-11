@@ -1,5 +1,22 @@
 import SwiftUI
 
+struct ConflictOption: Identifiable {
+    let id = UUID()
+    let summary: String
+    let explanation: String
+    let targetTimeShiftMinutes: Double?
+
+    init(
+        summary: String,
+        explanation: String,
+        targetTimeShiftMinutes: Double? = nil
+    ) {
+        self.summary = summary
+        self.explanation = explanation
+        self.targetTimeShiftMinutes = targetTimeShiftMinutes
+    }
+}
+
 struct ConflictResolutionSheet: View {
     let conflict: ScheduleConflict
     let recipe: Recipe
@@ -64,25 +81,7 @@ struct ConflictResolutionSheet: View {
     }
 
     private func loadOptions() async {
-        let service = LLMService()
-
-        if service.isAvailable {
-            do {
-                options = try await service.resolveConflict(
-                    conflict,
-                    recipe: recipe,
-                    kitchenTemp: kitchenTemp
-                )
-            } catch {
-                // Fall through to offline fallback below
-            }
-        }
-
-        // If no options from LLM, generate offline fallback
-        if options.isEmpty {
-            options = generateFallbackOptions()
-        }
-
+        options = generateFallbackOptions()
         isLoading = false
     }
 
