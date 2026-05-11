@@ -1,4 +1,4 @@
-import type { BakeContext, StarterContext, AvailabilityContext } from "./types";
+import type { BakeContext, StarterContext, AvailabilityContext } from "./types.js";
 
 const BASE_PROMPT = `You are an expert sourdough baking coach inside a mobile app called Doug. You help bakers with their sourdough journey — from maintaining their starter to completing bakes.
 

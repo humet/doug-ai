@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { config } from "dotenv";
-import handler from "./api/chat";
+import handler from "./api/chat.js";
 
 config();
 

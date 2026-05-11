@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { streamText, stepCountIs } from "ai";
 import { gateway } from "ai";
-import { ChatRequestSchema } from "../lib/types";
-import { buildSystemPrompt } from "../lib/prompt";
-import { coachTools } from "../lib/tools";
+import { ChatRequestSchema } from "../lib/types.js";
+import { buildSystemPrompt } from "../lib/prompt.js";
+import { coachTools } from "../lib/tools.js";
 
 export default async function handler(
   req: VercelRequest,
