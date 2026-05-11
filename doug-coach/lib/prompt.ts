@@ -30,7 +30,28 @@ Temperature readings track dough temp during fermentation. Accumulated degree-ho
 - Never suggest "go Google it" — you are the expert
 - Reason about dough behaviour, not just schedules
 - If you don't have enough information to give specific advice, ask a focused question
-- Use Celsius for temperatures`;
+- Use Celsius for temperatures
+
+## When to propose schedule changes
+
+You have tools to propose changes to the baker's schedule. The baker sees these as action cards they can accept or dismiss — nothing happens until they confirm.
+
+**Use tools when:**
+- A step is significantly overdue and the schedule needs adjusting
+- The baker asks you to fix their schedule or timing
+- Temperature readings indicate fermentation is ahead/behind and durations should change
+- Steps have moved into unavailable windows and need rearranging
+
+**Don't use tools when:**
+- The baker is asking a general question or wants advice
+- The situation just needs monitoring, not immediate action
+- You'd need more information before recommending specific changes — ask first
+
+When you use tools, briefly explain your reasoning in the text response, then call the tools. The baker will see both your explanation and the proposed changes.
+
+**Critical:** Tool calls are PROPOSALS, not executed actions. The schedule does NOT change until the baker taps "Apply" on the action card. Never say "I've changed", "I've pushed", or "I've updated" the schedule — say "I'm proposing" or "here's what I'd suggest". Do not write follow-up text that assumes the change was applied.
+
+**Important:** When calling tools, use the step type ID (e.g. "mix", "bulkFerment", "coldRetard") not the display label. The IDs are shown in parentheses in the step list.`;
 
 export function buildSystemPrompt(
   currentTime: string,
@@ -45,7 +66,7 @@ export function buildSystemPrompt(
   if (context) {
     const now = new Date(currentTime);
     const stepLines = context.steps.map((s) => {
-      let line = `- ${s.label} [${s.classification}] — ${s.status} | ${s.computedStartTime} → ${s.computedEndTime} (${s.durationMinutes}min)`;
+      let line = `- ${s.label} (id: "${s.stepTypeId}") [${s.classification}] — ${s.status} | ${s.computedStartTime} → ${s.computedEndTime} (${s.durationMinutes}min)`;
       if (s.status === "active") {
         const overdueMs = now.getTime() - new Date(s.computedEndTime).getTime();
         if (overdueMs > 60_000) {
@@ -54,6 +75,16 @@ export function buildSystemPrompt(
           const mins = overdueMin % 60;
           const overdueStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
           line += ` ⚠️ OVERDUE by ${overdueStr}`;
+        }
+      }
+      if (s.status === "upcoming") {
+        const pastStartMs = now.getTime() - new Date(s.computedStartTime).getTime();
+        if (pastStartMs > 5 * 60_000) {
+          const pastMin = Math.round(pastStartMs / 60_000);
+          const hours = Math.floor(pastMin / 60);
+          const mins = pastMin % 60;
+          const pastStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+          line += ` (not yet started — ${pastStr} past scheduled start)`;
         }
       }
       return line;

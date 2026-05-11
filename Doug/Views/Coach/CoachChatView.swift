@@ -8,6 +8,7 @@ struct CoachChatView: View {
     @FocusState private var inputFocused: Bool
 
     let schedule: Schedule?
+    let scheduleViewModel: ScheduleViewModel
 
     var body: some View {
         NavigationStack {
@@ -49,11 +50,42 @@ struct CoachChatView: View {
                             content: message.content
                         )
                         .id(message.persistentModelID)
+
+                        if message.actionsResolved, let actions = message.actions, !actions.isEmpty {
+                            CoachActionCard(
+                                actions: actions,
+                                selections: message.actionsDismissed ? [] : Set(actions.map(\.id)),
+                                resolved: true,
+                                dismissed: message.actionsDismissed,
+                                onToggle: { _ in },
+                                onApply: {},
+                                onDismiss: {}
+                            )
+                        }
                     }
 
                     if viewModel.isStreaming, !viewModel.streamingText.isEmpty {
                         CoachMessageBubble(role: .assistant, content: viewModel.streamingText)
                             .id("streaming")
+                    }
+
+                    if !viewModel.isStreaming, !viewModel.pendingActions.isEmpty {
+                        CoachActionCard(
+                            actions: viewModel.pendingActions,
+                            selections: viewModel.actionSelections,
+                            resolved: false,
+                            dismissed: false,
+                            onToggle: { viewModel.toggleAction($0) },
+                            onApply: {
+                                viewModel.applyActions(
+                                    schedule: schedule,
+                                    scheduleViewModel: scheduleViewModel,
+                                    modelContext: modelContext
+                                )
+                            },
+                            onDismiss: { viewModel.dismissActions() }
+                        )
+                        .id("pending-actions")
                     }
 
                     if viewModel.isStreaming, viewModel.streamingText.isEmpty {

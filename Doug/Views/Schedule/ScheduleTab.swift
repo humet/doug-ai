@@ -140,7 +140,7 @@ struct ScheduleTab: View {
                     }
                 }
                 .sheet(isPresented: $showCoachChat) {
-                    CoachChatView(schedule: viewModel.activeSchedule)
+                    CoachChatView(schedule: viewModel.activeSchedule, scheduleViewModel: viewModel)
                 }
                 .alert(
                     "Cancel this bake?",

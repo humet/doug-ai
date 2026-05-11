@@ -135,14 +135,13 @@ final class ScheduleViewModel {
             water: latest.ratioWater
         )
 
-        let expectedPeak: Double
-        if let bucket = ratioBucket,
-           let profile = peakProfile,
-           let observed = profile.averageMinutes(ratio: bucket, tempBracket: tempBracket)
+        let expectedPeak: Double = if let bucket = ratioBucket,
+                                      let profile = peakProfile,
+                                      let observed = profile.averageMinutes(ratio: bucket, tempBracket: tempBracket)
         {
-            expectedPeak = observed
+            observed
         } else {
-            expectedPeak = TemperatureCalculator.levainBuildMinutes(
+            TemperatureCalculator.levainBuildMinutes(
                 kitchenTemp: latest.kitchenTemperatureCelsius
             )
         }
@@ -251,6 +250,10 @@ final class ScheduleViewModel {
         }
 
         activeSchedule = schedule
+
+        if useActiveLevain {
+            promoteNextUpcoming(in: schedule)
+        }
 
         Task {
             await NotificationService.shared.scheduleNotifications(for: persistedSteps)
@@ -365,7 +368,12 @@ final class ScheduleViewModel {
             let duration = step.computedDurationMinutes * 60
             step.computedStartTime = now
             step.computedEndTime = now.addingTimeInterval(duration)
-            cascade(afterEnd: oldEnd, delta: step.computedEndTime.timeIntervalSince(oldEnd), in: schedule, excluding: step)
+            cascade(
+                afterEnd: oldEnd,
+                delta: step.computedEndTime.timeIntervalSince(oldEnd),
+                in: schedule,
+                excluding: step
+            )
         }
 
         syncLiveActivity()
@@ -509,6 +517,20 @@ final class ScheduleViewModel {
         step.computedDurationMinutes = max(1, step.computedDurationMinutes - minutes)
 
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
+        syncLiveActivity()
+    }
+
+    func skipStep(_ step: ScheduleStep, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        let delta = -step.computedDurationMinutes * 60
+        let oldEnd = step.computedEndTime
+
+        step.stepStatus = .skipped
+        step.computedEndTime = step.computedStartTime
+        step.computedDurationMinutes = 0
+
+        cascade(afterEnd: oldEnd, delta: delta, in: schedule)
+        promoteNextUpcoming(in: schedule)
         syncLiveActivity()
     }
 

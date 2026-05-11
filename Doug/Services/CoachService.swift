@@ -8,7 +8,7 @@ actor CoachService {
         bakeContext: BakeContextPayload?,
         starterContext: StarterContextPayload?,
         availabilityContext: AvailabilityContextPayload?
-    ) -> AsyncThrowingStream<String, Error> {
+    ) -> AsyncThrowingStream<CoachStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -31,12 +31,12 @@ actor CoachService {
         bakeContext: BakeContextPayload?,
         starterContext: StarterContextPayload?,
         availabilityContext: AvailabilityContextPayload?,
-        continuation: AsyncThrowingStream<String, Error>.Continuation
+        continuation: AsyncThrowingStream<CoachStreamEvent, Error>.Continuation
     ) async throws {
         guard let url = Config.coachAPIURL else {
             let offline = "I'm not available right now — the coach service isn't configured. " +
                 "You can still check your schedule steps and timings in the app."
-            continuation.yield(offline)
+            continuation.yield(.text(offline))
             continuation.finish()
             return
         }
@@ -76,7 +76,17 @@ actor CoachService {
             else { continue }
 
             if let text = json["text"] as? String {
-                continuation.yield(text)
+                continuation.yield(.text(text))
+            }
+            if let actionDict = json["action"] as? [String: Any],
+               let toolName = actionDict["toolName"] as? String,
+               let params = actionDict["params"] as? [String: Any]
+            {
+                let proposal = CoachActionProposal.from(
+                    toolName: toolName,
+                    params: params
+                )
+                continuation.yield(.action(proposal))
             }
             if let error = json["error"] as? String {
                 throw CoachError.streamError(error)
@@ -85,6 +95,11 @@ actor CoachService {
 
         continuation.finish()
     }
+}
+
+enum CoachStreamEvent {
+    case text(String)
+    case action(CoachActionProposal)
 }
 
 enum CoachError: LocalizedError {
