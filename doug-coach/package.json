@@ -1,7 +1,6 @@
 {
   "name": "doug-coach",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "npx tsx dev-server.ts",
     "typecheck": "tsc --noEmit"
