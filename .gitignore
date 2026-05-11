@@ -15,5 +15,10 @@ DerivedData/
 # Secrets
 Secrets.xcconfig
 
+# Node (doug-coach backend)
+node_modules/
+.env
+.env.local
+
 # Claude Code
 .claude/settings.local.json

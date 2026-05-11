@@ -9,4 +9,33 @@ enum Config {
         guard let key = anthropicAPIKey else { return false }
         return !key.isEmpty && key != "YOUR_ANTHROPIC_API_KEY"
     }
+
+    static var coachAPIURL: URL? {
+        #if DEBUG
+        if let override = ProcessInfo.processInfo.environment["COACH_API_URL"],
+           let url = URL(string: override)
+        {
+            return url
+        }
+        #endif
+        guard let string = Bundle.main.infoDictionary?["COACH_API_URL"] as? String,
+              !string.isEmpty,
+              string != "YOUR_COACH_API_URL"
+        else {
+            #if DEBUG
+            return URL(string: "http://localhost:3000/api/chat")
+            #else
+            return nil
+            #endif
+        }
+        return URL(string: string)
+    }
+
+    static var coachAPIToken: String? {
+        guard let token = Bundle.main.infoDictionary?["COACH_API_TOKEN"] as? String,
+              !token.isEmpty,
+              token != "YOUR_COACH_API_TOKEN"
+        else { return nil }
+        return token
+    }
 }

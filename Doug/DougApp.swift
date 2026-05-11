@@ -25,6 +25,7 @@ struct DougApp: App {
             RevivalFeedStep.self,
             UserAvailability.self,
             UnavailableWindow.self,
+            CoachMessage.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {

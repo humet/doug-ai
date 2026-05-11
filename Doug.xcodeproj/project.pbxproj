@@ -49,6 +49,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		10798AD32FB0D8A2007695FA /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10AA10012FA10000003679E8 /* DougLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DougLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		10CF465E2FA9FCE600843F8F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10CF53F62FAA0DE900843F8F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
@@ -133,6 +134,11 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		10798AD52FB0D8A2007695FA /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 		10CF46602FA9FCE600843F8F /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
@@ -332,6 +338,10 @@
 				{
 					ProductGroup = 10DB381B2F9130F7003679E8 /* Products */;
 					ProjectRef = 10DB38192F9130F7003679E8 /* Doug.xcodeproj */;
+				},
+				{
+					ProductGroup = 10798AD52FB0D8A2007695FA /* Products */;
+					ProjectRef = 10798AD32FB0D8A2007695FA /* Doug.xcodeproj */;
 				},
 				{
 					ProductGroup = 10CF46602FA9FCE600843F8F /* Products */;

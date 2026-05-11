@@ -6,6 +6,7 @@ struct ScheduleTab: View {
     @State private var showConfig = false
     @State private var detailStep: ScheduleStep?
     @State private var showCancelConfirm = false
+    @State private var showCoachChat = false
 
     @Query private var availabilities: [UserAvailability]
     @Query private var windows: [UnavailableWindow]
@@ -31,6 +32,14 @@ struct ScheduleTab: View {
                 }
                 .toolbar {
                     if viewModel.activeSchedule != nil {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                showCoachChat = true
+                            } label: {
+                                Image(systemName: "bubble.left.and.text.bubble.right")
+                            }
+                            .accessibilityLabel("Coach")
+                        }
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
                                 viewModel.showRecipeDetailSheet = true
@@ -129,6 +138,9 @@ struct ScheduleTab: View {
                             }
                         }
                     }
+                }
+                .sheet(isPresented: $showCoachChat) {
+                    CoachChatView(schedule: viewModel.activeSchedule)
                 }
                 .alert(
                     "Cancel this bake?",
