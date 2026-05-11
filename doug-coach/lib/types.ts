@@ -24,7 +24,7 @@ export const BakeContextSchema = z.object({
   recipeName: z.string(),
   hydrationPercent: z.number(),
   kitchenTempCelsius: z.number(),
-  targetBreadReadyTime: z.string().datetime(),
+  targetBreadReadyTime: z.string().datetime({ offset: true }),
   recipeMethod: z.array(RecipeMethodStepSchema).optional(),
   recipeIngredients: RecipeIngredientsSchema.optional(),
   steps: z.array(
@@ -33,8 +33,8 @@ export const BakeContextSchema = z.object({
       label: z.string(),
       classification: z.enum(["handsOn", "passiveFlexible", "passiveFixed"]),
       status: z.enum(["upcoming", "active", "done", "skipped"]),
-      computedStartTime: z.string().datetime(),
-      computedEndTime: z.string().datetime(),
+      computedStartTime: z.string().datetime({ offset: true }),
+      computedEndTime: z.string().datetime({ offset: true }),
       durationMinutes: z.number(),
       flexRangeMin: z.number().optional(),
       flexRangeMax: z.number().optional(),
@@ -42,7 +42,7 @@ export const BakeContextSchema = z.object({
   ),
   temperatureReadings: z.array(
     z.object({
-      timestamp: z.string().datetime(),
+      timestamp: z.string().datetime({ offset: true }),
       temperatureCelsius: z.number(),
       accumulatedDegreeHours: z.number(),
       associatedStepTypeId: z.string().optional(),
@@ -64,7 +64,7 @@ export const StarterContextSchema = z.object({
   daysSinceLastFeed: z.number().nullable(),
   recentFeeds: z.array(
     z.object({
-      timestamp: z.string().datetime(),
+      timestamp: z.string().datetime({ offset: true }),
       ratio: z.string(),
       flourType: z.string(),
       kitchenTempCelsius: z.number(),
@@ -84,8 +84,8 @@ export const StarterContextSchema = z.object({
 export const AvailabilityContextSchema = z.object({
   unavailableWindows: z.array(
     z.object({
-      start: z.string().datetime(),
-      end: z.string().datetime(),
+      start: z.string().datetime({ offset: true }),
+      end: z.string().datetime({ offset: true }),
       label: z.string().optional(),
     })
   ),
@@ -98,7 +98,8 @@ export const ChatRequestSchema = z.object({
       content: z.string(),
     })
   ),
-  currentTime: z.string().datetime(),
+  currentTime: z.string().datetime({ offset: true }),
+  timeZone: z.string().optional(),
   context: BakeContextSchema.nullable(),
   starterContext: StarterContextSchema.nullable(),
   availabilityContext: AvailabilityContextSchema.nullable(),

@@ -3,6 +3,13 @@ import Foundation
 actor CoachService {
     static let shared = CoachService()
 
+    nonisolated static func makeLocalDateFormatter() -> ISO8601DateFormatter {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        f.timeZone = .current
+        return f
+    }
+
     func streamResponse(
         messages: [(role: String, content: String)],
         bakeContext: BakeContextPayload?,
@@ -51,7 +58,8 @@ actor CoachService {
 
         let body: [String: Any] = [
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
-            "currentTime": ISO8601DateFormatter().string(from: Date()),
+            "currentTime": Self.makeLocalDateFormatter().string(from: Date()),
+            "timeZone": TimeZone.current.identifier,
             "context": bakeContext?.toDictionary() as Any,
             "starterContext": starterContext?.toDictionary() as Any,
             "availabilityContext": availabilityContext?.toDictionary() as Any,
@@ -176,7 +184,7 @@ struct BakeContextPayload {
     }
 
     func toDictionary() -> [String: Any] {
-        let formatter = ISO8601DateFormatter()
+        let formatter = CoachService.makeLocalDateFormatter()
         return [
             "recipeId": recipeId,
             "recipeName": recipeName,
@@ -263,7 +271,7 @@ struct StarterContextPayload {
     }
 
     func toDictionary() -> [String: Any] {
-        let formatter = ISO8601DateFormatter()
+        let formatter = CoachService.makeLocalDateFormatter()
         var dict: [String: Any] = [
             "storageType": storageType,
             "maintenanceCycleDays": maintenanceCycleDays,
@@ -304,7 +312,7 @@ struct AvailabilityContextPayload {
     }
 
     func toDictionary() -> [String: Any] {
-        let formatter = ISO8601DateFormatter()
+        let formatter = CoachService.makeLocalDateFormatter()
         return [
             "unavailableWindows": unavailableWindows.map { w in
                 var dict: [String: Any] = [

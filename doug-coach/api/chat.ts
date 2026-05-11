@@ -27,12 +27,13 @@ export default async function handler(
     return;
   }
 
-  const { messages, currentTime, context, starterContext, availabilityContext } = parsed.data;
+  const { messages, currentTime, timeZone, context, starterContext, availabilityContext } = parsed.data;
   console.log("\n--- INCOMING REQUEST ---");
   console.log("currentTime:", currentTime);
+  console.log("timeZone:", timeZone);
   console.log("context:", JSON.stringify(context, null, 2));
   console.log("--- END REQUEST ---\n");
-  const systemPrompt = buildSystemPrompt(currentTime, context, starterContext, availabilityContext);
+  const systemPrompt = buildSystemPrompt(currentTime, context, starterContext, availabilityContext, timeZone);
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -47,7 +48,7 @@ export default async function handler(
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       tools: coachTools,
       stopWhen: stepCountIs(2),
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
     });
 
     for await (const part of result.fullStream) {

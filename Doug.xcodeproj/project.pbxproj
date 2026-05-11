@@ -52,6 +52,7 @@
 
 /* Begin PBXFileReference section */
 		10798AD32FB0D8A2007695FA /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		108A67112FB22DB600D16E23 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10AA10012FA10000003679E8 /* DougLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DougLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		10ABBB092FB1D545000D4F3F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10ABBB952FB1E510000D4F3F /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
@@ -139,6 +140,11 @@
 
 /* Begin PBXGroup section */
 		10798AD52FB0D8A2007695FA /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		108A67142FB22DB600D16E23 /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -344,6 +350,10 @@
 				{
 					ProductGroup = 10CF53F82FAA0DE900843F8F /* Products */;
 					ProjectRef = 10CF53F62FAA0DE900843F8F /* Doug.xcodeproj */;
+				},
+				{
+					ProductGroup = 108A67142FB22DB600D16E23 /* Products */;
+					ProjectRef = 108A67112FB22DB600D16E23 /* Doug.xcodeproj */;
 				},
 				{
 					ProductGroup = 10DB381B2F9130F7003679E8 /* Products */;
@@ -641,6 +651,7 @@
 				DEVELOPMENT_TEAM = B989TTSYN5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Doug-Info.plist";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -675,6 +686,7 @@
 				DEVELOPMENT_TEAM = B989TTSYN5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Doug-Info.plist";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

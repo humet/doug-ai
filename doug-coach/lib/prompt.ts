@@ -63,11 +63,12 @@ export function buildSystemPrompt(
   currentTime: string,
   context: BakeContext | null,
   starterContext: StarterContext | null,
-  availabilityContext: AvailabilityContext | null
+  availabilityContext: AvailabilityContext | null,
+  timeZone?: string
 ): string {
   const parts = [BASE_PROMPT];
 
-  parts.push(`\n## Current time\n\n${currentTime}`);
+  parts.push(`\n## Current time\n\n${currentTime}${timeZone ? ` (${timeZone})` : ""}`);
 
   if (context) {
     const now = new Date(currentTime);
