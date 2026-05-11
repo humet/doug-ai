@@ -8,7 +8,8 @@ struct CoachChatView: View {
     @FocusState private var inputFocused: Bool
 
     let schedule: Schedule?
-    let scheduleViewModel: ScheduleViewModel
+    let scheduleViewModel: ScheduleViewModel?
+    var initialMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -29,6 +30,16 @@ struct CoachChatView: View {
                     modelContext: modelContext,
                     schedule: schedule
                 )
+                if let initialMessage, !initialMessage.isEmpty {
+                    viewModel.inputText = initialMessage
+                    viewModel.send(
+                        modelContext: modelContext,
+                        schedule: schedule,
+                        bakeContext: buildBakeContext(),
+                        starterContext: nil,
+                        availabilityContext: nil
+                    )
+                }
             }
             .onDisappear {
                 viewModel.cancelStream()
@@ -77,11 +88,13 @@ struct CoachChatView: View {
                             dismissed: false,
                             onToggle: { viewModel.toggleAction($0) },
                             onApply: {
-                                viewModel.applyActions(
-                                    schedule: schedule,
-                                    scheduleViewModel: scheduleViewModel,
-                                    modelContext: modelContext
-                                )
+                                if let scheduleViewModel {
+                                    viewModel.applyActions(
+                                        schedule: schedule,
+                                        scheduleViewModel: scheduleViewModel,
+                                        modelContext: modelContext
+                                    )
+                                }
                             },
                             onDismiss: { viewModel.dismissActions() }
                         )
@@ -188,12 +201,31 @@ struct CoachChatView: View {
             .filter { $0.parentStep == nil }
             .sorted { $0.sequenceIndex < $1.sequenceIndex }
 
+        let recipe = schedule.recipe
         return BakeContextPayload(
             recipeId: schedule.recipeID,
-            recipeName: schedule.recipe.name,
-            hydrationPercent: schedule.recipe.hydrationPercent,
+            recipeName: recipe.name,
+            hydrationPercent: recipe.hydrationPercent,
             kitchenTempCelsius: schedule.kitchenTemperatureCelsius,
             targetBreadReadyTime: schedule.targetBreadReadyTime,
+            recipeMethod: recipe.method.map { methodStep in
+                let st = methodStep.stepType
+                return BakeContextPayload.RecipeMethodPayload(
+                    stepTypeId: methodStep.stepTypeID.rawValue,
+                    label: st.label,
+                    classification: st.classification.rawValue,
+                    baseDurationMinutes: methodStep.effectiveDuration,
+                    flexRangeMin: methodStep.effectiveFlexRange?.lowerBound,
+                    flexRangeMax: methodStep.effectiveFlexRange?.upperBound
+                )
+            },
+            recipeIngredients: BakeContextPayload.IngredientsPayload(
+                flourGrams: recipe.ingredients.flourGrams,
+                waterGrams: recipe.ingredients.waterGrams,
+                saltGrams: recipe.ingredients.saltGrams,
+                levainGrams: recipe.ingredients.levainGrams,
+                extras: recipe.ingredients.extras.map { ($0.name, $0.grams) }
+            ),
             steps: steps.map { step in
                 let stepType = step.stepType
                 return BakeContextPayload.StepPayload(

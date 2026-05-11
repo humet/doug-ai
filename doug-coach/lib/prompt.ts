@@ -97,8 +97,31 @@ Recipe: ${context.recipeName} (${context.hydrationPercent}% hydration)
 Kitchen temperature: ${context.kitchenTempCelsius}°C
 Target bread ready: ${context.targetBreadReadyTime}
 Degree-hour target: ${context.degreeHourTarget}
-
-### Steps
+${
+  context.recipeIngredients
+    ? `
+### Ingredients
+Flour: ${context.recipeIngredients.flourGrams}g | Water: ${context.recipeIngredients.waterGrams}g | Salt: ${context.recipeIngredients.saltGrams}g | Levain: ${context.recipeIngredients.levainGrams}g${
+        context.recipeIngredients.extras && context.recipeIngredients.extras.length > 0
+          ? ` | ${context.recipeIngredients.extras.map((e) => `${e.name}: ${e.grams}g`).join(" | ")}`
+          : ""
+      }`
+    : ""
+}
+${
+  context.recipeMethod && context.recipeMethod.length > 0
+    ? `
+### Original recipe method
+${context.recipeMethod
+  .map(
+    (m) =>
+      `- ${m.label} (id: "${m.stepTypeId}") [${m.classification}] — base ${m.baseDurationMinutes}min${m.flexRangeMin != null ? ` (flex: ${m.flexRangeMin}–${m.flexRangeMax}min)` : ""}`
+  )
+  .join("\n")}
+`
+    : ""
+}
+### Current schedule
 ${stepLines.join("\n")}
 
 ### Temperature readings

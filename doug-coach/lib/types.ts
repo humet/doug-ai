@@ -1,11 +1,32 @@
 import { z } from "zod";
 
+export const RecipeMethodStepSchema = z.object({
+  stepTypeId: z.string(),
+  label: z.string(),
+  classification: z.enum(["handsOn", "passiveFlexible", "passiveFixed"]),
+  baseDurationMinutes: z.number(),
+  flexRangeMin: z.number().optional(),
+  flexRangeMax: z.number().optional(),
+});
+
+export const RecipeIngredientsSchema = z.object({
+  flourGrams: z.number(),
+  waterGrams: z.number(),
+  saltGrams: z.number(),
+  levainGrams: z.number(),
+  extras: z
+    .array(z.object({ name: z.string(), grams: z.number() }))
+    .optional(),
+});
+
 export const BakeContextSchema = z.object({
   recipeId: z.string(),
   recipeName: z.string(),
   hydrationPercent: z.number(),
   kitchenTempCelsius: z.number(),
   targetBreadReadyTime: z.string().datetime(),
+  recipeMethod: z.array(RecipeMethodStepSchema).optional(),
+  recipeIngredients: RecipeIngredientsSchema.optional(),
   steps: z.array(
     z.object({
       stepTypeId: z.string(),

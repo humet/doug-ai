@@ -7,6 +7,7 @@ struct ScheduleTab: View {
     @State private var detailStep: ScheduleStep?
     @State private var showCancelConfirm = false
     @State private var showCoachChat = false
+    @State private var coachPrefill: String?
 
     @Query private var availabilities: [UserAvailability]
     @Query private var windows: [UnavailableWindow]
@@ -140,7 +141,12 @@ struct ScheduleTab: View {
                     }
                 }
                 .sheet(isPresented: $showCoachChat) {
-                    CoachChatView(schedule: viewModel.activeSchedule, scheduleViewModel: viewModel)
+                    CoachChatView(
+                        schedule: viewModel.activeSchedule,
+                        scheduleViewModel: viewModel,
+                        initialMessage: coachPrefill
+                    )
+                    .onDisappear { coachPrefill = nil }
                 }
                 .alert(
                     "Cancel this bake?",
@@ -240,7 +246,10 @@ struct ScheduleTab: View {
                     }
 
                     if !viewModel.activeConflicts.isEmpty {
-                        ConflictBanner(conflicts: viewModel.activeConflicts)
+                        ConflictBanner(conflicts: viewModel.activeConflicts) { prefill in
+                            coachPrefill = prefill
+                            showCoachChat = true
+                        }
                     }
 
                     CompletedStepsDisclosure(
@@ -254,7 +263,11 @@ struct ScheduleTab: View {
                             step: focus,
                             viewModel: viewModel,
                             referenceDate: now,
-                            onOpenDetail: { detailStep = $0 }
+                            onOpenDetail: { detailStep = $0 },
+                            onOpenCoach: { prefill in
+                                coachPrefill = prefill
+                                showCoachChat = true
+                            }
                         )
                     }
 

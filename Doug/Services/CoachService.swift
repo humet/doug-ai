@@ -127,10 +127,29 @@ struct BakeContextPayload {
     let hydrationPercent: Int
     let kitchenTempCelsius: Double
     let targetBreadReadyTime: Date
+    let recipeMethod: [RecipeMethodPayload]
+    let recipeIngredients: IngredientsPayload
     let steps: [StepPayload]
     let temperatureReadings: [TempReadingPayload]
     let degreeHourTarget: Double
     let delays: [DelayPayload]
+
+    struct RecipeMethodPayload {
+        let stepTypeId: String
+        let label: String
+        let classification: String
+        let baseDurationMinutes: Double
+        let flexRangeMin: Double?
+        let flexRangeMax: Double?
+    }
+
+    struct IngredientsPayload {
+        let flourGrams: Double
+        let waterGrams: Double
+        let saltGrams: Double
+        let levainGrams: Double
+        let extras: [(name: String, grams: Double)]
+    }
 
     struct StepPayload {
         let stepTypeId: String
@@ -164,6 +183,31 @@ struct BakeContextPayload {
             "hydrationPercent": hydrationPercent,
             "kitchenTempCelsius": kitchenTempCelsius,
             "targetBreadReadyTime": formatter.string(from: targetBreadReadyTime),
+            "recipeMethod": recipeMethod.map { m in
+                var dict: [String: Any] = [
+                    "stepTypeId": m.stepTypeId,
+                    "label": m.label,
+                    "classification": m.classification,
+                    "baseDurationMinutes": m.baseDurationMinutes,
+                ]
+                if let min = m.flexRangeMin { dict["flexRangeMin"] = min }
+                if let max = m.flexRangeMax { dict["flexRangeMax"] = max }
+                return dict
+            },
+            "recipeIngredients": {
+                var dict: [String: Any] = [
+                    "flourGrams": recipeIngredients.flourGrams,
+                    "waterGrams": recipeIngredients.waterGrams,
+                    "saltGrams": recipeIngredients.saltGrams,
+                    "levainGrams": recipeIngredients.levainGrams,
+                ]
+                if !recipeIngredients.extras.isEmpty {
+                    dict["extras"] = recipeIngredients.extras.map {
+                        ["name": $0.name, "grams": $0.grams] as [String: Any]
+                    }
+                }
+                return dict
+            }(),
             "steps": steps.map { step in
                 var dict: [String: Any] = [
                     "stepTypeId": step.stepTypeId,

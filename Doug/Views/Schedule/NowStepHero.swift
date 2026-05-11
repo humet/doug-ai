@@ -7,6 +7,7 @@ struct NowStepHero: View {
     let viewModel: ScheduleViewModel
     let referenceDate: Date
     let onOpenDetail: (ScheduleStep) -> Void
+    var onOpenCoach: ((String) -> Void)?
 
     @Environment(\.modelContext) private var modelContext
     @State private var showTemperatureEntry = false
@@ -94,7 +95,6 @@ struct NowStepHero: View {
 
     // MARK: - Staleness
 
-    @ViewBuilder
     private func stalenessWarning(_ info: StalenessInfo) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 8) {
@@ -110,6 +110,22 @@ struct NowStepHero: View {
                 Text(info.salvageAdvice)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            if onOpenCoach != nil {
+                let delay = Int(referenceDate.timeIntervalSince(step.computedStartTime) / 60)
+                let temp = step.schedule?.kitchenTemperatureCelsius ?? 22
+                Button {
+                    onOpenCoach?(
+                        "I'm \(delay) minutes late for \(step.stepType.label). Kitchen is \(Int(temp))°C. What should I do?"
+                    )
+                } label: {
+                    Label("What should I do?", systemImage: "bubble.left.and.text.bubble.right")
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .adaptiveGlassButtonStyle()
             }
         }
         .padding(12)

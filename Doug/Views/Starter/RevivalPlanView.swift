@@ -19,6 +19,7 @@ struct RevivalPlanView: View {
     @State private var viewModel = StarterViewModel()
     @State private var isReminderPending = false
     @State private var bakeReady: Bool?
+    @State private var showCoachChat = false
 
     var body: some View {
         List {
@@ -54,12 +55,27 @@ struct RevivalPlanView: View {
             }
         }
         .navigationTitle("Revival")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showCoachChat = true
+                } label: {
+                    Image(systemName: "bubble.left.and.text.bubble.right")
+                }
+                .accessibilityLabel("Coach")
+            }
+        }
+        .sheet(isPresented: $showCoachChat) {
+            CoachChatView(
+                schedule: nil,
+                scheduleViewModel: nil,
+                initialMessage: revivalCoachPrefill
+            )
+        }
         .task(id: currentStep?.status) {
             await refreshReminderState()
             bakeReady = nil
         }
-
-
     }
 
     // MARK: - Sections
@@ -129,7 +145,6 @@ struct RevivalPlanView: View {
         }
     }
 
-    @ViewBuilder
     private func pendingContent(_ step: RevivalFeedStep) -> some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             let isWaiting = step.scheduledTime > context.date
@@ -457,7 +472,6 @@ struct RevivalPlanView: View {
         }
     }
 
-    @ViewBuilder
     private func nextStepActionButton(_ step: RevivalFeedStep) -> some View {
         mixFeedButton(step)
     }
@@ -482,8 +496,10 @@ struct RevivalPlanView: View {
                     .foregroundStyle(.secondary)
 
                 HStack {
-                    Text("\(minTime, format: .dateTime.hour().minute()) – \(maxTime, format: .dateTime.hour().minute())")
-                        .font(.subheadline.bold())
+                    Text(
+                        "\(minTime, format: .dateTime.hour().minute()) – \(maxTime, format: .dateTime.hour().minute())"
+                    )
+                    .font(.subheadline.bold())
                     Spacer()
                     peakWindowBadge(startedAt: startedAt, step: step)
                 }
@@ -583,8 +599,10 @@ struct RevivalPlanView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Feed now")
                             .font(.subheadline.bold())
-                        Text("Scheduled for \(step.scheduledTime, format: .dateTime.hour().minute()) — \(Int(minutesPast))min ago")
-                            .font(.caption)
+                        Text(
+                            "Scheduled for \(step.scheduledTime, format: .dateTime.hour().minute()) — \(Int(minutesPast))min ago"
+                        )
+                        .font(.caption)
                     }
                 }
                 Spacer()
@@ -709,9 +727,6 @@ struct RevivalPlanView: View {
         return retain + flour + water
     }
 
-
-
-    @ViewBuilder
     private func actionButton(for step: RevivalFeedStep) -> some View {
         mixFeedButton(step)
     }
@@ -786,7 +801,16 @@ struct RevivalPlanView: View {
         }
     }
 
-
+    private var revivalCoachPrefill: String {
+        let stepNum = plan.currentStepIndex + 1
+        let total = sortedSteps.count
+        let peakTrend = sortedSteps
+            .filter { $0.timeToPeakMinutes != nil }
+            .map { "\(Int($0.timeToPeakMinutes!))min" }
+            .joined(separator: " → ")
+        let trend = peakTrend.isEmpty ? "no peaks recorded yet" : peakTrend
+        return "My starter is on step \(stepNum) of \(total) in revival. Peak times: \(trend). Is this normal?"
+    }
 
     // MARK: - Helpers
 
@@ -849,11 +873,10 @@ struct RevivalPlanView: View {
     }
 
     private func refreshReminderState() async {
-        let reminderStep: RevivalFeedStep?
-        if let step = currentStep, step.feedStatus == .peaked {
-            reminderStep = nextStep(after: step)
+        let reminderStep: RevivalFeedStep? = if let step = currentStep, step.feedStatus == .peaked {
+            nextStep(after: step)
         } else {
-            reminderStep = currentStep
+            currentStep
         }
         guard let reminderStep, reminderStep.feedStatus == .pending, reminderStep.scheduledTime > Date() else {
             isReminderPending = false
