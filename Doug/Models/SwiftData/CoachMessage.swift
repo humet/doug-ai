@@ -8,8 +8,8 @@ final class CoachMessage {
     var timestamp: Date
     var schedule: Schedule?
     var actionsJSON: String?
-    var actionsResolved: Bool
-    var actionsDismissed: Bool
+    var actionsResolved: Bool = false
+    var actionsDismissed: Bool = false
 
     init(
         role: CoachMessageRole,
