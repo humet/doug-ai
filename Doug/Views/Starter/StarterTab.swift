@@ -16,6 +16,7 @@ struct StarterTab: View {
     private var schedules: [Schedule]
 
     @Environment(\.modelContext) private var modelContext
+    @State private var showCoachChat = false
 
     private var profile: StarterProfile? {
         profiles.first
@@ -59,6 +60,14 @@ struct StarterTab: View {
             }
             .navigationTitle("Starter")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showCoachChat = true
+                    } label: {
+                        Image(systemName: "bubble.left.and.text.bubble.right")
+                    }
+                    .accessibilityLabel("Coach")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         viewModel.showLogFeed = true
@@ -66,6 +75,15 @@ struct StarterTab: View {
                         Label("Log Feed", systemImage: "plus")
                     }
                 }
+            }
+            .sheet(isPresented: $showCoachChat) {
+                CoachChatView(
+                    schedule: nil,
+                    scheduleViewModel: nil,
+                    starterProfile: profile,
+                    feedLogs: Array(feedLogs),
+                    unavailableWindows: Array(windows)
+                )
             }
             .sheet(isPresented: $viewModel.showLogFeed) {
                 LogFeedSheet(viewModel: viewModel, modelContext: modelContext)

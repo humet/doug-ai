@@ -10,6 +10,9 @@ struct CoachChatView: View {
     let schedule: Schedule?
     let scheduleViewModel: ScheduleViewModel?
     var initialMessage: String?
+    var starterProfile: StarterProfile?
+    var feedLogs: [StarterFeedLog] = []
+    var unavailableWindows: [UnavailableWindow] = []
 
     var body: some View {
         NavigationStack {
@@ -36,8 +39,8 @@ struct CoachChatView: View {
                         modelContext: modelContext,
                         schedule: schedule,
                         bakeContext: buildBakeContext(),
-                        starterContext: nil,
-                        availabilityContext: nil
+                        starterContext: buildStarterContext(),
+                        availabilityContext: buildAvailabilityContext()
                     )
                 }
             }
@@ -156,8 +159,8 @@ struct CoachChatView: View {
                         modelContext: modelContext,
                         schedule: schedule,
                         bakeContext: buildBakeContext(),
-                        starterContext: nil,
-                        availabilityContext: nil
+                        starterContext: buildStarterContext(),
+                        availabilityContext: buildAvailabilityContext()
                     )
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
@@ -268,5 +271,52 @@ struct CoachChatView: View {
                     delayMinutes: delay
                 )
             }
+    }
+
+    private func buildStarterContext() -> StarterContextPayload? {
+        guard let profile = starterProfile else { return nil }
+        let lastFeed = feedLogs.first
+        let daysSinceLastFeed: Double? = lastFeed.map {
+            Date().timeIntervalSince($0.timestamp) / 86400
+        }
+        return StarterContextPayload(
+            storageType: profile.storageType,
+            maintenanceCycleDays: profile.maintenanceCycleDays,
+            healthStatus: profile.healthStatus,
+            daysSinceLastFeed: daysSinceLastFeed,
+            recentFeeds: Array(feedLogs.prefix(5)).map { log in
+                StarterContextPayload.FeedPayload(
+                    timestamp: log.timestamp,
+                    ratio: log.ratioDescription,
+                    flourType: log.flourType,
+                    kitchenTempCelsius: log.kitchenTemperatureCelsius,
+                    timeToPeakMinutes: log.timeToPeakMinutes
+                )
+            },
+            revivalPlan: nil
+        )
+    }
+
+    private func buildAvailabilityContext() -> AvailabilityContextPayload? {
+        let active = unavailableWindows.filter(\.isActive)
+        guard !active.isEmpty else { return nil }
+        let cal = Calendar.current
+        let today = Date()
+        return AvailabilityContextPayload(
+            unavailableWindows: active.compactMap { w in
+                guard let start = cal.date(
+                    bySettingHour: w.startHour, minute: w.startMinute, second: 0, of: today
+                ),
+                    let end = cal.date(
+                        bySettingHour: w.endHour, minute: w.endMinute, second: 0, of: today
+                    )
+                else { return nil }
+                return AvailabilityContextPayload.WindowPayload(
+                    start: start,
+                    end: end,
+                    label: w.name
+                )
+            }
+        )
     }
 }
