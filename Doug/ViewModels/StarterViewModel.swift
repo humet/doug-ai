@@ -7,6 +7,7 @@ import SwiftData
 final class StarterViewModel {
     var showLogFeed = false
     var showStartRevival = false
+    var editingFeedLog: StarterFeedLog?
 
     // Feed entry form state
     var feedRatioStarter = 1
@@ -14,6 +15,7 @@ final class StarterViewModel {
     var feedRatioWater = 5
     var feedFlourType = "white"
     var feedKitchenTemp = 22.0
+    var feedTimestamp = Date()
     var logFeedStarterGrams = ""
 
     // Revival wizard form state
@@ -86,6 +88,7 @@ final class StarterViewModel {
     func logFeed(modelContext: ModelContext) {
         let grams = Double(logFeedStarterGrams.trimmingCharacters(in: .whitespaces))
         let log = StarterFeedLog(
+            timestamp: feedTimestamp,
             ratioStarter: feedRatioStarter,
             ratioFlour: feedRatioFlour,
             ratioWater: feedRatioWater,
@@ -100,9 +103,16 @@ final class StarterViewModel {
         feedRatioFlour = 5
         feedRatioWater = 5
         feedFlourType = "white"
+        feedTimestamp = Date()
         logFeedStarterGrams = ""
 
         showLogFeed = false
+    }
+
+    func deleteFeedLog(_ log: StarterFeedLog, modelContext: ModelContext, profile: StarterProfile?, feedLogs: [StarterFeedLog]) {
+        modelContext.delete(log)
+        let remaining = feedLogs.filter { $0.persistentModelID != log.persistentModelID }
+        updateProfileAverages(profile: profile, feedLogs: remaining)
     }
 
     func markPeak(for log: StarterFeedLog, profile: StarterProfile?, allLogs: [StarterFeedLog]) {

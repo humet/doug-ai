@@ -492,6 +492,26 @@ final class ScheduleViewModel {
         syncLiveActivity()
     }
 
+    func startStepAt(_ step: ScheduleStep, at startTime: Date, modelContext _: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+        let delta = startTime.timeIntervalSince(step.computedStartTime)
+        let oldStart = step.computedStartTime
+        guard abs(delta) > 1 else { return }
+
+        step.computedStartTime = startTime
+        step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
+        step.stepStatus = .active
+
+        for candidate in allSteps(in: schedule)
+            where candidate !== step && candidate.stepStatus == .active
+        {
+            candidate.stepStatus = .upcoming
+        }
+
+        cascade(afterEnd: oldStart, delta: delta, in: schedule, excluding: step)
+        syncLiveActivity()
+    }
+
     func extendStep(_ step: ScheduleStep, byMinutes minutes: Double, modelContext _: ModelContext) {
         guard let schedule = activeSchedule else { return }
         guard minutes > 0 else { return }

@@ -12,6 +12,7 @@ struct NowStepHero: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showTemperatureEntry = false
     @State private var showAbandonConfirm = false
+    @State private var showAlreadyStarted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -49,6 +50,9 @@ struct NowStepHero: View {
             if let schedule = step.schedule {
                 TemperatureEntryView(schedule: schedule, foldStep: step)
             }
+        }
+        .sheet(isPresented: $showAlreadyStarted) {
+            AlreadyStartedSheet(step: step, viewModel: viewModel)
         }
         .confirmationDialog(
             "Abandon this bake?",
@@ -165,6 +169,15 @@ struct NowStepHero: View {
                         .padding(.vertical, 10)
                 }
                 .adaptiveGlassButtonStyle(prominent: true)
+                Button {
+                    showAlreadyStarted = true
+                } label: {
+                    Label("Already Started", systemImage: "clock.arrow.circlepath")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .adaptiveGlassButtonStyle()
             } else if step.stepType.requiresTempReading, step.stepStatus == .active {
                 Button {
                     showTemperatureEntry = true
@@ -301,5 +314,59 @@ struct NowStepHero: View {
         } else {
             viewModel.finishStepEarly(step, modelContext: modelContext)
         }
+    }
+}
+
+// MARK: - Already Started Sheet
+
+private struct AlreadyStartedSheet: View {
+    let step: ScheduleStep
+    let viewModel: ScheduleViewModel
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @State private var startTime: Date
+
+    init(step: ScheduleStep, viewModel: ScheduleViewModel) {
+        self.step = step
+        self.viewModel = viewModel
+        let earliest = Calendar.current.startOfDay(for: Date())
+        let initial = max(earliest, step.computedStartTime)
+        _startTime = State(initialValue: initial)
+    }
+
+    private var earliestAllowed: Date {
+        Calendar.current.startOfDay(for: Date())
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    DatePicker(
+                        "Started at",
+                        selection: $startTime,
+                        in: earliestAllowed ... Date(),
+                        displayedComponents: [.hourAndMinute]
+                    )
+                } footer: {
+                    Text("Pick when you actually started this step. The rest of the schedule will shift to match.")
+                }
+            }
+            .navigationTitle("Already Started")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        viewModel.startStepAt(step, at: startTime, modelContext: modelContext)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
