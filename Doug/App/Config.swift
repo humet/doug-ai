@@ -17,18 +17,10 @@ enum Config {
         {
             return url
         }
+        return URL(string: "http://localhost:3000/api/chat")
+        #else
+        return URL(string: "https://doug-ai.vercel.app/api/chat")
         #endif
-        guard let string = Bundle.main.infoDictionary?["COACH_API_URL"] as? String,
-              !string.isEmpty,
-              string != "YOUR_COACH_API_URL"
-        else {
-            #if DEBUG
-            return URL(string: "http://localhost:3000/api/chat")
-            #else
-            return nil
-            #endif
-        }
-        return URL(string: string)
     }
 
     static var coachAPIToken: String? {
