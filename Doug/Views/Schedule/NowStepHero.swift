@@ -346,19 +346,42 @@ struct NowStepHero: View {
             case .buildLevain:
                 measurementChips([("Levain", ing.levainGrams)])
             case .autolyse:
-                measurementChips([("Flour", ing.flourGrams), ("Water", ing.waterGrams)])
+                VStack(alignment: .leading, spacing: 6) {
+                    measurementChips([("Flour", ing.flourGrams), ("Water", ing.waterGrams)])
+                    waterTemperatureCallout
+                }
             case .mix:
-                measurementChips([
-                    ("Flour", ing.flourGrams),
-                    ("Water", ing.waterGrams),
-                    ("Levain", ing.levainGrams),
-                    ("Salt", ing.saltGrams),
-                ])
+                VStack(alignment: .leading, spacing: 6) {
+                    measurementChips([
+                        ("Flour", ing.flourGrams),
+                        ("Water", ing.waterGrams),
+                        ("Levain", ing.levainGrams),
+                        ("Salt", ing.saltGrams),
+                    ])
+                    waterTemperatureCallout
+                }
             case .addInclusions where !ing.extras.isEmpty:
                 measurementChips(ing.extras.map { ($0.name, $0.grams) })
             default:
                 EmptyView()
             }
+        }
+    }
+
+    @ViewBuilder
+    private var waterTemperatureCallout: some View {
+        if let waterTemp = desiredWaterTemperature {
+            HStack(spacing: 6) {
+                Image(systemName: "drop.fill")
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                Text("Water at \(Int(waterTemp.rounded()))°C")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.blue)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(.blue.opacity(0.1), in: .capsule)
         }
     }
 
@@ -443,6 +466,15 @@ struct NowStepHero: View {
 
     private var recipeIngredients: Ingredients? {
         step.schedule?.recipe.ingredients
+    }
+
+    private var desiredWaterTemperature: Double? {
+        guard [.autolyse, .mix].contains(stepTypeIDEnum),
+              let schedule = step.schedule else { return nil }
+        return TemperatureCalculator.desiredWaterTemperature(
+            desiredDoughTemp: schedule.recipe.referenceTemperatureCelsius,
+            kitchenTemp: schedule.kitchenTemperatureCelsius
+        )
     }
 
     private var stalenessInfo: StalenessInfo? {

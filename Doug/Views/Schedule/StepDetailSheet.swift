@@ -113,6 +113,7 @@ struct StepDetailSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("What to do")
                 .font(.subheadline.bold())
+            contextualIngredients
             Text(step.stepType.instructionText)
                 .font(.subheadline)
             if let temp = ovenTemperature {
@@ -137,6 +138,66 @@ struct StepDetailSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(DougTheme.cardBackground, in: .rect(cornerRadius: 14))
+    }
+
+    @ViewBuilder
+    private var contextualIngredients: some View {
+        if let ing = step.schedule?.recipe.ingredients {
+            let items: [(String, Double)] = switch stepTypeIDEnum {
+            case .buildLevain: [("Levain", ing.levainGrams)]
+            case .autolyse: [("Flour", ing.flourGrams), ("Water", ing.waterGrams)]
+            case .mix: [
+                ("Flour", ing.flourGrams),
+                ("Water", ing.waterGrams),
+                ("Levain", ing.levainGrams),
+                ("Salt", ing.saltGrams),
+            ]
+            case .addInclusions: ing.extras.map { ($0.name, $0.grams) }
+            default: []
+            }
+            if !items.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                        if index > 0 { Divider() }
+                        HStack {
+                            Text(item.0)
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(Int(item.1.rounded()))g")
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 4)
+                    }
+                    if let waterTemp = desiredWaterTemperature {
+                        Divider()
+                        HStack {
+                            Label("Water temperature", systemImage: "drop.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.blue)
+                            Spacer()
+                            Text("\(Int(waterTemp.rounded()))°C")
+                                .font(.subheadline.bold().monospacedDigit())
+                                .foregroundStyle(.blue)
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 4)
+                    }
+                }
+                .padding(10)
+                .background(DougTheme.warmWheat.opacity(0.3), in: .rect(cornerRadius: 10))
+            }
+        }
+    }
+
+    private var desiredWaterTemperature: Double? {
+        guard [.autolyse, .mix].contains(stepTypeIDEnum),
+              let schedule = step.schedule else { return nil }
+        return TemperatureCalculator.desiredWaterTemperature(
+            desiredDoughTemp: schedule.recipe.referenceTemperatureCelsius,
+            kitchenTemp: schedule.kitchenTemperatureCelsius
+        )
     }
 
     private var ovenTemperature: Int? {

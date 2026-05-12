@@ -46,6 +46,24 @@ enum TemperatureCalculator {
     /// Standard levain-build ratio assumed for personalised peak-time lookups.
     static let levainBuildRatio: FeedRatioBucket = .oneToFive
 
+    /// Calculates the recommended water temperature to hit the desired dough
+    /// temperature (DDT), using the standard 3-factor method.
+    ///
+    /// Formula: waterTemp = (DDT × 3) - flourTemp - levainTemp
+    /// Assumes flour and levain are at kitchen (room) temperature.
+    ///
+    /// - Parameters:
+    ///   - desiredDoughTemp: The recipe's reference/target dough temperature (°C).
+    ///   - kitchenTemp: Current kitchen temperature (°C), used for flour and levain.
+    /// - Returns: Recommended water temperature in °C, clamped to 2...45.
+    static func desiredWaterTemperature(
+        desiredDoughTemp: Double,
+        kitchenTemp: Double
+    ) -> Double {
+        let raw = (desiredDoughTemp * 3.0) - (2.0 * kitchenTemp)
+        return min(max(raw, 2.0), 45.0)
+    }
+
     /// Computes the effective duration of a method step, applying temperature
     /// adjustment if the step type is temperature-adjusted.
     ///
