@@ -7,6 +7,7 @@ import SwiftData
 final class StarterViewModel {
     var showLogFeed = false
     var showStartRevival = false
+    var showPostBake = false
     var editingFeedLog: StarterFeedLog?
 
     // Feed entry form state
@@ -85,7 +86,8 @@ final class StarterViewModel {
         await NotificationService.shared.scheduleStarterFeedReminder(at: nextFeed, context: context)
     }
 
-    func logFeed(modelContext: ModelContext) {
+    func logFeed(modelContext: ModelContext, profile: StarterProfile? = nil, intent: FeedIntent? = nil) {
+        let resolvedIntent = intent ?? inferFeedIntent(profile: profile)
         let grams = Double(logFeedStarterGrams.trimmingCharacters(in: .whitespaces))
         let log = StarterFeedLog(
             timestamp: feedTimestamp,
@@ -94,11 +96,11 @@ final class StarterViewModel {
             ratioWater: feedRatioWater,
             flourType: feedFlourType,
             kitchenTemperatureCelsius: feedKitchenTemp,
-            starterGrams: grams
+            starterGrams: grams,
+            feedIntent: resolvedIntent
         )
         modelContext.insert(log)
 
-        // Reset form
         feedRatioStarter = 1
         feedRatioFlour = 5
         feedRatioWater = 5
@@ -109,7 +111,20 @@ final class StarterViewModel {
         showLogFeed = false
     }
 
-    func deleteFeedLog(_ log: StarterFeedLog, modelContext: ModelContext, profile: StarterProfile?, feedLogs: [StarterFeedLog]) {
+    private func inferFeedIntent(profile: StarterProfile?) -> FeedIntent {
+        switch profile?.starterLifecycleState {
+        case .activating: .activation
+        case .active: .postBake
+        default: .maintenance
+        }
+    }
+
+    func deleteFeedLog(
+        _ log: StarterFeedLog,
+        modelContext: ModelContext,
+        profile: StarterProfile?,
+        feedLogs: [StarterFeedLog]
+    ) {
         modelContext.delete(log)
         let remaining = feedLogs.filter { $0.persistentModelID != log.persistentModelID }
         updateProfileAverages(profile: profile, feedLogs: remaining)
@@ -118,18 +133,83 @@ final class StarterViewModel {
     func markPeak(for log: StarterFeedLog, profile: StarterProfile?, allLogs: [StarterFeedLog]) {
         log.markPeak(at: Date())
         updateProfileAverages(profile: profile, feedLogs: allLogs)
+
+        if log.starterFeedIntent == .activation, let profile {
+            evaluateLifecycle(profile: profile, feedLogs: allLogs)
+        }
     }
 
-    /// Recalculates the starter profile's average time-to-peak from feed history.
     func updateProfileAverages(profile: StarterProfile?, feedLogs: [StarterFeedLog]) {
         guard let profile else { return }
 
-        let peakTimes = feedLogs.compactMap(\.timeToPeakMinutes)
-        guard !peakTimes.isEmpty else { return }
+        let allPeakTimes = feedLogs.compactMap(\.timeToPeakMinutes)
+        if !allPeakTimes.isEmpty {
+            profile.averageTimeToPeakMinutes = allPeakTimes.reduce(0, +) / Double(allPeakTimes.count)
+        }
 
-        profile.averageTimeToPeakMinutes = peakTimes.reduce(0, +) / Double(peakTimes.count)
+        let activationPeakTimes = feedLogs
+            .filter { $0.starterFeedIntent == .activation }
+            .compactMap(\.timeToPeakMinutes)
+        if !activationPeakTimes.isEmpty {
+            profile.activePeakAverageMinutes = activationPeakTimes.reduce(0, +) / Double(activationPeakTimes.count)
+        }
+
         profile.starterHealthStatus = healthStatus(profile: profile, feedLogs: feedLogs)
         profile.lastUpdated = Date()
+    }
+
+    // MARK: - Lifecycle
+
+    func activate(profile: StarterProfile) {
+        if let result = StarterStateMachine.activate(currentState: profile.starterLifecycleState) {
+            profile.starterLifecycleState = result.newState
+        }
+    }
+
+    func feedAndRefrigerate(profile: StarterProfile, modelContext: ModelContext) {
+        logFeed(modelContext: modelContext, profile: profile, intent: .postBake)
+        if let result = StarterStateMachine.refrigerate(currentState: profile.starterLifecycleState) {
+            profile.starterLifecycleState = result.newState
+        }
+    }
+
+    func evaluateLifecycle(profile: StarterProfile, feedLogs: [StarterFeedLog]) {
+        let activationLogs = feedLogs.filter { $0.starterFeedIntent == .activation }
+        let lastActivation = activationLogs.first.map { FeedLogInput(from: $0) }
+
+        if let result = StarterStateMachine.evaluateAutoTransition(
+            currentState: profile.starterLifecycleState,
+            stateChangedAt: profile.stateChangedAt,
+            lastActivationFeed: lastActivation,
+            activePeakAverage: profile.activePeakAverageMinutes
+        ) {
+            profile.starterLifecycleState = result.newState
+        }
+    }
+
+    func feedSuggestion(
+        profile: StarterProfile?,
+        feedLogs: [StarterFeedLog],
+        availability: UserAvailability?,
+        windows: [UnavailableWindow],
+        upcomingBakeStart: Date?
+    ) -> FeedSuggestion? {
+        guard let profile else { return nil }
+
+        let avail = availability.map { AvailabilityInput(from: $0) }
+            ?? AvailabilityInput(startHour: 6, startMinute: 30, endHour: 21, endMinute: 0)
+
+        return FeedScheduler.suggestNextFeed(
+            lifecycleState: profile.starterLifecycleState,
+            stateChangedAt: profile.stateChangedAt,
+            lastFeedTime: feedLogs.first?.timestamp,
+            cycleDays: profile.maintenanceCycleDays,
+            upcomingBakeStart: upcomingBakeStart,
+            activePeakAverage: profile.activePeakAverageMinutes,
+            kitchenTempC: feedLogs.first?.kitchenTemperatureCelsius ?? 22,
+            availability: avail,
+            windows: windows.map { WindowInput(from: $0) }
+        )
     }
 
     // MARK: - Revival
@@ -302,15 +382,21 @@ final class StarterViewModel {
         plan: RevivalPlan,
         doubled: Bool,
         availability: UserAvailability?,
-        windows: [UnavailableWindow]
+        windows: [UnavailableWindow],
+        profile: StarterProfile? = nil
     ) -> Bool {
         let peakMinutes = step.timeToPeakMinutes ?? step.expectedPeakMinutes
         let maxPeak = step.maxPeakMinutes ?? step.expectedPeakMinutes * 1.5
         let peakedInWindow = peakMinutes <= maxPeak
 
-        if doubled && peakedInWindow {
+        if doubled, peakedInWindow {
             step.feedStatus = .completed
             plan.revivalStatus = .completed
+            if let profile,
+               let result = StarterStateMachine.completeRevival(currentState: profile.starterLifecycleState)
+            {
+                profile.starterLifecycleState = result.newState
+            }
             syncRevivalActivity(plan: plan)
             return true
         } else {

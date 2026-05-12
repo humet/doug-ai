@@ -10,6 +10,11 @@ struct ScheduleConfigSheet: View {
     @Query private var windows: [UnavailableWindow]
     @Query(sort: \StarterFeedLog.timestamp, order: .reverse)
     private var feedLogs: [StarterFeedLog]
+    @Query private var profiles: [StarterProfile]
+
+    private var starterProfile: StarterProfile? {
+        profiles.first
+    }
 
     var body: some View {
         NavigationStack {
@@ -58,6 +63,8 @@ struct ScheduleConfigSheet: View {
                 } header: {
                     Text("Temperature")
                 }
+
+                starterStatusSection
 
                 if let ctx = viewModel.detectedLevain {
                     Section {
@@ -114,6 +121,78 @@ struct ScheduleConfigSheet: View {
             .onChange(of: viewModel.targetDate) {
                 rebuildPreview()
             }
+        }
+    }
+
+    @ViewBuilder
+    private var starterStatusSection: some View {
+        let state = starterProfile?.starterLifecycleState ?? .dormant
+        Section {
+            HStack(spacing: 10) {
+                Image(systemName: starterStatusIcon(state))
+                    .foregroundStyle(starterStatusColor(state))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(starterStatusTitle(state))
+                        .font(.subheadline.bold())
+                    Text(starterStatusDetail(state))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Starter")
+        }
+    }
+
+    private func starterStatusIcon(_ state: StarterLifecycleState) -> String {
+        switch state {
+        case .active: "checkmark.circle.fill"
+        case .activating: "flame.fill"
+        case .dormant: "snowflake"
+        case .reviving: "arrow.triangle.2.circlepath.circle.fill"
+        }
+    }
+
+    private func starterStatusColor(_ state: StarterLifecycleState) -> Color {
+        switch state {
+        case .active: .green
+        case .activating: .orange
+        case .dormant: .blue
+        case .reviving: .purple
+        }
+    }
+
+    private func starterStatusTitle(_ state: StarterLifecycleState) -> String {
+        switch state {
+        case .active: "Starter ready"
+        case .activating: "Starter activating"
+        case .dormant: "Starter in the fridge"
+        case .reviving: "Starter in revival"
+        }
+    }
+
+    private func starterStatusDetail(_ state: StarterLifecycleState) -> String {
+        switch state {
+        case .active:
+            return "Your starter is active and ready for this bake."
+        case .activating:
+            return "Your starter is waking up — wait for it to peak before starting."
+        case .dormant:
+            let duration = EarliestBakeEstimator.recipeDurationMinutes(
+                recipe: viewModel.selectedRecipe,
+                kitchenTempC: viewModel.kitchenTemperature
+            )
+            let estimate = EarliestBakeEstimator.estimate(
+                lifecycleState: .dormant,
+                stateChangedAt: starterProfile?.stateChangedAt ?? Date(),
+                lastActivationFeed: nil,
+                activePeakAverage: starterProfile?.activePeakAverageMinutes,
+                kitchenTempC: viewModel.kitchenTemperature,
+                scheduleDurationMinutes: duration
+            )
+            return "Feed it on the counter first. Earliest bread ready: \(estimate.earliestBreadReady.formatted(date: .abbreviated, time: .shortened))"
+        case .reviving:
+            return "Your starter needs to finish revival before you can bake."
         }
     }
 

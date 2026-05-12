@@ -41,8 +41,8 @@ struct StarterTab: View {
         return levainStarts.filter { $0 > now }.min()
     }
 
-    private var nextFeed: Date? {
-        viewModel.nextFeedTime(
+    private var currentSuggestion: FeedSuggestion? {
+        viewModel.feedSuggestion(
             profile: profile,
             feedLogs: feedLogs,
             availability: availabilities.first,
@@ -51,12 +51,21 @@ struct StarterTab: View {
         )
     }
 
+    private var nextFeed: Date? {
+        currentSuggestion?.time
+    }
+
+    private var lifecycleState: StarterLifecycleState {
+        profile?.starterLifecycleState ?? .dormant
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                healthSection
+                lifecycleSection
+                bakeAwarenessSection
                 revivalSection
-                nextFeedSection
+                suggestionSection
                 feedHistorySection
             }
             .navigationTitle("Starter")
@@ -87,7 +96,7 @@ struct StarterTab: View {
                 )
             }
             .sheet(isPresented: $viewModel.showLogFeed) {
-                LogFeedSheet(viewModel: viewModel, modelContext: modelContext)
+                LogFeedSheet(viewModel: viewModel, modelContext: modelContext, profile: profile)
             }
             .sheet(item: $viewModel.editingFeedLog) { log in
                 EditFeedLogSheet(log: log, profile: profile, allLogs: Array(feedLogs), viewModel: viewModel)
@@ -98,7 +107,12 @@ struct StarterTab: View {
             )) {
                 Button("Delete", role: .destructive) {
                     if let log = feedLogToDelete {
-                        viewModel.deleteFeedLog(log, modelContext: modelContext, profile: profile, feedLogs: Array(feedLogs))
+                        viewModel.deleteFeedLog(
+                            log,
+                            modelContext: modelContext,
+                            profile: profile,
+                            feedLogs: Array(feedLogs)
+                        )
                     }
                     feedLogToDelete = nil
                 }
@@ -116,6 +130,14 @@ struct StarterTab: View {
                     windows: Array(windows)
                 )
             }
+            .sheet(isPresented: $viewModel.showPostBake) {
+                PostBakeSheet(viewModel: viewModel, modelContext: modelContext, profile: profile)
+            }
+            .task {
+                if let profile {
+                    viewModel.evaluateLifecycle(profile: profile, feedLogs: Array(feedLogs))
+                }
+            }
             .task(id: nextFeed) {
                 await viewModel.syncFeedReminder(
                     nextFeed: nextFeed,
@@ -127,37 +149,129 @@ struct StarterTab: View {
 
     // MARK: - Sections
 
-    private var healthSection: some View {
+    private var lifecycleSection: some View {
         Section {
-            HStack {
-                if activeRevivalPlan != nil {
-                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                        .foregroundStyle(.tint)
-                        .font(.title2)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("In Revival")
-                            .font(.headline)
-                        Text("Your starter is rebuilding strength. Follow the revival plan below.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
-                    Image(systemName: healthIcon(status))
-                        .foregroundStyle(healthColor(status))
-                        .font(.title2)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(healthLabel(status))
-                            .font(.headline)
-                        Text(healthDescription(status))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            HStack(spacing: 12) {
+                Image(systemName: lifecycleIcon)
+                    .foregroundStyle(lifecycleColor)
+                    .font(.title2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(lifecycleTitle)
+                        .font(.headline)
+                    Text(lifecycleSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 4)
+
+            lifecycleActions
         } header: {
-            Text("Health")
+            Text("Starter")
+        }
+    }
+
+    @ViewBuilder
+    private var lifecycleActions: some View {
+        switch lifecycleState {
+        case .dormant:
+            Button {
+                viewModel.showLogFeed = true
+            } label: {
+                Label("Log Maintenance Feed", systemImage: "snowflake")
+            }
+            Button {
+                if let profile {
+                    viewModel.activate(profile: profile)
+                }
+            } label: {
+                Label("Activate for Bake", systemImage: "flame")
+            }
+            .tint(.orange)
+        case .activating:
+            let risingFeed = feedLogs.first { $0.starterFeedIntent == .activation && $0.peakTimestamp == nil }
+            if risingFeed != nil {
+                Button {
+                    if let feed = risingFeed {
+                        viewModel.markPeak(for: feed, profile: profile, allLogs: Array(feedLogs))
+                    }
+                } label: {
+                    Label("Mark Peak", systemImage: "chart.line.uptrend.xyaxis")
+                }
+                .tint(.green)
+            } else {
+                Button {
+                    viewModel.showLogFeed = true
+                } label: {
+                    Label("Log Activation Feed", systemImage: "flame")
+                }
+                .tint(.orange)
+            }
+        case .active:
+            Button {
+                viewModel.showPostBake = true
+            } label: {
+                Label("Feed & Refrigerate", systemImage: "snowflake")
+            }
+        case .reviving:
+            EmptyView()
+        }
+    }
+
+    private var lifecycleIcon: String {
+        switch lifecycleState {
+        case .dormant:
+            let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
+            return healthIcon(status)
+        case .activating: return "flame.fill"
+        case .active: return "checkmark.circle.fill"
+        case .reviving: return "arrow.triangle.2.circlepath.circle.fill"
+        }
+    }
+
+    private var lifecycleColor: Color {
+        switch lifecycleState {
+        case .dormant:
+            let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
+            return healthColor(status)
+        case .activating: return .orange
+        case .active: return DougTheme.starterReady
+        case .reviving: return .accentColor
+        }
+    }
+
+    private var lifecycleTitle: String {
+        switch lifecycleState {
+        case .dormant: return "In the Fridge"
+        case .activating:
+            let risingFeed = feedLogs.first { $0.starterFeedIntent == .activation && $0.peakTimestamp == nil }
+            return risingFeed != nil ? "Waking Up" : "Activating"
+        case .active: return "Ready to Bake!"
+        case .reviving: return "In Revival"
+        }
+    }
+
+    private var lifecycleSubtitle: String {
+        switch lifecycleState {
+        case .dormant:
+            if let lastFeed = feedLogs.first {
+                let days = Int(Date().timeIntervalSince(lastFeed.timestamp) / 86400)
+                return "Last fed \(days) day\(days == 1 ? "" : "s") ago"
+            }
+            return "No feeds logged yet"
+        case .activating:
+            if let risingFeed = feedLogs
+                .first(where: { $0.starterFeedIntent == .activation && $0.peakTimestamp == nil })
+            {
+                let hours = Int(Date().timeIntervalSince(risingFeed.timestamp) / 3600)
+                return "Rising on the counter — \(hours)h since feed"
+            }
+            return "Feed your starter on the counter to wake it up"
+        case .active:
+            let hours = Int(Date().timeIntervalSince(profile?.stateChangedAt ?? Date()) / 3600)
+            return "Active for \(hours)h — build your levain or feed & refrigerate"
+        case .reviving:
+            return "Your starter is rebuilding strength. Follow the revival plan below."
         }
     }
 
@@ -190,24 +304,61 @@ struct StarterTab: View {
     }
 
     @ViewBuilder
-    private var nextFeedSection: some View {
-        if activeRevivalPlan == nil, let nextFeed {
+    private var bakeAwarenessSection: some View {
+        if lifecycleState == .dormant, let bakeStart = upcomingBakeStart {
+            Section {
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar.badge.clock")
+                        .foregroundStyle(.orange)
+                        .font(.title3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Upcoming bake needs active starter")
+                            .font(.subheadline.bold())
+                        Text(
+                            "Feed your starter on the counter by \(bakeStart.addingTimeInterval(-6 * 3600), format: .dateTime.weekday(.wide).hour().minute())"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                Button {
+                    if let profile {
+                        viewModel.activate(profile: profile)
+                    }
+                } label: {
+                    Label("Activate Now", systemImage: "flame")
+                }
+                .tint(.orange)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var suggestionSection: some View {
+        if activeRevivalPlan == nil, let suggestion = currentSuggestion {
             Section {
                 HStack {
-                    Label("Next feed", systemImage: "clock")
+                    Label {
+                        Text(suggestion.reason)
+                    } icon: {
+                        Image(systemName: suggestion.intent == .activation ? "flame" : "clock")
+                    }
                     Spacer()
-                    RelativeTimeLabel(date: nextFeed)
+                    RelativeTimeLabel(date: suggestion.time)
                         .foregroundStyle(.secondary)
                 }
                 HStack {
                     Spacer()
-                    Text(nextFeed, format: .dateTime.weekday(.wide).hour().minute())
+                    Text(suggestion.time, format: .dateTime.weekday(.wide).hour().minute())
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             } footer: {
-                Text(viewModel.feedContext(nextFeed: nextFeed, upcomingBakeStart: upcomingBakeStart))
-                    .font(.caption)
+                if suggestion.urgency == .urgent {
+                    Text("This is getting urgent — don't wait too long.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
         }
     }
@@ -292,6 +443,7 @@ struct FeedLogRow: View {
             HStack {
                 Text(log.ratioDescription)
                     .font(.headline)
+                intentBadge
                 Spacer()
                 RelativeTimeLabel(date: log.timestamp)
                     .font(.caption)
@@ -309,7 +461,7 @@ struct FeedLogRow: View {
                     Label("\(Int(peak))m to peak", systemImage: "chart.line.uptrend.xyaxis")
                         .font(.caption)
                         .foregroundStyle(.green)
-                } else if log.peakTimestamp == nil {
+                } else if log.peakTimestamp == nil, log.starterFeedIntent == .activation {
                     Button("Mark Peak", action: onMarkPeak)
                         .font(.caption)
                         .buttonStyle(.bordered)
@@ -318,6 +470,24 @@ struct FeedLogRow: View {
             .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var intentBadge: some View {
+        switch log.starterFeedIntent {
+        case .activation:
+            Label("Counter", systemImage: "flame")
+                .font(.caption2)
+                .foregroundStyle(.orange)
+        case .postBake:
+            Label("Post-bake", systemImage: "arrow.uturn.down")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        case .maintenance:
+            Label("Fridge", systemImage: "snowflake")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -400,6 +570,7 @@ private struct RevivalInProgressRow: View {
 struct LogFeedSheet: View {
     @Bindable var viewModel: StarterViewModel
     let modelContext: ModelContext
+    var profile: StarterProfile?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -484,7 +655,7 @@ struct LogFeedSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        viewModel.logFeed(modelContext: modelContext)
+                        viewModel.logFeed(modelContext: modelContext, profile: profile)
                     }
                 }
             }
@@ -497,6 +668,8 @@ struct LogFeedSheet: View {
         let flour = retain * Double(viewModel.feedRatioFlour) / Double(viewModel.feedRatioStarter)
         let water = retain * Double(viewModel.feedRatioWater) / Double(viewModel.feedRatioStarter)
 
+        let feedKind: FeedStepKind = profile?.starterLifecycleState == .activating ? .activation : .maintenance
+
         let instruction = FeedInstructions.instruction(
             for: FeedInstructionInput(
                 retainGrams: retain,
@@ -505,7 +678,7 @@ struct LogFeedSheet: View {
                 flourType: viewModel.feedFlourType,
                 kitchenTempC: viewModel.feedKitchenTemp,
                 expectedPeakMinutes: 300,
-                kind: .maintenance,
+                kind: feedKind,
                 hadHooch: false,
                 neglect: nil
             )

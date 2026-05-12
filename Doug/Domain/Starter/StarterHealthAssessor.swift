@@ -14,23 +14,37 @@ enum StarterHealthAssessor {
         feedLogs: [FeedLogInput],
         now: Date = Date()
     ) -> StarterHealthStatus {
+        switch profile.lifecycleState {
+        case .active:
+            .readyToBake
+        case .activating:
+            assessActivating(feedLogs: feedLogs, profile: profile)
+        case .reviving:
+            .needsRevival
+        case .dormant:
+            assessDormant(feedLogs: feedLogs, profile: profile, now: now)
+        }
+    }
+
+    private static func assessDormant(
+        feedLogs: [FeedLogInput],
+        profile: StarterProfileInput,
+        now: Date
+    ) -> StarterHealthStatus {
         guard let lastFeed = feedLogs.first else {
-            return .needsRevival // Never fed = needs revival
+            return .needsRevival
         }
 
         let daysSinceLastFeed = now.timeIntervalSince(lastFeed.timestamp) / 86400.0
 
-        // Check if significantly overdue → needs revival
         if daysSinceLastFeed > profile.needsRevivalDaysThreshold {
             return .needsRevival
         }
 
-        // Check if peak times are trending slow → needs revival
         if isPeakTimeTrendingSlow(feedLogs: feedLogs, profile: profile) {
             return .needsRevival
         }
 
-        // Check if moderately overdue → needs a feed
         if daysSinceLastFeed > profile.needsFeedDaysThreshold {
             return .needsFeed
         }
@@ -38,8 +52,24 @@ enum StarterHealthAssessor {
         return .readyToBake
     }
 
-    /// Checks whether recent time-to-peak readings are significantly slower
-    /// than the user's historical average.
+    private static func assessActivating(
+        feedLogs: [FeedLogInput],
+        profile: StarterProfileInput
+    ) -> StarterHealthStatus {
+        let activationLogs = feedLogs.filter { $0.feedIntent == .activation }
+        let recentPeaks = activationLogs.prefix(3).compactMap(\.timeToPeakMinutes)
+        guard recentPeaks.count >= 2 else { return .needsFeed }
+
+        if let avg = profile.activePeakAverageMinutes, avg > 0 {
+            let recentAvg = recentPeaks.reduce(0, +) / Double(recentPeaks.count)
+            if recentAvg > avg * 1.5 {
+                return .needsRevival
+            }
+        }
+
+        return .readyToBake
+    }
+
     private static func isPeakTimeTrendingSlow(
         feedLogs: [FeedLogInput],
         profile: StarterProfileInput
@@ -54,7 +84,6 @@ enum StarterHealthAssessor {
         let recentAvg = recentWithPeak.compactMap(\.timeToPeakMinutes).reduce(0, +)
             / Double(recentWithPeak.count)
 
-        // If recent average is >50% slower than historical, flag it
         return recentAvg > avgPeak * 1.5
     }
 }
@@ -67,6 +96,8 @@ struct StarterProfileInput {
     let needsFeedDaysThreshold: Double
     let needsRevivalDaysThreshold: Double
     let averageTimeToPeakMinutes: Double?
+    var lifecycleState: StarterLifecycleState = .dormant
+    var activePeakAverageMinutes: Double?
 }
 
 struct FeedLogInput {
@@ -77,6 +108,7 @@ struct FeedLogInput {
     let flourType: String
     let kitchenTemperatureCelsius: Double
     let timeToPeakMinutes: Double?
+    var feedIntent: FeedIntent = .maintenance
 }
 
 extension StarterProfileInput {
@@ -86,6 +118,8 @@ extension StarterProfileInput {
         needsFeedDaysThreshold = model.needsFeedDaysThreshold
         needsRevivalDaysThreshold = model.needsRevivalDaysThreshold
         averageTimeToPeakMinutes = model.averageTimeToPeakMinutes
+        lifecycleState = model.starterLifecycleState
+        activePeakAverageMinutes = model.activePeakAverageMinutes
     }
 }
 
@@ -98,5 +132,6 @@ extension FeedLogInput {
         flourType = model.flourType
         kitchenTemperatureCelsius = model.kitchenTemperatureCelsius
         timeToPeakMinutes = model.timeToPeakMinutes
+        feedIntent = model.starterFeedIntent
     }
 }

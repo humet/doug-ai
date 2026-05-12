@@ -47,9 +47,10 @@ struct StarterPeakProfile {
         let bracket: TemperatureBracket
     }
 
-    init(feedLogs: [FeedLogInput]) {
+    init(feedLogs: [FeedLogInput], intentFilter: FeedIntent? = nil) {
         var grouped: [BucketKey: [Double]] = [:]
         for log in feedLogs {
+            if let filter = intentFilter, log.feedIntent != filter { continue }
             guard let minutes = log.timeToPeakMinutes, minutes > 0 else { continue }
             guard let ratio = FeedRatioBucket.bucket(
                 starter: log.ratioStarter,

@@ -249,6 +249,7 @@ struct BakeContextPayload {
 
 struct StarterContextPayload {
     let storageType: String
+    let lifecycleState: String
     let maintenanceCycleDays: Double
     let healthStatus: String
     let daysSinceLastFeed: Double?
@@ -261,6 +262,7 @@ struct StarterContextPayload {
         let flourType: String
         let kitchenTempCelsius: Double
         let timeToPeakMinutes: Double?
+        let intent: String
     }
 
     struct RevivalPayload {
@@ -274,6 +276,7 @@ struct StarterContextPayload {
         let formatter = CoachService.makeLocalDateFormatter()
         var dict: [String: Any] = [
             "storageType": storageType,
+            "lifecycleState": lifecycleState,
             "maintenanceCycleDays": maintenanceCycleDays,
             "healthStatus": healthStatus,
             "daysSinceLastFeed": daysSinceLastFeed as Any,
@@ -283,6 +286,7 @@ struct StarterContextPayload {
                     "ratio": feed.ratio,
                     "flourType": feed.flourType,
                     "kitchenTempCelsius": feed.kitchenTempCelsius,
+                    "intent": feed.intent,
                 ]
                 d["timeToPeakMinutes"] = feed.timeToPeakMinutes as Any
                 return d

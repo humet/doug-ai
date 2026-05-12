@@ -176,7 +176,7 @@ struct ScheduleTab: View {
                         Text("Your starter needs revival before baking. Check the Starter tab for a revival plan.")
                     } else {
                         Text(
-                            "Your starter needs a feed before baking. Feed it and wait for it to peak, then try again."
+                            "Your starter is in the fridge. Activate it on the counter and wait for it to peak, then try again."
                         )
                     }
                 }
@@ -272,7 +272,6 @@ struct ScheduleTab: View {
                                 showCoachChat = true
                             }
                         )
-
                     }
 
                     if let adjustment = viewModel.lastScheduleAdjustment {
@@ -459,6 +458,25 @@ struct ScheduleTab: View {
 
     private func planBake(for recipeID: RecipeID) {
         viewModel.selectedRecipeID = recipeID
+
+        let profile = profiles.first
+        let state = profile?.starterLifecycleState ?? .dormant
+        let duration = EarliestBakeEstimator.recipeDurationMinutes(
+            recipe: viewModel.selectedRecipe,
+            kitchenTempC: viewModel.kitchenTemperature
+        )
+        let activationLogs = feedLogs.filter { $0.starterFeedIntent == .activation }
+        let lastActivation = activationLogs.first.map { FeedLogInput(from: $0) }
+        let estimate = EarliestBakeEstimator.estimate(
+            lifecycleState: state,
+            stateChangedAt: profile?.stateChangedAt ?? Date(),
+            lastActivationFeed: lastActivation,
+            activePeakAverage: profile?.activePeakAverageMinutes,
+            kitchenTempC: viewModel.kitchenTemperature,
+            scheduleDurationMinutes: duration
+        )
+        viewModel.targetDate = estimate.earliestBreadReady
+
         viewModel.buildPreview(
             availability: availabilities.first,
             windows: Array(windows),

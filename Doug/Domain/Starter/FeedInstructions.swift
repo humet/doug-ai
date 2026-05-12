@@ -6,6 +6,8 @@ enum FeedStepKind {
     case revivalMiddle
     case revivalFinal
     case maintenance
+    case activation
+    case postBake
 }
 
 /// Everything the instruction renderer needs to produce human-readable copy.
@@ -45,6 +47,10 @@ enum FeedInstructions {
             revivalFinal(input)
         case .maintenance:
             maintenance(input)
+        case .activation:
+            activation(input)
+        case .postBake:
+            postBake(input)
         }
     }
 
@@ -133,6 +139,40 @@ enum FeedInstructions {
             watchFor: "Domed top, bubbles throughout, roughly doubled.",
             expectedWait: waitString(input.expectedPeakMinutes),
             peakGuidance: "Watch for a domed top with bubbles throughout. When it stops rising, that's peak."
+        )
+    }
+
+    // MARK: - Activation
+
+    private static func activation(_ input: FeedInstructionInput) -> FeedInstruction {
+        FeedInstruction(
+            title: "Activate your starter",
+            steps: [
+                "Weigh \(gramString(input.retainGrams)) starter into a clean jar. Discard the rest.",
+                "Add \(gramString(input.addFlourGrams)) \(input.flourType) flour and \(gramString(input.addWaterGrams)) water (~27°C).",
+                "Stir until smooth; mark the starting height on the jar.",
+                "Leave on the counter at \(tempString(input.kitchenTempC)). Watch for it to double.",
+            ],
+            watchFor: "Doubled in volume with a domed, bubbly top. That's your peak — your starter is active and ready for a levain build.",
+            expectedWait: waitString(input.expectedPeakMinutes),
+            peakGuidance: "Leave it on the counter and watch for doubling. When the dome just starts to flatten, that's peak. Mark it in the app and your starter is ready to bake with."
+        )
+    }
+
+    // MARK: - Post-Bake
+
+    private static func postBake(_ input: FeedInstructionInput) -> FeedInstruction {
+        FeedInstruction(
+            title: "Feed & refrigerate",
+            steps: [
+                "Weigh \(gramString(input.retainGrams)) starter into a clean jar. Discard the rest.",
+                "Add \(gramString(input.addFlourGrams)) \(input.flourType) flour and \(gramString(input.addWaterGrams)) water (~27°C).",
+                "Stir until smooth.",
+                "Put it straight in the fridge. No need to wait for a rise.",
+            ],
+            watchFor: "Nothing to watch — it'll ferment slowly in the fridge until your next bake.",
+            expectedWait: "N/A",
+            peakGuidance: "No peak tracking needed for a fridge feed. Your starter will rest until you're ready to bake again."
         )
     }
 

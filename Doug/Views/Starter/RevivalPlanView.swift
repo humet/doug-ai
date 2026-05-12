@@ -278,13 +278,15 @@ struct RevivalPlanView: View {
                     .font(.largeTitle)
                     .foregroundStyle(.orange)
 
-                Text("Your starter is back")
+                Text("Your starter is waking up")
                     .font(.headline)
 
-                Text("Doubled in \(formattedDuration(step.timeToPeakMinutes)) — you're good to bake.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                Text(
+                    "Doubled in \(formattedDuration(step.timeToPeakMinutes)) — one more counter feed and you'll be bake-ready."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)

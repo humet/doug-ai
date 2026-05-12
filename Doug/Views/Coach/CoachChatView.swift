@@ -281,6 +281,7 @@ struct CoachChatView: View {
         }
         return StarterContextPayload(
             storageType: profile.storageType,
+            lifecycleState: profile.lifecycleState,
             maintenanceCycleDays: profile.maintenanceCycleDays,
             healthStatus: profile.healthStatus,
             daysSinceLastFeed: daysSinceLastFeed,
@@ -290,7 +291,8 @@ struct CoachChatView: View {
                     ratio: log.ratioDescription,
                     flourType: log.flourType,
                     kitchenTempCelsius: log.kitchenTemperatureCelsius,
-                    timeToPeakMinutes: log.timeToPeakMinutes
+                    timeToPeakMinutes: log.timeToPeakMinutes,
+                    intent: log.feedIntent
                 )
             },
             revivalPlan: nil

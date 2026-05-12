@@ -2,6 +2,13 @@ import Foundation
 import Observation
 import SwiftData
 
+enum PreBakeCheckResult {
+    case ready
+    case needsActivation
+    case activating(lastFeed: Date?, peaked: Bool)
+    case blocked(StarterHealthStatus)
+}
+
 struct ActiveConflict: Identifiable {
     let id = UUID()
     let stepLabel: String
@@ -98,7 +105,7 @@ final class ScheduleViewModel {
         let windowInputs = windows.map { WindowInput(from: $0) }
         let peakProfile = feedLogs.isEmpty
             ? nil
-            : StarterPeakProfile(feedLogs: feedLogs.map { FeedLogInput(from: $0) })
+            : StarterPeakProfile(feedLogs: feedLogs.map { FeedLogInput(from: $0) }, intentFilter: .activation)
 
         detectActiveLevain(feedLogs: feedLogs, peakProfile: peakProfile)
 
@@ -187,30 +194,52 @@ final class ScheduleViewModel {
 
     // MARK: - Pre-Bake Health Check
 
-    /// Checks starter health before allowing bake to start.
-    /// Returns true if bake can proceed, false if blocked.
+    func preBakeCheck(
+        profile: StarterProfile?,
+        feedLogs: [StarterFeedLog]
+    ) -> PreBakeCheckResult {
+        guard let profile else { return .blocked(.needsFeed) }
+
+        switch profile.starterLifecycleState {
+        case .active:
+            return .ready
+        case .activating:
+            let lastActivation = feedLogs.first { $0.starterFeedIntent == .activation }
+            return .activating(lastFeed: lastActivation?.timestamp, peaked: lastActivation?.peakTimestamp != nil)
+        case .reviving:
+            return .blocked(.needsRevival)
+        case .dormant:
+            let profileInput = StarterProfileInput(from: profile)
+            let logInputs = feedLogs.map { FeedLogInput(from: $0) }
+            let status = StarterHealthAssessor.assess(profile: profileInput, feedLogs: logInputs)
+            switch status {
+            case .readyToBake:
+                return .needsActivation
+            case .needsFeed:
+                return .needsActivation
+            case .needsRevival:
+                return .blocked(.needsRevival)
+            }
+        }
+    }
+
     func preBakeHealthCheck(
         profile: StarterProfile?,
         feedLogs: [StarterFeedLog]
     ) -> Bool {
-        guard let profile else {
-            starterHealthBlock = .needsFeed
-            return false
-        }
-
-        let profileInput = StarterProfileInput(from: profile)
-        let logInputs = feedLogs.map { FeedLogInput(from: $0) }
-        let status = StarterHealthAssessor.assess(profile: profileInput, feedLogs: logInputs)
-
-        switch status {
-        case .readyToBake:
+        let result = preBakeCheck(profile: profile, feedLogs: feedLogs)
+        switch result {
+        case .ready:
             starterHealthBlock = nil
             return true
-        case .needsFeed:
+        case .needsActivation:
             starterHealthBlock = .needsFeed
             return false
-        case .needsRevival:
-            starterHealthBlock = .needsRevival
+        case .activating:
+            starterHealthBlock = .needsFeed
+            return false
+        case let .blocked(status):
+            starterHealthBlock = status
             return false
         }
     }
@@ -446,7 +475,8 @@ final class ScheduleViewModel {
             case .active:
                 if step.stepType.classification == .passiveFixed, step.computedEndTime <= now {
                     if step.stepTypeID == StepTypeID.bake.rawValue,
-                       !step.subSteps.allSatisfy({ $0.stepStatus == .done || $0.stepStatus == .skipped }) {
+                       !step.subSteps.allSatisfy({ $0.stepStatus == .done || $0.stepStatus == .skipped })
+                    {
                         advanceSubSteps(in: schedule, now: now)
                         return
                     }
@@ -501,11 +531,10 @@ final class ScheduleViewModel {
             case .done, .skipped:
                 continue
             case .active, .upcoming:
-                let tooLate: Bool
-                if index + 1 < subs.count {
-                    tooLate = subs[index + 1].computedStartTime <= now
+                let tooLate: Bool = if index + 1 < subs.count {
+                    subs[index + 1].computedStartTime <= now
                 } else {
-                    tooLate = now.timeIntervalSince(sub.computedStartTime) > spacing
+                    now.timeIntervalSince(sub.computedStartTime) > spacing
                 }
 
                 if tooLate {
@@ -520,7 +549,8 @@ final class ScheduleViewModel {
                            $0.stepStatus == .done && $0.stepTypeID == StepTypeID.stretchAndFold.rawValue
                        }),
                        let doneTime = prevFold.actualEndTime,
-                       now.timeIntervalSince(doneTime) < minimumGap {
+                       now.timeIntervalSince(doneTime) < minimumGap
+                    {
                         return
                     }
                     if !subs.contains(where: { $0.stepStatus == .active }) {

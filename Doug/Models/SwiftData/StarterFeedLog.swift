@@ -12,6 +12,7 @@ final class StarterFeedLog {
     var peakTimestamp: Date?
     var timeToPeakMinutes: Double?
     var starterGrams: Double?
+    var feedIntent: String = FeedIntent.maintenance.rawValue
 
     init(
         timestamp: Date = Date(),
@@ -20,7 +21,8 @@ final class StarterFeedLog {
         ratioWater: Int,
         flourType: String = "white",
         kitchenTemperatureCelsius: Double,
-        starterGrams: Double? = nil
+        starterGrams: Double? = nil,
+        feedIntent: FeedIntent = .maintenance
     ) {
         self.timestamp = timestamp
         self.ratioStarter = ratioStarter
@@ -29,6 +31,12 @@ final class StarterFeedLog {
         self.flourType = flourType
         self.kitchenTemperatureCelsius = kitchenTemperatureCelsius
         self.starterGrams = starterGrams
+        self.feedIntent = feedIntent.rawValue
+    }
+
+    var starterFeedIntent: FeedIntent {
+        get { FeedIntent(rawValue: feedIntent) ?? .maintenance }
+        set { feedIntent = newValue.rawValue }
     }
 
     func markPeak(at peakTime: Date) {

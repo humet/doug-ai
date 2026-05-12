@@ -1,7 +1,133 @@
 import Foundation
 
+// MARK: - Feed Suggestion
+
+struct FeedSuggestion {
+    let time: Date
+    let intent: FeedIntent
+    let reason: String
+    let urgency: FeedUrgency
+}
+
+enum FeedUrgency: String {
+    case routine
+    case suggested
+    case needed
+    case urgent
+}
+
 /// Suggests the next feed time for a starter, respecting availability and upcoming bakes.
 enum FeedScheduler {
+    // MARK: - Lifecycle-Aware Suggestion
+
+    static func suggestNextFeed(
+        lifecycleState: StarterLifecycleState,
+        stateChangedAt: Date,
+        lastFeedTime: Date?,
+        cycleDays: Double,
+        upcomingBakeStart: Date?,
+        activePeakAverage: Double?,
+        kitchenTempC: Double,
+        availability: AvailabilityInput,
+        windows: [WindowInput],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> FeedSuggestion? {
+        switch lifecycleState {
+        case .active:
+            let hoursActive = now.timeIntervalSince(stateChangedAt) / 3600
+            if hoursActive > 12 {
+                return FeedSuggestion(
+                    time: now,
+                    intent: .postBake,
+                    reason: "Feed & refrigerate or build your levain",
+                    urgency: hoursActive > 24 ? .urgent : .suggested
+                )
+            }
+            return nil
+
+        case .activating:
+            return nil
+
+        case .reviving:
+            return nil
+
+        case .dormant:
+            return suggestDormantFeed(
+                lastFeedTime: lastFeedTime,
+                cycleDays: cycleDays,
+                upcomingBakeStart: upcomingBakeStart,
+                activePeakAverage: activePeakAverage,
+                kitchenTempC: kitchenTempC,
+                availability: availability,
+                windows: windows,
+                now: now,
+                calendar: calendar
+            )
+        }
+    }
+
+    private static func suggestDormantFeed(
+        lastFeedTime: Date?,
+        cycleDays: Double,
+        upcomingBakeStart: Date?,
+        activePeakAverage: Double?,
+        kitchenTempC: Double,
+        availability: AvailabilityInput,
+        windows: [WindowInput],
+        now: Date,
+        calendar: Calendar
+    ) -> FeedSuggestion? {
+        if let bakeStart = upcomingBakeStart {
+            let peakHours = (activePeakAverage ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTempC)) /
+                60
+            let activateBy = bakeStart.addingTimeInterval(-peakHours * 3600)
+            let candidate = max(activateBy, now)
+            let snapped = snapToAvailableTime(
+                candidate: candidate,
+                availability: availability,
+                windows: windows,
+                calendar: calendar
+            )
+
+            let hoursUntilBake = bakeStart.timeIntervalSince(now) / 3600
+            let urgency: FeedUrgency = hoursUntilBake < 24 ? .urgent : hoursUntilBake < 48 ? .needed : .suggested
+
+            return FeedSuggestion(
+                time: snapped ?? candidate,
+                intent: .activation,
+                reason: "Feed your starter on the counter for your upcoming bake",
+                urgency: urgency
+            )
+        }
+
+        guard let time = nextFeedTime(
+            lastFeedTime: lastFeedTime,
+            cycleDays: cycleDays,
+            upcomingBakeStart: nil,
+            availability: availability,
+            windows: windows,
+            now: now,
+            calendar: calendar
+        ) else { return nil }
+
+        let daysSinceLastFeed = lastFeedTime.map { now.timeIntervalSince($0) / 86400.0 }
+        let urgency: FeedUrgency = if let days = daysSinceLastFeed, days > 10 {
+            .urgent
+        } else if let days = daysSinceLastFeed, days > 7 {
+            .needed
+        } else {
+            .routine
+        }
+
+        return FeedSuggestion(
+            time: time,
+            intent: .maintenance,
+            reason: "Keep your starter on a healthy maintenance rhythm",
+            urgency: urgency
+        )
+    }
+
     /// Calculates the next suggested feed time.
     ///
     /// Logic:

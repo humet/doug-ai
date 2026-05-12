@@ -12,6 +12,10 @@ final class StarterProfile {
     var needsRevivalDaysThreshold: Double
     var averageTimeToPeakMinutes: Double?
 
+    var lifecycleState: String = StarterLifecycleState.dormant.rawValue
+    var stateChangedAt: Date = Date()
+    var activePeakAverageMinutes: Double?
+
     init(
         storageType: StarterStorageType = .fridge,
         maintenanceCycleDays: Double = 6
@@ -20,15 +24,8 @@ final class StarterProfile {
         self.maintenanceCycleDays = maintenanceCycleDays
         healthStatus = StarterHealthStatus.needsFeed.rawValue
         lastUpdated = Date()
-
-        switch storageType {
-        case .fridge:
-            needsFeedDaysThreshold = 7
-            needsRevivalDaysThreshold = 10
-        case .counter:
-            needsFeedDaysThreshold = 1.5
-            needsRevivalDaysThreshold = 2
-        }
+        needsFeedDaysThreshold = 7
+        needsRevivalDaysThreshold = 10
     }
 
     var starterStorageType: StarterStorageType {
@@ -39,6 +36,14 @@ final class StarterProfile {
     var starterHealthStatus: StarterHealthStatus {
         get { StarterHealthStatus(rawValue: healthStatus) ?? .needsFeed }
         set { healthStatus = newValue.rawValue }
+    }
+
+    var starterLifecycleState: StarterLifecycleState {
+        get { StarterLifecycleState(rawValue: lifecycleState) ?? .dormant }
+        set {
+            lifecycleState = newValue.rawValue
+            stateChangedAt = Date()
+        }
     }
 }
 
@@ -51,4 +56,17 @@ enum StarterHealthStatus: String, Codable {
     case readyToBake
     case needsFeed
     case needsRevival
+}
+
+enum StarterLifecycleState: String, Codable {
+    case dormant
+    case activating
+    case active
+    case reviving
+}
+
+enum FeedIntent: String, Codable {
+    case maintenance
+    case activation
+    case postBake
 }
