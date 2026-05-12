@@ -70,7 +70,7 @@ enum FeedInstructions {
             .append("In a clean jar, keep \(gramString(input.retainGrams)) of your existing starter. Discard the rest.")
         steps
             .append(
-                "Add \(gramString(input.addFlourGrams)) \(input.flourType) flour and \(gramString(input.addWaterGrams)) water at room temp (~27°C)."
+                "Add \(gramString(input.addFlourGrams)) flour and \(gramString(input.addWaterGrams)) water at ~\(tempString(input.kitchenTempC))."
             )
         steps.append("Stir until no dry flour remains; scrape down the sides.")
         steps.append("Cover loosely and rest at \(tempString(input.kitchenTempC)).")
@@ -101,7 +101,7 @@ enum FeedInstructions {
             title: "Feed \(input.neglect == .severe ? "2" : "2") — build consistency",
             steps: [
                 "Discard down to \(gramString(input.retainGrams)) of active starter.",
-                "Add \(gramString(input.addFlourGrams)) \(input.flourType) flour and \(gramString(input.addWaterGrams)) water.",
+                "Add \(gramString(input.addFlourGrams)) flour and \(gramString(input.addWaterGrams)) water.",
                 "Mix, scrape, and mark the jar at the starter line.",
                 "Cover loosely and rest.",
             ],
@@ -116,7 +116,7 @@ enum FeedInstructions {
             title: "Final feed — confirm it's ready",
             steps: [
                 "Discard to \(gramString(input.retainGrams)).",
-                "Add \(gramString(input.addFlourGrams)) \(input.flourType) flour and \(gramString(input.addWaterGrams)) water.",
+                "Add \(gramString(input.addFlourGrams)) flour and \(gramString(input.addWaterGrams)) water.",
                 "Mix and mark the starting line.",
             ],
             watchFor: "Reliable double in the expected window, glossy domed top. If it hits, you're bake-ready.",
@@ -132,13 +132,13 @@ enum FeedInstructions {
             title: "How to feed",
             steps: [
                 "Weigh \(gramString(input.retainGrams)) starter into a clean jar. Discard the rest.",
-                "Add \(gramString(input.addFlourGrams)) \(input.flourType) flour and \(gramString(input.addWaterGrams)) water (~27°C).",
-                "Stir until smooth; mark the starting height on the jar.",
-                "Cover loosely. Expect peak in \(waitString(input.expectedPeakMinutes)) at \(tempString(input.kitchenTempC)).",
+                "Add \(gramString(input.addFlourGrams)) flour and \(gramString(input.addWaterGrams)) water at ~\(tempString(input.kitchenTempC)).",
+                "Stir until smooth.",
+                "Put it straight in the fridge. It'll ferment slowly until your next bake.",
             ],
-            watchFor: "Domed top, bubbles throughout, roughly doubled.",
-            expectedWait: waitString(input.expectedPeakMinutes),
-            peakGuidance: "Watch for a domed top with bubbles throughout. When it stops rising, that's peak."
+            watchFor: "Nothing to watch — it rests in the fridge.",
+            expectedWait: "N/A",
+            peakGuidance: "No peak tracking needed for a fridge feed."
         )
     }
 
@@ -149,7 +149,7 @@ enum FeedInstructions {
             title: "Activate your starter",
             steps: [
                 "Weigh \(gramString(input.retainGrams)) starter into a clean jar. Discard the rest.",
-                "Add \(gramString(input.addFlourGrams)) \(input.flourType) flour and \(gramString(input.addWaterGrams)) water (~27°C).",
+                "Add \(gramString(input.addFlourGrams)) flour and \(gramString(input.addWaterGrams)) water at ~\(tempString(input.kitchenTempC)).",
                 "Stir until smooth; mark the starting height on the jar.",
                 "Leave on the counter at \(tempString(input.kitchenTempC)). Watch for it to double.",
             ],
@@ -166,7 +166,7 @@ enum FeedInstructions {
             title: "Feed & refrigerate",
             steps: [
                 "Weigh \(gramString(input.retainGrams)) starter into a clean jar. Discard the rest.",
-                "Add \(gramString(input.addFlourGrams)) \(input.flourType) flour and \(gramString(input.addWaterGrams)) water (~27°C).",
+                "Add \(gramString(input.addFlourGrams)) flour and \(gramString(input.addWaterGrams)) water at ~\(tempString(input.kitchenTempC)).",
                 "Stir until smooth.",
                 "Put it straight in the fridge. No need to wait for a rise.",
             ],

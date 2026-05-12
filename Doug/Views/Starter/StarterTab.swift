@@ -207,6 +207,15 @@ struct StarterTab: View {
                 }
                 .tint(.orange)
             }
+            Button {
+                if let profile {
+                    if let result = StarterStateMachine.refrigerate(currentState: profile.starterLifecycleState) {
+                        profile.starterLifecycleState = result.newState
+                    }
+                }
+            } label: {
+                Label("Put Back in Fridge", systemImage: "snowflake")
+            }
         case .active:
             Button {
                 viewModel.showPostBake = true
@@ -574,6 +583,8 @@ struct LogFeedSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    @State private var showRatioCustomisation = false
+
     var body: some View {
         NavigationStack {
             Form {
@@ -581,72 +592,91 @@ struct LogFeedSheet: View {
                     DatePicker("Fed at", selection: $viewModel.feedTimestamp, in: ...Date())
                 }
 
-                howToFeedSection
-
-                Section("Ratio") {
-                    Stepper("Starter: \(viewModel.feedRatioStarter)", value: $viewModel.feedRatioStarter, in: 1 ... 10)
-                    Stepper("Flour: \(viewModel.feedRatioFlour)", value: $viewModel.feedRatioFlour, in: 1 ... 20)
-                    Stepper("Water: \(viewModel.feedRatioWater)", value: $viewModel.feedRatioWater, in: 1 ... 20)
-                }
-
                 Section {
                     HStack {
-                        Text("Starter amount")
+                        Text("Keep")
                         Spacer()
-                        TextField("optional", text: $viewModel.logFeedStarterGrams)
+                        TextField("10", text: $viewModel.logFeedStarterGrams)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 100)
+                            .frame(maxWidth: 80)
                         Text("g")
                             .foregroundStyle(.secondary)
                     }
 
                     if let grams = starterGrams {
+                        let flourGrams = grams * Double(viewModel.feedRatioFlour) / Double(viewModel.feedRatioStarter)
+                        let waterGrams = grams * Double(viewModel.feedRatioWater) / Double(viewModel.feedRatioStarter)
                         HStack {
                             Text("Flour")
                             Spacer()
-                            Text(
-                                "\(gramString(grams * Double(viewModel.feedRatioFlour) / Double(viewModel.feedRatioStarter))) g"
-                            )
-                            .foregroundStyle(.secondary)
+                            Text("\(gramString(flourGrams)) g")
+                                .foregroundStyle(.secondary)
                         }
                         HStack {
                             Text("Water")
                             Spacer()
-                            Text(
-                                "\(gramString(grams * Double(viewModel.feedRatioWater) / Double(viewModel.feedRatioStarter))) g"
-                            )
-                            .foregroundStyle(.secondary)
+                            Text("\(gramString(waterGrams)) g")
+                                .foregroundStyle(.secondary)
                         }
+                        HStack {
+                            Text("Total")
+                                .fontWeight(.medium)
+                            Spacer()
+                            Text("\(gramString(grams + flourGrams + waterGrams)) g")
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    HStack {
+                        Text("Ratio")
+                        Spacer()
+                        Text("\(viewModel.feedRatioStarter):\(viewModel.feedRatioFlour):\(viewModel.feedRatioWater)")
+                            .foregroundStyle(.secondary)
+                        Button {
+                            showRatioCustomisation.toggle()
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(showRatioCustomisation ? 90 : 0))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if showRatioCustomisation {
+                        Stepper("Starter: \(viewModel.feedRatioStarter)", value: $viewModel.feedRatioStarter, in: 1 ... 10)
+                        Stepper("Flour: \(viewModel.feedRatioFlour)", value: $viewModel.feedRatioFlour, in: 1 ... 20)
+                        Stepper("Water: \(viewModel.feedRatioWater)", value: $viewModel.feedRatioWater, in: 1 ... 20)
                     }
                 } header: {
                     Text("Amount")
                 } footer: {
-                    Text("Enter how many grams of starter you're keeping. We'll calculate flour and water for you.")
+                    Text(ratioGuidance)
                 }
 
                 Section("Details") {
-                    Picker("Flour type", selection: $viewModel.feedFlourType) {
-                        Text("White").tag("white")
-                        Text("Whole Wheat").tag("whole wheat")
-                        Text("Rye").tag("rye")
-                    }
-
                     HStack {
-                        Text("Kitchen temp")
+                        Text("Flour")
                         Spacer()
-                        Text("\(Int(viewModel.feedKitchenTemp))°C")
+                        TextField("e.g. white, 50/50 white/rye", text: $viewModel.feedFlourType)
+                            .multilineTextAlignment(.trailing)
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $viewModel.feedKitchenTemp, in: 16 ... 32, step: 1)
+
+                    if isActivationFeed {
+                        HStack {
+                            Text("Kitchen temp")
+                            Spacer()
+                            Text("\(Int(viewModel.feedKitchenTemp))°C")
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $viewModel.feedKitchenTemp, in: 16 ... 32, step: 1)
+                    }
                 }
 
-                Section {
-                    Text("Ratio: \(viewModel.feedRatioStarter):\(viewModel.feedRatioFlour):\(viewModel.feedRatioWater)")
-                        .font(.headline)
-                } header: {
-                    Text("Summary")
-                }
+                howToFeedSection
             }
             .navigationTitle("Log Feed")
             .toolbar {
@@ -659,12 +689,35 @@ struct LogFeedSheet: View {
                     }
                 }
             }
+            .onAppear {
+                if isActivationFeed {
+                    viewModel.feedRatioFlour = 5
+                    viewModel.feedRatioWater = 5
+                } else {
+                    viewModel.feedRatioFlour = 1
+                    viewModel.feedRatioWater = 1
+                }
+                if viewModel.logFeedStarterGrams.isEmpty {
+                    viewModel.logFeedStarterGrams = "10"
+                }
+            }
         }
+    }
+
+    private var isActivationFeed: Bool {
+        profile?.starterLifecycleState == .activating
+    }
+
+    private var ratioGuidance: String {
+        if isActivationFeed {
+            return "1:5:5 gives a strong, predictable rise over ~5–6 hours. Use 1:3:3 for a faster peak (~3–4h), or 1:10:10 to time an overnight feed."
+        }
+        return "1:1:1 is enough food for 1–2 weeks in the fridge with minimal waste. Use 1:2:2 if storing for longer."
     }
 
     @ViewBuilder
     private var howToFeedSection: some View {
-        let retain = starterGrams ?? 20
+        let retain = starterGrams ?? 10
         let flour = retain * Double(viewModel.feedRatioFlour) / Double(viewModel.feedRatioStarter)
         let water = retain * Double(viewModel.feedRatioWater) / Double(viewModel.feedRatioStarter)
 
@@ -775,10 +828,12 @@ struct EditFeedLogSheet: View {
                 }
 
                 Section("Details") {
-                    Picker("Flour type", selection: $flourType) {
-                        Text("White").tag("white")
-                        Text("Whole Wheat").tag("whole wheat")
-                        Text("Rye").tag("rye")
+                    HStack {
+                        Text("Flour")
+                        Spacer()
+                        TextField("e.g. white, 50/50 white/rye", text: $flourType)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundStyle(.secondary)
                     }
 
                     HStack {

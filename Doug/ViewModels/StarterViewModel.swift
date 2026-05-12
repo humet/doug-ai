@@ -12,8 +12,8 @@ final class StarterViewModel {
 
     // Feed entry form state
     var feedRatioStarter = 1
-    var feedRatioFlour = 5
-    var feedRatioWater = 5
+    var feedRatioFlour = 1
+    var feedRatioWater = 1
     var feedFlourType = "white"
     var feedKitchenTemp = 22.0
     var feedTimestamp = Date()
@@ -102,8 +102,8 @@ final class StarterViewModel {
         modelContext.insert(log)
 
         feedRatioStarter = 1
-        feedRatioFlour = 5
-        feedRatioWater = 5
+        feedRatioFlour = 2
+        feedRatioWater = 2
         feedFlourType = "white"
         feedTimestamp = Date()
         logFeedStarterGrams = ""
