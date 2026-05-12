@@ -237,19 +237,39 @@ struct NowStepHero: View {
                 let isOverdueFlexible = step.stepType.classification == .passiveFlexible
                     && step.computedEndTime <= referenceDate
                 let isPassive = step.stepType.classification != .handsOn
-                Button {
-                    completeCurrent()
-                } label: {
-                    Label(
-                        isOverdueFlexible ? "Move On" : (isPassive ? "Finish Early" : "Done"),
-                        systemImage: isOverdueFlexible ? "checkmark.circle.fill"
-                            : (isPassive ? "forward.fill" : "checkmark.circle.fill")
-                    )
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+
+                if let activeSub = activeBakeSubStep {
+                    let isSubOverdue = activeSub.computedEndTime <= referenceDate
+                    let isCovered = activeSub.stepTypeID == StepTypeID.bakeCovered.rawValue
+                    Button {
+                        viewModel.markStepDone(activeSub, modelContext: modelContext)
+                    } label: {
+                        Label(
+                            isSubOverdue
+                                ? (isCovered ? "Remove Lid" : "Done")
+                                : (isCovered ? "Remove Lid Early" : "Finish Early"),
+                            systemImage: isSubOverdue ? "checkmark.circle.fill" : "forward.fill"
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                    }
+                    .adaptiveGlassButtonStyle(prominent: isSubOverdue)
+                } else {
+                    Button {
+                        completeCurrent()
+                    } label: {
+                        Label(
+                            isOverdueFlexible ? "Move On" : (isPassive ? "Finish Early" : "Done"),
+                            systemImage: isOverdueFlexible ? "checkmark.circle.fill"
+                                : (isPassive ? "forward.fill" : "checkmark.circle.fill")
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                    }
+                    .adaptiveGlassButtonStyle(prominent: isOverdueFlexible || !isPassive)
                 }
-                .adaptiveGlassButtonStyle(prominent: isOverdueFlexible || !isPassive)
             }
         }
     }
@@ -526,6 +546,13 @@ struct NowStepHero: View {
         return step.subSteps
             .sorted { $0.sequenceIndex < $1.sequenceIndex }
             .first { $0.stepStatus == .active && $0.stepType.requiresTempReading }
+    }
+
+    private var activeBakeSubStep: ScheduleStep? {
+        guard stepTypeIDEnum == .bake else { return nil }
+        return step.subSteps
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+            .first { $0.stepStatus == .active }
     }
 
     private var stepRequiringTemp: ScheduleStep? {
