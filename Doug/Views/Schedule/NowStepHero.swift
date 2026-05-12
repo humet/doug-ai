@@ -57,7 +57,12 @@ struct NowStepHero: View {
                 TemperatureEntryView(
                     schedule: schedule,
                     foldStep: stepRequiringTemp,
-                    onSave: { viewModel.handleNewTemperatureReading(schedule: schedule) }
+                    onSave: {
+                        if let tempStep = stepRequiringTemp, tempStep.parentStep == nil {
+                            viewModel.finishStepEarly(tempStep, modelContext: modelContext)
+                        }
+                        viewModel.handleNewTemperatureReading(schedule: schedule)
+                    }
                 )
             }
         }
