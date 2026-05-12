@@ -100,7 +100,8 @@ struct ScheduleTab: View {
                     if let schedule = viewModel.activeSchedule {
                         TemperatureEntryView(
                             schedule: schedule,
-                            foldStep: viewModel.selectedFoldStep
+                            foldStep: viewModel.selectedFoldStep,
+                            onSave: { viewModel.handleNewTemperatureReading(schedule: schedule) }
                         )
                     }
                 }
@@ -111,7 +112,8 @@ struct ScheduleTab: View {
                             foldStep: schedule.steps.first {
                                 $0.stepTypeID == entry.stepTypeID
                                     && $0.sequenceIndex == entry.sequenceIndex
-                            }
+                            },
+                            onSave: { viewModel.handleNewTemperatureReading(schedule: schedule) }
                         )
                     }
                 }
@@ -272,11 +274,30 @@ struct ScheduleTab: View {
 
                     }
 
+                    if let adjustment = viewModel.lastScheduleAdjustment {
+                        ScheduleAdjustmentBanner(adjustment: adjustment) {
+                            viewModel.lastScheduleAdjustment = nil
+                        }
+                    }
+
                     if !schedule.temperatureReadings.isEmpty {
                         DegreeHoursChartView(
                             readings: schedule.temperatureReadings,
                             targetDegreeHours: schedule.recipe.degreeHourTarget
                         )
+
+                        if isBulkFermentActive(in: schedule) {
+                            Button {
+                                viewModel.selectedFoldStep = nil
+                                viewModel.showTemperatureEntry = true
+                            } label: {
+                                Label("Add Temperature Reading", systemImage: "thermometer.medium")
+                                    .font(.caption.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                            }
+                            .adaptiveGlassButtonStyle()
+                        }
                     }
 
                     if let _ = viewModel.coldRetardStep {
@@ -408,6 +429,12 @@ struct ScheduleTab: View {
         let steps = orderedTopLevelSteps(in: schedule)
         if let active = steps.first(where: { $0.stepStatus == .active }) { return active }
         return steps.first { $0.stepStatus == .upcoming }
+    }
+
+    private func isBulkFermentActive(in schedule: Schedule) -> Bool {
+        orderedTopLevelSteps(in: schedule).contains {
+            StepTypeID(rawValue: $0.stepTypeID) == .bulkFerment && $0.stepStatus == .active
+        }
     }
 
     private func canFinishBake(in schedule: Schedule) -> Bool {

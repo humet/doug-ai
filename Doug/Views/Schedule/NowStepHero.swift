@@ -36,6 +36,7 @@ struct NowStepHero: View {
                 }
             }
 
+            activeFoldCallout
             primaryActions
             secondaryActions
             subStepsList
@@ -49,7 +50,11 @@ struct NowStepHero: View {
         )
         .sheet(isPresented: $showTemperatureEntry) {
             if let schedule = step.schedule {
-                TemperatureEntryView(schedule: schedule, foldStep: step)
+                TemperatureEntryView(
+                    schedule: schedule,
+                    foldStep: activeFoldWithTempReading,
+                    onSave: { viewModel.handleNewTemperatureReading(schedule: schedule) }
+                )
             }
         }
         .sheet(isPresented: $showAlreadyStarted) {
@@ -189,6 +194,41 @@ struct NowStepHero: View {
                         .padding(.vertical, 10)
                 }
                 .adaptiveGlassButtonStyle(prominent: true)
+            } else if activeFoldWithTempReading != nil {
+                Button {
+                    showTemperatureEntry = true
+                } label: {
+                    Label("Log Temp", systemImage: "thermometer.medium")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .adaptiveGlassButtonStyle(prominent: true)
+            } else if isBulkFermentActive {
+                if viewModel.bulkFermentTargetReached {
+                    Label("Fermentation target reached", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.green)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Button {
+                    showTemperatureEntry = true
+                } label: {
+                    Label("Log Temp", systemImage: "thermometer.medium")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .adaptiveGlassButtonStyle(prominent: true)
+                Button {
+                    completeCurrent()
+                } label: {
+                    Label("Finish Early", systemImage: "forward.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .adaptiveGlassButtonStyle()
             } else if step.stepStatus == .active {
                 let isPassive = step.stepType.classification != .handsOn
                 Button {
@@ -276,6 +316,25 @@ struct NowStepHero: View {
         }
     }
 
+    // MARK: - Fold callout
+
+    @ViewBuilder
+    private var activeFoldCallout: some View {
+        if let fold = activeFoldWithTempReading {
+            VStack(alignment: .leading, spacing: 6) {
+                Label(fold.stepType.label, systemImage: "hand.raised.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.orange)
+                Text("Once you've folded, log your dough temperature.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.orange.opacity(0.1), in: .rect(cornerRadius: 12))
+        }
+    }
+
     // MARK: - Substeps
 
     @ViewBuilder
@@ -331,6 +390,17 @@ struct NowStepHero: View {
     private var showsStart: Bool {
         step.stepStatus == .upcoming
             && referenceDate >= step.computedStartTime
+    }
+
+    private var isBulkFermentActive: Bool {
+        stepTypeIDEnum == .bulkFerment && step.stepStatus == .active
+    }
+
+    private var activeFoldWithTempReading: ScheduleStep? {
+        guard isBulkFermentActive else { return nil }
+        return step.subSteps
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+            .first { $0.stepStatus == .active && $0.stepType.requiresTempReading }
     }
 
     private var isPaused: Bool {

@@ -50,7 +50,11 @@ struct StepDetailSheet: View {
         }
         .sheet(isPresented: $showTemperatureEntry) {
             if let schedule = step.schedule {
-                TemperatureEntryView(schedule: schedule, foldStep: step)
+                TemperatureEntryView(
+                    schedule: schedule,
+                    foldStep: step,
+                    onSave: { viewModel.handleNewTemperatureReading(schedule: schedule) }
+                )
             }
         }
     }

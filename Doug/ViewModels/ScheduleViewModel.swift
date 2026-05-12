@@ -10,6 +10,12 @@ struct ActiveConflict: Identifiable {
     let scheduledEnd: Date
 }
 
+struct ScheduleAdjustment: Identifiable {
+    let id = UUID()
+    let deltaMinutes: Double
+    let newBulkEndTime: Date
+}
+
 @Observable
 @MainActor
 final class ScheduleViewModel {
@@ -38,6 +44,8 @@ final class ScheduleViewModel {
     var starterHealthBlock: StarterHealthStatus?
     var pendingFoldEntry: PendingFoldEntry?
     var pendingStepDetail: PendingStepDetail?
+    var bulkFermentTargetReached = false
+    var lastScheduleAdjustment: ScheduleAdjustment?
 
     // Levain-in-progress detection
     var detectedLevain: LevainContext?
@@ -301,6 +309,11 @@ final class ScheduleViewModel {
             latestTempCelsius: latestTemp
         ) else { return }
 
+        if remainingMinutes < 15 {
+            bulkFermentTargetReached = true
+            return
+        }
+
         // Find bulk ferment step and adjust its end time
         let steps = allSteps(in: schedule)
         guard let bulkStep = steps.first(where: {
@@ -319,6 +332,11 @@ final class ScheduleViewModel {
 
         cascade(afterEnd: oldBulkEnd, delta: delta, in: schedule)
         syncLiveActivity()
+
+        lastScheduleAdjustment = ScheduleAdjustment(
+            deltaMinutes: delta / 60.0,
+            newBulkEndTime: newBulkEnd
+        )
     }
 
     // MARK: - Cold Retard Step Lookup

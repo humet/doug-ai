@@ -8,6 +8,7 @@ import SwiftUI
 struct TemperatureEntryView: View {
     let schedule: Schedule
     let foldStep: ScheduleStep?
+    var onSave: (() -> Void)?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -52,6 +53,12 @@ struct TemperatureEntryView: View {
                         Label(fold.stepType.label, systemImage: "hand.raised")
                             .font(.headline)
                         Text(fold.stepType.instructionText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Label("Bulk Ferment", systemImage: "clock.arrow.2.circlepath")
+                            .font(.headline)
+                        Text("Log your current dough temperature to track fermentation progress.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -140,6 +147,8 @@ struct TemperatureEntryView: View {
             fold.stepStatus = .done
             fold.actualEndTime = Date()
         }
+
+        onSave?()
     }
 
     private func formatMinutes(_ minutes: Double) -> String {
