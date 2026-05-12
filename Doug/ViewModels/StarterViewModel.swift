@@ -166,6 +166,12 @@ final class StarterViewModel {
         }
     }
 
+    func refrigerate(profile: StarterProfile) {
+        if let result = StarterStateMachine.refrigerate(currentState: profile.starterLifecycleState) {
+            profile.starterLifecycleState = result.newState
+        }
+    }
+
     func feedAndRefrigerate(profile: StarterProfile, modelContext: ModelContext) {
         logFeed(modelContext: modelContext, profile: profile, intent: .postBake)
         if let result = StarterStateMachine.refrigerate(currentState: profile.starterLifecycleState) {
