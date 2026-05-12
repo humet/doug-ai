@@ -233,19 +233,22 @@ struct NowStepHero: View {
                 }
                 .adaptiveGlassButtonStyle()
             } else if step.stepStatus == .active {
+                let isOverdueFlexible = step.stepType.classification == .passiveFlexible
+                    && step.computedEndTime <= referenceDate
                 let isPassive = step.stepType.classification != .handsOn
                 Button {
                     completeCurrent()
                 } label: {
                     Label(
-                        isPassive ? "Finish Early" : "Done",
-                        systemImage: isPassive ? "forward.fill" : "checkmark.circle.fill"
+                        isOverdueFlexible ? "Move On" : (isPassive ? "Finish Early" : "Done"),
+                        systemImage: isOverdueFlexible ? "checkmark.circle.fill"
+                            : (isPassive ? "forward.fill" : "checkmark.circle.fill")
                     )
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                 }
-                .adaptiveGlassButtonStyle(prominent: !isPassive)
+                .adaptiveGlassButtonStyle(prominent: isOverdueFlexible || !isPassive)
             }
         }
     }

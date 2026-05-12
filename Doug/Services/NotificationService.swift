@@ -81,8 +81,8 @@ final class NotificationService {
 
     // MARK: - Schedule Notifications
 
-    /// Schedules notifications for all hands-on steps in a schedule.
-    /// Fires 5 minutes before each step.
+    /// Schedules notifications for hands-on steps (5 min before start) and
+    /// passive-flexible steps (at timer completion, prompting user to move on).
     func scheduleNotifications(for steps: [ScheduleStep]) async {
         let authorized = await requestAuthorization()
         guard authorized else { return }
@@ -90,17 +90,17 @@ final class NotificationService {
         for step in steps {
             let stepType = step.stepType
 
-            // Only notify for hands-on steps + preheat + cold retard end
-            guard stepType.classification == .handsOn
-                || step.stepTypeID == StepStatus.upcoming.rawValue // won't match, handled below
-                || stepType.id == .preheat
-            else {
+            if stepType.classification == .passiveFlexible {
+                await scheduleFlexibleCompletionNotification(step: step)
+                continue
+            }
+
+            guard stepType.classification == .handsOn || stepType.id == .preheat else {
                 continue
             }
 
             await scheduleStepNotification(step: step)
 
-            // Also schedule sub-steps (folds)
             for subStep in step.subSteps {
                 await scheduleStepNotification(step: subStep)
             }
@@ -152,6 +152,38 @@ final class NotificationService {
         } catch {
             // Notification scheduling failed — non-fatal
         }
+    }
+
+    private func scheduleFlexibleCompletionNotification(step: ScheduleStep) async {
+        let notifTime = step.computedEndTime
+        guard notifTime > Date() else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "\(step.stepType.label) Timer Complete"
+        content.body = "Move on when your dough is ready."
+        content.sound = .default
+        content.categoryIdentifier = Category.handsOnStep
+        content.userInfo = [
+            "stepTypeID": step.stepTypeID,
+            "sequenceIndex": step.sequenceIndex,
+        ]
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: max(notifTime.timeIntervalSinceNow, 1),
+            repeats: false
+        )
+
+        let identifier = "step-\(step.stepTypeID)-\(step.sequenceIndex)-complete"
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: trigger
+        )
+
+        do {
+            try await center.add(request)
+            step.notificationIdentifier = identifier
+        } catch {}
     }
 
     // MARK: - Cancel & Reschedule

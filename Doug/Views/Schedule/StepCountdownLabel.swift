@@ -27,6 +27,9 @@ struct StepCountdownLabel: View {
                 return "\(Self.format(seconds: remaining)) remaining"
             }
             let overdue = -remaining
+            if step.stepType.classification == .passiveFlexible {
+                return "\(Self.format(seconds: overdue)) over — resting"
+            }
             return "\(Self.format(seconds: overdue)) overdue"
         case .done:
             let actualEnd = step.actualEndTime ?? step.computedEndTime
@@ -47,7 +50,10 @@ struct StepCountdownLabel: View {
         case .active:
             let anchor = step.schedule?.pausedAt ?? referenceDate
             let remaining = step.computedEndTime.timeIntervalSince(anchor)
-            if remaining < 0 { return .red }
+            if remaining < 0 {
+                return step.stepType.classification == .passiveFlexible
+                    ? DougTheme.stepActive : .red
+            }
             if remaining < 5 * 60 { return .red }
             return DougTheme.stepActive
         case .done:

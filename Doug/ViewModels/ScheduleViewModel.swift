@@ -438,7 +438,7 @@ final class ScheduleViewModel {
                 advanceSubSteps(in: schedule, now: now)
                 return
             case .active:
-                if step.stepType.classification != .handsOn, step.computedEndTime <= now {
+                if step.stepType.classification == .passiveFixed, step.computedEndTime <= now {
                     step.stepStatus = .done
                     step.actualEndTime = step.computedEndTime
                     didChange = true

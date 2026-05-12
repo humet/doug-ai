@@ -163,7 +163,7 @@ struct ScheduleAdjustmentsTests {
 
     // MARK: - advanceIfReady
 
-    @Test func advanceIfReadyAutoProgressesPassiveAndStopsAtHandsOn() throws {
+    @Test func advanceIfReadyStopsAtPassiveFlexibleAndHandsOn() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
         // Anchor so autolyse already ended 1 minute ago.
@@ -173,13 +173,33 @@ struct ScheduleAdjustmentsTests {
 
         vm.advanceIfReady(now: Date(), modelContext: context)
 
-        // Autolyse (passive) auto-completes.
-        #expect(steps[0].stepStatus == .done)
-        #expect(steps[0].actualEndTime != nil)
-        // Mix (hands-on) has entered its active window and blocks further progression.
-        #expect(steps[1].stepStatus == .active)
-        // Bulk stays upcoming until mix is confirmed.
+        // Autolyse (passiveFlexible) stays active past its timer — requires user confirmation.
+        #expect(steps[0].stepStatus == .active)
+        #expect(steps[0].actualEndTime == nil)
+        // Mix stays upcoming until autolyse is manually confirmed.
+        #expect(steps[1].stepStatus == .upcoming)
         #expect(steps[2].stepStatus == .upcoming)
+    }
+
+    @Test func advanceIfReadyAutoCompletesPassiveFixed() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // Anchor so all three steps ended in the past.
+        let anchor = Date().addingTimeInterval(-180 * 60)
+        let (schedule, steps) = makeSchedule(anchor: anchor, context: context)
+        // Manually advance past autolyse and mix so bulk (passiveFixed) is active.
+        steps[0].stepStatus = .done
+        steps[0].actualEndTime = steps[0].computedEndTime
+        steps[1].stepStatus = .done
+        steps[1].actualEndTime = steps[1].computedEndTime
+        steps[2].stepStatus = .active
+        let vm = makeViewModel(with: schedule)
+
+        vm.advanceIfReady(now: Date(), modelContext: context)
+
+        // Bulk ferment (passiveFixed) auto-completes when timer expires.
+        #expect(steps[2].stepStatus == .done)
+        #expect(steps[2].actualEndTime != nil)
     }
 
     @Test func advanceIfReadyWaitsOnUnconfirmedHandsOn() throws {
