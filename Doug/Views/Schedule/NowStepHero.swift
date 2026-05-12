@@ -38,6 +38,7 @@ struct NowStepHero: View {
 
             primaryActions
             secondaryActions
+            subStepsList
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -189,15 +190,19 @@ struct NowStepHero: View {
                 }
                 .adaptiveGlassButtonStyle(prominent: true)
             } else if step.stepStatus == .active {
+                let isPassive = step.stepType.classification != .handsOn
                 Button {
                     completeCurrent()
                 } label: {
-                    Label("Done", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                    Label(
+                        isPassive ? "Finish Early" : "Done",
+                        systemImage: isPassive ? "forward.fill" : "checkmark.circle.fill"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
                 }
-                .adaptiveGlassButtonStyle(prominent: true)
+                .adaptiveGlassButtonStyle(prominent: !isPassive)
             }
         }
     }
@@ -267,6 +272,30 @@ struct NowStepHero: View {
                         .padding(.vertical, 8)
                 }
                 .adaptiveGlassButtonStyle()
+            }
+        }
+    }
+
+    // MARK: - Substeps
+
+    @ViewBuilder
+    private var subStepsList: some View {
+        let subs = step.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        if !subs.isEmpty {
+            Divider()
+                .padding(.vertical, 2)
+
+            Text("Stretch & Folds")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            ForEach(subs) { sub in
+                CompactStepRow(
+                    step: sub,
+                    referenceDate: referenceDate,
+                    isSubStep: true,
+                    onTap: { onOpenDetail(sub) }
+                )
             }
         }
     }

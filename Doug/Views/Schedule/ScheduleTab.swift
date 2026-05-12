@@ -269,6 +269,7 @@ struct ScheduleTab: View {
                                 showCoachChat = true
                             }
                         )
+
                     }
 
                     if !schedule.temperatureReadings.isEmpty {

@@ -379,10 +379,8 @@ final class ScheduleViewModel {
         syncLiveActivity()
     }
 
-    /// Auto-completes passive steps whose end time has passed. Never promotes the next
-    /// step — all transitions to `.active` require user action (`startStepNow`,
-    /// `markStepDone`, `finishStepEarly`) since the user may not be present when a
-    /// timer-driven completion fires.
+    /// Auto-completes passive steps whose end time has passed and promotes the next
+    /// step to `.active`. Also advances fold substeps within the active parent step.
     func advanceIfReady(now: Date, modelContext _: ModelContext) {
         guard let schedule = activeSchedule, schedule.pausedAt == nil else { return }
         let steps = orderedTopLevelSteps(in: schedule)
@@ -393,7 +391,11 @@ final class ScheduleViewModel {
             case .done, .skipped:
                 continue
             case .upcoming:
-                if didChange { syncLiveActivity() }
+                if didChange {
+                    promoteNextUpcoming(in: schedule)
+                    syncLiveActivity()
+                }
+                advanceSubSteps(in: schedule, now: now)
                 return
             case .active:
                 if step.stepType.classification != .handsOn, step.computedEndTime <= now {
@@ -402,11 +404,65 @@ final class ScheduleViewModel {
                     didChange = true
                     continue
                 }
-                if didChange { syncLiveActivity() }
+                if didChange {
+                    promoteNextUpcoming(in: schedule)
+                    syncLiveActivity()
+                }
+                advanceSubSteps(in: schedule, now: now)
                 return
             }
         }
-        if didChange { syncLiveActivity() }
+        if didChange {
+            promoteNextUpcoming(in: schedule)
+            syncLiveActivity()
+        }
+    }
+
+    private func advanceSubSteps(in schedule: Schedule, now: Date) {
+        let steps = orderedTopLevelSteps(in: schedule)
+        guard let active = steps.first(where: { $0.stepStatus == .active }),
+              !active.subSteps.isEmpty else { return }
+
+        let subs = active.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        let spacing: TimeInterval = subs.count >= 2
+            ? subs[1].computedStartTime.timeIntervalSince(subs[0].computedStartTime)
+            : 30 * 60
+        let minimumGap = max(spacing / 2, 15 * 60)
+
+        for (index, sub) in subs.enumerated() {
+            switch sub.stepStatus {
+            case .done, .skipped:
+                continue
+            case .active, .upcoming:
+                let tooLate: Bool
+                if index + 1 < subs.count {
+                    tooLate = subs[index + 1].computedStartTime <= now
+                } else {
+                    tooLate = now.timeIntervalSince(sub.computedStartTime) > spacing
+                }
+
+                if tooLate {
+                    sub.stepStatus = .skipped
+                    continue
+                }
+
+                if sub.stepStatus == .upcoming, sub.computedStartTime <= now {
+                    let isFold = sub.stepTypeID == StepTypeID.stretchAndFold.rawValue
+                    if isFold,
+                       let prevFold = subs[0 ..< index].last(where: {
+                           $0.stepStatus == .done && $0.stepTypeID == StepTypeID.stretchAndFold.rawValue
+                       }),
+                       let doneTime = prevFold.actualEndTime,
+                       now.timeIntervalSince(doneTime) < minimumGap {
+                        return
+                    }
+                    if !subs.contains(where: { $0.stepStatus == .active }) {
+                        sub.stepStatus = .active
+                    }
+                }
+                return
+            }
+        }
     }
 
     // MARK: - Pause / Resume
