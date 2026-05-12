@@ -220,6 +220,119 @@ struct ScheduleAdjustmentsTests {
         #expect(steps[2].stepStatus == .upcoming)
     }
 
+    // MARK: - Bake substeps
+
+    private func makeBakeSchedule(anchor: Date, context: ModelContext) -> (Schedule, ScheduleStep, [ScheduleStep]) {
+        let schedule = Schedule(
+            recipeID: .countryLoaf,
+            targetBreadReadyTime: anchor.addingTimeInterval(60 * 60),
+            kitchenTemperatureCelsius: 22
+        )
+        schedule.scheduleStatus = .active
+        context.insert(schedule)
+
+        let bake = ScheduleStep(
+            stepTypeID: .bake,
+            sequenceIndex: 0,
+            computedStartTime: anchor,
+            computedEndTime: anchor.addingTimeInterval(45 * 60),
+            computedDurationMinutes: 45
+        )
+        bake.schedule = schedule
+        bake.stepStatus = .active
+        context.insert(bake)
+
+        let covered = ScheduleStep(
+            stepTypeID: .bakeCovered,
+            sequenceIndex: 0,
+            computedStartTime: anchor,
+            computedEndTime: anchor.addingTimeInterval(20 * 60),
+            computedDurationMinutes: 20
+        )
+        covered.parentStep = bake
+        covered.schedule = schedule
+        covered.stepStatus = .active
+        context.insert(covered)
+
+        let uncovered = ScheduleStep(
+            stepTypeID: .bakeUncovered,
+            sequenceIndex: 1,
+            computedStartTime: anchor.addingTimeInterval(20 * 60),
+            computedEndTime: anchor.addingTimeInterval(45 * 60),
+            computedDurationMinutes: 25
+        )
+        uncovered.parentStep = bake
+        uncovered.schedule = schedule
+        context.insert(uncovered)
+
+        return (schedule, bake, [covered, uncovered])
+    }
+
+    @Test func advanceSubStepsAdvancesBakePhases() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-25 * 60)
+        let (schedule, _, subs) = makeBakeSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: schedule)
+
+        vm.advanceIfReady(now: Date(), modelContext: context)
+
+        // Covered is overdue but stays active — no auto-skipping for bake phases.
+        #expect(subs[0].stepStatus == .active)
+        #expect(subs[1].stepStatus == .upcoming)
+    }
+
+    @Test func bakeParentCompletesWhenAllSubStepsDone() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-50 * 60)
+        let (schedule, bake, subs) = makeBakeSchedule(anchor: anchor, context: context)
+        subs[0].stepStatus = .done
+        subs[0].actualEndTime = subs[0].computedEndTime
+        subs[1].stepStatus = .done
+        subs[1].actualEndTime = subs[1].computedEndTime
+        let vm = makeViewModel(with: schedule)
+
+        vm.advanceIfReady(now: Date(), modelContext: context)
+
+        #expect(bake.stepStatus == .done)
+    }
+
+    @Test func bakeParentStaysActiveWithPendingSubSteps() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-50 * 60)
+        let (schedule, bake, subs) = makeBakeSchedule(anchor: anchor, context: context)
+        subs[0].stepStatus = .done
+        subs[0].actualEndTime = subs[0].computedEndTime
+        // Uncovered still active
+        subs[1].stepStatus = .active
+        let vm = makeViewModel(with: schedule)
+
+        vm.advanceIfReady(now: Date(), modelContext: context)
+
+        // Parent stays active because uncovered isn't done yet.
+        #expect(bake.stepStatus == .active)
+    }
+
+    @Test func markStepDoneCascadesLateBakeSubStep() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-25 * 60)
+        let (schedule, bake, subs) = makeBakeSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: schedule)
+
+        let originalUncoveredStart = subs[1].computedStartTime
+
+        vm.markStepDone(subs[0], modelContext: context)
+
+        // Covered was 5 min overdue, so uncovered should shift later.
+        #expect(subs[0].stepStatus == .done)
+        #expect(subs[1].computedStartTime > originalUncoveredStart)
+        // Parent end time should also have shifted.
+        #expect(bake.computedEndTime > anchor.addingTimeInterval(45 * 60))
+    }
+
     // MARK: - markStepDone / reopenStep
 
     @Test func markStepDonePromotesNext() throws {

@@ -40,6 +40,7 @@ struct NowStepHero: View {
             }
 
             activeFoldCallout
+            bakePhaseCallout
             primaryActions
             secondaryActions
             subStepsList
@@ -55,7 +56,7 @@ struct NowStepHero: View {
             if let schedule = step.schedule {
                 TemperatureEntryView(
                     schedule: schedule,
-                    foldStep: activeFoldWithTempReading,
+                    foldStep: stepRequiringTemp,
                     onSave: { viewModel.handleNewTemperatureReading(schedule: schedule) }
                 )
             }
@@ -191,7 +192,7 @@ struct NowStepHero: View {
                 Button {
                     showTemperatureEntry = true
                 } label: {
-                    Label("Enter Temp", systemImage: "thermometer.medium")
+                    Label("Done — Log Temp", systemImage: "thermometer.medium")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -416,6 +417,29 @@ struct NowStepHero: View {
         }
     }
 
+    // MARK: - Bake phase callout
+
+    @ViewBuilder
+    private var bakePhaseCallout: some View {
+        if stepTypeIDEnum == .bake,
+           let covered = step.subSteps.first(where: {
+               $0.stepTypeID == StepTypeID.bakeCovered.rawValue && $0.stepStatus == .active
+           }),
+           covered.computedEndTime <= referenceDate {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Remove the Lid", systemImage: "flame.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.orange)
+                Text("The covered phase is done. Remove the lid and tap Done to start the uncovered bake.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.orange.opacity(0.1), in: .rect(cornerRadius: 12))
+        }
+    }
+
     // MARK: - Substeps
 
     @ViewBuilder
@@ -425,7 +449,7 @@ struct NowStepHero: View {
             Divider()
                 .padding(.vertical, 2)
 
-            Text("Stretch & Folds")
+            Text(stepTypeIDEnum == .bake ? "Bake Stages" : "Stretch & Folds")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -460,7 +484,7 @@ struct NowStepHero: View {
     }
 
     private var ovenTemperature: Int? {
-        guard [.preheat, .bakeCovered, .bakeUncovered].contains(stepTypeIDEnum) else { return nil }
+        guard [.preheat, .bake, .bakeCovered, .bakeUncovered].contains(stepTypeIDEnum) else { return nil }
         return step.schedule?.recipe.bakeTemperature(for: stepTypeIDEnum)
     }
 
@@ -502,6 +526,11 @@ struct NowStepHero: View {
         return step.subSteps
             .sorted { $0.sequenceIndex < $1.sequenceIndex }
             .first { $0.stepStatus == .active && $0.stepType.requiresTempReading }
+    }
+
+    private var stepRequiringTemp: ScheduleStep? {
+        activeFoldWithTempReading
+            ?? (step.stepType.requiresTempReading && step.stepStatus == .active ? step : nil)
     }
 
     private var isPaused: Bool {

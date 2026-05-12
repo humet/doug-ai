@@ -13,6 +13,7 @@ enum StepTypeIcon {
         case .shape: "circle.circle"
         case .coldRetard: "snowflake"
         case .preheat: "flame"
+        case .bake: "oven"
         case .bakeCovered: "oven"
         case .bakeUncovered: "oven.fill"
         }
@@ -26,7 +27,7 @@ enum StepTypeIcon {
             DougTheme.crustGold
         case .coldRetard:
             .blue
-        case .preheat, .bakeCovered, .bakeUncovered:
+        case .preheat, .bake, .bakeCovered, .bakeUncovered:
             .orange
         }
     }

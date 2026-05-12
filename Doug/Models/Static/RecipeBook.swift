@@ -42,8 +42,10 @@ enum RecipeBook {
                 flexRangeOverride: 480 ... 1080
             ),
             MethodStep(stepTypeID: .preheat),
-            MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
-            MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25),
+            MethodStep(stepTypeID: .bake, durationOverrideMinutes: 45, subSteps: [
+                MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
+                MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25),
+            ]),
         ],
         bakeTemperatureCelsius: 250,
         degreeHourTarget: 80,
@@ -82,8 +84,10 @@ enum RecipeBook {
                 flexRangeOverride: 600 ... 1080
             ),
             MethodStep(stepTypeID: .preheat),
-            MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
-            MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25),
+            MethodStep(stepTypeID: .bake, durationOverrideMinutes: 45, subSteps: [
+                MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
+                MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25),
+            ]),
         ],
         bakeTemperatureCelsius: 250,
         degreeHourTarget: 100,
@@ -125,8 +129,10 @@ enum RecipeBook {
                 flexRangeOverride: 480 ... 1080
             ),
             MethodStep(stepTypeID: .preheat),
-            MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
-            MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25, bakeTemperatureCelsius: 230),
+            MethodStep(stepTypeID: .bake, durationOverrideMinutes: 45, subSteps: [
+                MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
+                MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25, bakeTemperatureCelsius: 230),
+            ]),
         ],
         bakeTemperatureCelsius: 245,
         degreeHourTarget: 70,
@@ -171,8 +177,10 @@ enum RecipeBook {
                 flexRangeOverride: 480 ... 1080
             ),
             MethodStep(stepTypeID: .preheat),
-            MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
-            MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25),
+            MethodStep(stepTypeID: .bake, durationOverrideMinutes: 45, subSteps: [
+                MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
+                MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25),
+            ]),
         ],
         bakeTemperatureCelsius: 250,
         degreeHourTarget: 80,

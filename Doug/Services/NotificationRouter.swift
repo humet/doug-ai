@@ -92,6 +92,17 @@ final class NotificationRouter {
         }
     }
 
+    func markBakeSubStepDone(stepTypeID: String, sequenceIndex: Int) {
+        selectedTab = .schedule
+        guard let viewModel = scheduleViewModel,
+              let schedule = viewModel.activeSchedule else { return }
+        let step = findStep(in: schedule, matching: PendingStepDetail(
+            stepTypeID: stepTypeID, sequenceIndex: sequenceIndex
+        ))
+        guard let step, let context = step.modelContext else { return }
+        viewModel.markStepDone(step, modelContext: context)
+    }
+
     func focusScheduleTab() {
         selectedTab = .schedule
     }

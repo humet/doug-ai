@@ -12,6 +12,7 @@ final class NotificationService {
         static let foldStep = "FOLD_STEP"
         static let handsOnStep = "HANDS_ON_STEP"
         static let coldRetardEnd = "COLD_RETARD_END"
+        static let bakePhase = "BAKE_PHASE"
         static let starterFeed = "STARTER_FEED"
     }
 
@@ -20,6 +21,7 @@ final class NotificationService {
         static let logFeed = "LOG_FEED"
         static let snoozeFeed = "SNOOZE_FEED_1H"
         static let snoozeStep = "SNOOZE_STEP_30M"
+        static let markBakePhaseDone = "MARK_BAKE_PHASE_DONE"
     }
 
     /// Stable identifier so feed reminders can be rescheduled or cancelled cleanly.
@@ -72,17 +74,30 @@ final class NotificationService {
             options: []
         )
 
+        let markDoneAction = UNNotificationAction(
+            identifier: Action.markBakePhaseDone,
+            title: "Done",
+            options: [.foreground]
+        )
+        let bakePhaseCategory = UNNotificationCategory(
+            identifier: Category.bakePhase,
+            actions: [markDoneAction, snoozeStepAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
         center.setNotificationCategories([
             starterFeedCategory,
             handsOnStepCategory,
             foldStepCategory,
+            bakePhaseCategory,
         ])
     }
 
     // MARK: - Schedule Notifications
 
-    /// Schedules notifications for hands-on steps (5 min before start) and
-    /// passive-flexible steps (at timer completion, prompting user to move on).
+    /// Schedules notifications for hands-on steps (5 min before start),
+    /// passive-flexible steps (at timer completion), and bake substep transitions.
     func scheduleNotifications(for steps: [ScheduleStep]) async {
         let authorized = await requestAuthorization()
         guard authorized else { return }
@@ -92,6 +107,13 @@ final class NotificationService {
 
             if stepType.classification == .passiveFlexible {
                 await scheduleFlexibleCompletionNotification(step: step)
+                continue
+            }
+
+            if stepType.id == .bake {
+                for subStep in step.subSteps {
+                    await scheduleBakePhaseNotification(step: subStep)
+                }
                 continue
             }
 
@@ -123,6 +145,7 @@ final class NotificationService {
             content.categoryIdentifier = Category.foldStep
         } else if stepType.id == .preheat {
             content.categoryIdentifier = Category.coldRetardEnd
+            content.interruptionLevel = .timeSensitive
         } else {
             content.categoryIdentifier = Category.handsOnStep
         }
@@ -162,7 +185,44 @@ final class NotificationService {
         content.title = "\(step.stepType.label) Timer Complete"
         content.body = "Move on when your dough is ready."
         content.sound = .default
+        content.interruptionLevel = .timeSensitive
         content.categoryIdentifier = Category.handsOnStep
+        content.userInfo = [
+            "stepTypeID": step.stepTypeID,
+            "sequenceIndex": step.sequenceIndex,
+        ]
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: max(notifTime.timeIntervalSinceNow, 1),
+            repeats: false
+        )
+
+        let identifier = "step-\(step.stepTypeID)-\(step.sequenceIndex)-complete"
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: trigger
+        )
+
+        do {
+            try await center.add(request)
+            step.notificationIdentifier = identifier
+        } catch {}
+    }
+
+    private func scheduleBakePhaseNotification(step: ScheduleStep) async {
+        let notifTime = step.computedEndTime
+        guard notifTime > Date() else { return }
+
+        let isCovered = step.stepTypeID == StepTypeID.bakeCovered.rawValue
+        let content = UNMutableNotificationContent()
+        content.title = isCovered ? "Remove the Lid" : "Your Bread Is Ready!"
+        content.body = isCovered
+            ? "The covered bake is done. Remove the lid to develop the crust."
+            : "Take your loaf out and let it cool on a wire rack."
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        content.categoryIdentifier = Category.bakePhase
         content.userInfo = [
             "stepTypeID": step.stepTypeID,
             "sequenceIndex": step.sequenceIndex,

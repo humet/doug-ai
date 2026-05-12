@@ -12,6 +12,7 @@ enum StepTypeID: String, CaseIterable, Codable {
     case shape
     case coldRetard
     case preheat
+    case bake
     case bakeCovered
     case bakeUncovered
 }

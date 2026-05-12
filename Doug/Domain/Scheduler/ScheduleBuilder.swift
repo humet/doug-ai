@@ -174,6 +174,37 @@ enum ScheduleBuilder {
                     )
                 }
 
+                if !methodStep.subSteps.isEmpty {
+                    var subStart = tentativeStart
+                    let subs = methodStep.subSteps.map { sub -> ScheduledStep in
+                        let subType = StepTypeRegistry.type(for: sub.stepTypeID)
+                        let subDuration = sub.effectiveDuration
+                        let subEnd = subStart.addingTimeInterval(subDuration * 60)
+                        defer { subStart = subEnd }
+                        return ScheduledStep(
+                            methodStepID: sub.id,
+                            stepTypeID: sub.stepTypeID,
+                            label: subType.label,
+                            classification: subType.classification,
+                            startTime: subStart,
+                            endTime: subEnd,
+                            durationMinutes: subDuration,
+                            requiresTempReading: subType.requiresTempReading
+                        )
+                    }
+                    step = ScheduledStep(
+                        methodStepID: step.methodStepID,
+                        stepTypeID: step.stepTypeID,
+                        label: step.label,
+                        classification: step.classification,
+                        startTime: step.startTime,
+                        endTime: step.endTime,
+                        durationMinutes: step.durationMinutes,
+                        subSteps: subs,
+                        requiresTempReading: step.requiresTempReading
+                    )
+                }
+
                 scheduledSteps.append(step)
                 cursor = tentativeStart
 

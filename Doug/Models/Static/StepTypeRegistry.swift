@@ -163,6 +163,25 @@ enum StepTypeRegistry {
             successSignal: "Oven has held target temperature for at least 15 minutes and the dutch oven is thoroughly hot."
         ),
 
+        .bake: StepType(
+            id: .bake,
+            label: "Bake",
+            classification: .passiveFixed,
+            baseDurationMinutes: 45,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Score the dough and load it into the hot dutch oven. Bake covered first for oven spring, then remove the lid to develop the crust.",
+            notificationText: "Time to bake — score your dough and load into the hot dutch oven.",
+            successSignal: "Crust is deep mahogany, the loaf sounds hollow when tapped underneath, and internal temperature reads 96–98°C.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 30,
+                warning: "Your oven has been at temperature for a long time — wasting energy, but the dough in the fridge is fine. No harm to the bread.",
+                salvageAdvice: "Turn the oven off and try again when you're ready. The dough will keep in the fridge."
+            )
+        ),
+
         .bakeCovered: StepType(
             id: .bakeCovered,
             label: "Bake (Covered)",

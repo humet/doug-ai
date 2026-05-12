@@ -83,6 +83,25 @@ final class NotificationActionHandler: NSObject, UNUserNotificationCenterDelegat
                 default:
                     break
                 }
+            case NotificationService.Category.bakePhase:
+                switch actionIdentifier {
+                case NotificationService.Action.markBakePhaseDone:
+                    if let stepTypeID, let sequenceIndex {
+                        NotificationRouter.shared.markBakeSubStepDone(
+                            stepTypeID: stepTypeID,
+                            sequenceIndex: sequenceIndex
+                        )
+                    }
+                case UNNotificationDefaultActionIdentifier:
+                    if let stepTypeID, let sequenceIndex {
+                        NotificationRouter.shared.requestStepDetail(
+                            stepTypeID: stepTypeID,
+                            sequenceIndex: sequenceIndex
+                        )
+                    }
+                default:
+                    break
+                }
             case NotificationService.Category.coldRetardEnd:
                 if actionIdentifier == UNNotificationDefaultActionIdentifier {
                     NotificationRouter.shared.focusScheduleTab()

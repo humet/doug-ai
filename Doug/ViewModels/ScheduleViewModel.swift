@@ -363,6 +363,12 @@ final class ScheduleViewModel {
         if step.actualEndTime == nil {
             step.actualEndTime = Date()
         }
+        if step.parentStep != nil, let actual = step.actualEndTime {
+            let delta = actual.timeIntervalSince(step.computedEndTime)
+            if delta > 0 {
+                cascade(afterEnd: step.computedEndTime, delta: delta, in: schedule, excluding: step)
+            }
+        }
         promoteNextUpcoming(in: schedule)
         syncLiveActivity()
     }
@@ -431,7 +437,7 @@ final class ScheduleViewModel {
             case .done, .skipped:
                 continue
             case .upcoming:
-                if didChange {
+                if didChange || !steps.contains(where: { $0.stepStatus == .active }) {
                     promoteNextUpcoming(in: schedule)
                     syncLiveActivity()
                 }
@@ -439,8 +445,13 @@ final class ScheduleViewModel {
                 return
             case .active:
                 if step.stepType.classification == .passiveFixed, step.computedEndTime <= now {
+                    if step.stepTypeID == StepTypeID.bake.rawValue,
+                       !step.subSteps.allSatisfy({ $0.stepStatus == .done || $0.stepStatus == .skipped }) {
+                        advanceSubSteps(in: schedule, now: now)
+                        return
+                    }
                     step.stepStatus = .done
-                    step.actualEndTime = step.computedEndTime
+                    step.actualEndTime = step.subSteps.isEmpty ? step.computedEndTime : now
                     didChange = true
                     continue
                 }
@@ -464,6 +475,22 @@ final class ScheduleViewModel {
               !active.subSteps.isEmpty else { return }
 
         let subs = active.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+
+        if active.stepTypeID == StepTypeID.bake.rawValue {
+            for sub in subs {
+                switch sub.stepStatus {
+                case .done, .skipped: continue
+                case .active: return
+                case .upcoming:
+                    if !subs.contains(where: { $0.stepStatus == .active }) {
+                        sub.stepStatus = .active
+                    }
+                    return
+                }
+            }
+            return
+        }
+
         let spacing: TimeInterval = subs.count >= 2
             ? subs[1].computedStartTime.timeIntervalSince(subs[0].computedStartTime)
             : 30 * 60
