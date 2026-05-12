@@ -5,6 +5,7 @@ import SwiftUI
 struct MethodStepCard: View {
     let step: MethodStep
     let stepNumber: Int
+    var recipe: Recipe?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -12,6 +13,11 @@ struct MethodStepCard: View {
             Text(step.stepType.instructionText)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            if let temp = ovenTemperature {
+                Label("\(temp)°C", systemImage: "flame.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
             Text(step.stepType.successSignal)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -69,6 +75,11 @@ struct MethodStepCard: View {
             .padding(.vertical, 2)
             .foregroundStyle(color)
             .background(color.opacity(0.15), in: .capsule)
+    }
+
+    private var ovenTemperature: Int? {
+        guard [.preheat, .bakeCovered, .bakeUncovered].contains(step.stepTypeID) else { return nil }
+        return recipe?.bakeTemperature(for: step.stepTypeID) ?? step.bakeTemperatureCelsius
     }
 
     private var durationText: String {

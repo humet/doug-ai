@@ -126,7 +126,7 @@ enum RecipeBook {
             ),
             MethodStep(stepTypeID: .preheat),
             MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
-            MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25),
+            MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25, bakeTemperatureCelsius: 230),
         ],
         bakeTemperatureCelsius: 245,
         degreeHourTarget: 70,

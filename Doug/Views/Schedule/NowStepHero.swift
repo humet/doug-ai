@@ -17,12 +17,15 @@ struct NowStepHero: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
+            contextualInfo
 
             if let info = stalenessInfo {
                 stalenessWarning(info)
             } else {
                 Text(step.stepType.instructionText)
                     .font(.subheadline)
+
+                ovenTemperatureCallout
 
                 if !step.stepType.successSignal.isEmpty {
                     HStack(alignment: .top, spacing: 6) {
@@ -316,6 +319,61 @@ struct NowStepHero: View {
         }
     }
 
+    // MARK: - Oven temperature callout
+
+    @ViewBuilder
+    private var ovenTemperatureCallout: some View {
+        if let temp = ovenTemperature {
+            HStack(spacing: 8) {
+                Image(systemName: "flame.fill")
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+                Text("\(temp)°C")
+                    .font(.title2.bold().monospacedDigit())
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.orange.opacity(0.1), in: .rect(cornerRadius: 12))
+        }
+    }
+
+    // MARK: - Contextual measurements
+
+    @ViewBuilder
+    private var contextualInfo: some View {
+        if let ing = recipeIngredients {
+            switch stepTypeIDEnum {
+            case .buildLevain:
+                measurementChips([("Levain", ing.levainGrams)])
+            case .autolyse:
+                measurementChips([("Flour", ing.flourGrams), ("Water", ing.waterGrams)])
+            case .mix:
+                measurementChips([
+                    ("Flour", ing.flourGrams),
+                    ("Water", ing.waterGrams),
+                    ("Levain", ing.levainGrams),
+                    ("Salt", ing.saltGrams),
+                ])
+            case .addInclusions where !ing.extras.isEmpty:
+                measurementChips(ing.extras.map { ($0.name, $0.grams) })
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    private func measurementChips(_ items: [(String, Double)]) -> some View {
+        FlowLayout(spacing: 6) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                Text("\(item.0) \(Int(item.1.rounded()))g")
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(DougTheme.warmWheat.opacity(0.5), in: .capsule)
+            }
+        }
+    }
+
     // MARK: - Fold callout
 
     @ViewBuilder
@@ -376,6 +434,15 @@ struct NowStepHero: View {
 
     private var accentTint: Color {
         StepTypeIcon.tint(for: stepTypeIDEnum)
+    }
+
+    private var ovenTemperature: Int? {
+        guard [.preheat, .bakeCovered, .bakeUncovered].contains(stepTypeIDEnum) else { return nil }
+        return step.schedule?.recipe.bakeTemperature(for: stepTypeIDEnum)
+    }
+
+    private var recipeIngredients: Ingredients? {
+        step.schedule?.recipe.ingredients
     }
 
     private var stalenessInfo: StalenessInfo? {

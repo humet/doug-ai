@@ -45,7 +45,7 @@ struct ScheduleTab: View {
                             Button {
                                 viewModel.showRecipeDetailSheet = true
                             } label: {
-                                Image(systemName: "book.pages")
+                                Image(systemName: "list.bullet.rectangle")
                             }
                             .accessibilityLabel("Recipe")
                         }
@@ -238,6 +238,7 @@ struct ScheduleTab: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     activeHeader(schedule: schedule)
+                    IngredientsDisclosure(ingredients: schedule.recipe.ingredients)
 
                     if let pausedAt = schedule.pausedAt {
                         PausedBanner(
@@ -509,6 +510,44 @@ private struct RecipeCard: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground), in: .rect(cornerRadius: 16))
+    }
+}
+
+// MARK: - Ingredients Disclosure
+
+private struct IngredientsDisclosure: View {
+    let ingredients: Ingredients
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Button {
+                withAnimation(.smooth(duration: 0.25)) {
+                    expanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "scalemass")
+                        .foregroundStyle(.secondary)
+                    Text("Ingredients")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(DougTheme.cardBackground, in: .rect(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+
+            if expanded {
+                IngredientsTableView(ingredients: ingredients)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
     }
 }
 

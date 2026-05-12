@@ -84,7 +84,7 @@ struct RecipeDetailView: View {
             sectionHeader("Method")
             VStack(spacing: 12) {
                 ForEach(Array(recipe.method.enumerated()), id: \.offset) { index, step in
-                    MethodStepCard(step: step, stepNumber: index + 1)
+                    MethodStepCard(step: step, stepNumber: index + 1, recipe: recipe)
                 }
             }
         }

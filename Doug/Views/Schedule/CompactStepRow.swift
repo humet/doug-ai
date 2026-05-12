@@ -25,6 +25,11 @@ struct CompactStepRow: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
+                if let temp = ovenTemperature {
+                    Label("\(temp)°", systemImage: "flame.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
                 Text(step.computedStartTime, style: .time)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(hasConflict ? .orange : .secondary)
@@ -47,6 +52,11 @@ struct CompactStepRow: View {
 
     private var stepTypeIDEnum: StepTypeID {
         StepTypeID(rawValue: step.stepTypeID) ?? .mix
+    }
+
+    private var ovenTemperature: Int? {
+        guard [.preheat, .bakeCovered, .bakeUncovered].contains(stepTypeIDEnum) else { return nil }
+        return step.schedule?.recipe.bakeTemperature(for: stepTypeIDEnum)
     }
 
     private var statusDot: some View {

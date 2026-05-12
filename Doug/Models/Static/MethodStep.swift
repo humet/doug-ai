@@ -9,6 +9,7 @@ struct MethodStep: Identifiable {
     let degreeHourTarget: Double?
     let foldSpacingFraction: Double?
     let inclusionAtFold: Int?
+    let bakeTemperatureCelsius: Int?
     let subSteps: [MethodStep]
 
     var stepType: StepType {
@@ -31,6 +32,7 @@ struct MethodStep: Identifiable {
         degreeHourTarget: Double? = nil,
         foldSpacingFraction: Double? = nil,
         inclusionAtFold: Int? = nil,
+        bakeTemperatureCelsius: Int? = nil,
         subSteps: [MethodStep] = []
     ) {
         id = UUID()
@@ -41,6 +43,7 @@ struct MethodStep: Identifiable {
         self.degreeHourTarget = degreeHourTarget
         self.foldSpacingFraction = foldSpacingFraction
         self.inclusionAtFold = inclusionAtFold
+        self.bakeTemperatureCelsius = bakeTemperatureCelsius
         self.subSteps = subSteps
     }
 }

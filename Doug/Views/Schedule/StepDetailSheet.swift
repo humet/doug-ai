@@ -115,6 +115,18 @@ struct StepDetailSheet: View {
                 .font(.subheadline.bold())
             Text(step.stepType.instructionText)
                 .font(.subheadline)
+            if let temp = ovenTemperature {
+                HStack(spacing: 8) {
+                    Image(systemName: "flame.fill")
+                        .font(.title3)
+                        .foregroundStyle(.orange)
+                    Text("\(temp)°C")
+                        .font(.title2.bold().monospacedDigit())
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.orange.opacity(0.1), in: .rect(cornerRadius: 12))
+            }
             Text("You'll know it's done when")
                 .font(.subheadline.bold())
                 .padding(.top, 8)
@@ -125,6 +137,11 @@ struct StepDetailSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(DougTheme.cardBackground, in: .rect(cornerRadius: 14))
+    }
+
+    private var ovenTemperature: Int? {
+        guard [.preheat, .bakeCovered, .bakeUncovered].contains(stepTypeIDEnum) else { return nil }
+        return step.schedule?.recipe.bakeTemperature(for: stepTypeIDEnum)
     }
 
     // MARK: - Primary actions

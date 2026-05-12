@@ -70,4 +70,8 @@ struct Recipe: Identifiable {
     let bakeTemperatureCelsius: Int
     let degreeHourTarget: Double
     let referenceTemperatureCelsius: Double
+
+    func bakeTemperature(for stepTypeID: StepTypeID) -> Int {
+        method.first { $0.stepTypeID == stepTypeID }?.bakeTemperatureCelsius ?? bakeTemperatureCelsius
+    }
 }
