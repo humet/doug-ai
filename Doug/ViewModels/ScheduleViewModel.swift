@@ -379,22 +379,44 @@ final class ScheduleViewModel {
 
         let now = Date()
         let oldEnd = step.computedEndTime
+        let elapsed = (step.actualEndTime ?? now).timeIntervalSince(step.computedStartTime)
+        let remaining = max((step.computedDurationMinutes * 60) - elapsed, 60)
+
         step.stepStatus = .active
         step.actualEndTime = nil
+        step.computedStartTime = now
+        step.computedEndTime = now.addingTimeInterval(remaining)
 
-        if step.computedEndTime <= now {
-            let duration = step.computedDurationMinutes * 60
-            step.computedStartTime = now
-            step.computedEndTime = now.addingTimeInterval(duration)
-            cascade(
-                afterEnd: oldEnd,
-                delta: step.computedEndTime.timeIntervalSince(oldEnd),
-                in: schedule,
-                excluding: step
-            )
-        }
+        cascade(
+            afterEnd: oldEnd,
+            delta: step.computedEndTime.timeIntervalSince(oldEnd),
+            in: schedule,
+            excluding: step
+        )
 
+        rescheduleSubSteps(of: step)
         syncLiveActivity()
+    }
+
+    private func rescheduleSubSteps(of step: ScheduleStep) {
+        let subs = step.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        guard !subs.isEmpty else { return }
+
+        let remaining = step.computedEndTime.timeIntervalSince(step.computedStartTime)
+        let pendingFolds = subs.filter { $0.stepStatus != .done }
+        guard !pendingFolds.isEmpty else { return }
+
+        let spacingFraction = 0.67
+        let foldWindow = remaining * spacingFraction
+        let spacing = foldWindow / Double(pendingFolds.count + 1)
+
+        for (index, sub) in pendingFolds.enumerated() {
+            let offset = spacing * Double(index + 1)
+            sub.computedStartTime = step.computedStartTime.addingTimeInterval(offset)
+            sub.computedEndTime = sub.computedStartTime.addingTimeInterval(sub.computedDurationMinutes * 60)
+            sub.stepStatus = .upcoming
+            sub.actualEndTime = nil
+        }
     }
 
     /// Auto-completes passive steps whose end time has passed and promotes the next
@@ -525,7 +547,6 @@ final class ScheduleViewModel {
         step.stepStatus = .done
         step.actualEndTime = now
         step.computedEndTime = now
-        step.computedDurationMinutes = now.timeIntervalSince(step.computedStartTime) / 60
 
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
         promoteNextUpcoming(in: schedule)
