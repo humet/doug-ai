@@ -351,15 +351,12 @@ struct NowStepHero: View {
                     waterTemperatureCallout
                 }
             case .mix:
-                VStack(alignment: .leading, spacing: 6) {
-                    measurementChips([
-                        ("Flour", ing.flourGrams),
-                        ("Water", ing.waterGrams),
-                        ("Levain", ing.levainGrams),
-                        ("Salt", ing.saltGrams),
-                    ])
-                    waterTemperatureCallout
-                }
+                measurementChips([
+                    ("Flour", ing.flourGrams),
+                    ("Water", ing.waterGrams),
+                    ("Levain", ing.levainGrams),
+                    ("Salt", ing.saltGrams),
+                ])
             case .addInclusions where !ing.extras.isEmpty:
                 measurementChips(ing.extras.map { ($0.name, $0.grams) })
             default:
@@ -469,11 +466,13 @@ struct NowStepHero: View {
     }
 
     private var desiredWaterTemperature: Double? {
-        guard [.autolyse, .mix].contains(stepTypeIDEnum),
+        guard stepTypeIDEnum == .autolyse,
               let schedule = step.schedule else { return nil }
         return TemperatureCalculator.desiredWaterTemperature(
             desiredDoughTemp: schedule.recipe.referenceTemperatureCelsius,
-            kitchenTemp: schedule.kitchenTemperatureCelsius
+            kitchenTemp: schedule.kitchenTemperatureCelsius,
+            restMinutes: step.computedDurationMinutes,
+            includeLevain: false
         )
     }
 

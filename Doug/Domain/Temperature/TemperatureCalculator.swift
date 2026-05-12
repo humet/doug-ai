@@ -46,21 +46,43 @@ enum TemperatureCalculator {
     /// Standard levain-build ratio assumed for personalised peak-time lookups.
     static let levainBuildRatio: FeedRatioBucket = .oneToFive
 
+    /// Time constant for dough cooling/warming toward ambient (minutes).
+    /// ~75 min for a typical 800g–1kg dough mass in a home kitchen.
+    static let doughThermalTimeConstant = 75.0
+
     /// Calculates the recommended water temperature to hit the desired dough
-    /// temperature (DDT), using the standard 3-factor method.
+    /// temperature (DDT).
     ///
-    /// Formula: waterTemp = (DDT × 3) - flourTemp - levainTemp
-    /// Assumes flour and levain are at kitchen (room) temperature.
+    /// When `restMinutes` is provided (e.g. autolyse duration), compensates for
+    /// thermal drift during the rest using Newton's cooling law so the dough
+    /// arrives at DDT by the end of the rest period, not just at the start.
+    ///
+    /// Uses the 2-factor method for autolyse (flour + water only) and the
+    /// 3-factor method for mix (flour + water + levain).
     ///
     /// - Parameters:
     ///   - desiredDoughTemp: The recipe's reference/target dough temperature (°C).
     ///   - kitchenTemp: Current kitchen temperature (°C), used for flour and levain.
+    ///   - restMinutes: Optional rest duration after mixing. When set, the water
+    ///     temp is raised/lowered to compensate for drift toward ambient.
+    ///   - includeLevain: Whether levain is present (3-factor). False for autolyse (2-factor).
     /// - Returns: Recommended water temperature in °C, clamped to 2...45.
     static func desiredWaterTemperature(
         desiredDoughTemp: Double,
-        kitchenTemp: Double
+        kitchenTemp: Double,
+        restMinutes: Double = 0,
+        includeLevain: Bool = true
     ) -> Double {
-        let raw = (desiredDoughTemp * 3.0) - (2.0 * kitchenTemp)
+        let targetAfterRest: Double
+        if restMinutes > 0 {
+            let decay = exp(restMinutes / doughThermalTimeConstant)
+            targetAfterRest = kitchenTemp + (desiredDoughTemp - kitchenTemp) * decay
+        } else {
+            targetAfterRest = desiredDoughTemp
+        }
+
+        let factors = includeLevain ? 3.0 : 2.0
+        let raw = (targetAfterRest * factors) - ((factors - 1.0) * kitchenTemp)
         return min(max(raw, 2.0), 45.0)
     }
 

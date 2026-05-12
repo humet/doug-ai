@@ -192,11 +192,13 @@ struct StepDetailSheet: View {
     }
 
     private var desiredWaterTemperature: Double? {
-        guard [.autolyse, .mix].contains(stepTypeIDEnum),
+        guard stepTypeIDEnum == .autolyse,
               let schedule = step.schedule else { return nil }
         return TemperatureCalculator.desiredWaterTemperature(
             desiredDoughTemp: schedule.recipe.referenceTemperatureCelsius,
-            kitchenTemp: schedule.kitchenTemperatureCelsius
+            kitchenTemp: schedule.kitchenTemperatureCelsius,
+            restMinutes: step.computedDurationMinutes,
+            includeLevain: false
         )
     }
 
