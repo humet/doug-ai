@@ -35,7 +35,7 @@ struct ScheduleConfigSheet: View {
                     DatePicker(
                         "Bread ready by",
                         selection: $viewModel.targetDate,
-                        in: Date()...,
+                        in: (viewModel.viableBreadReadyRange?.lowerBound ?? Date())...,
                         displayedComponents: [.date, .hourAndMinute]
                     )
                 } header: {
@@ -90,7 +90,12 @@ struct ScheduleConfigSheet: View {
 
                 if !viewModel.previewSteps.isEmpty {
                     Section {
-                        ForEach(viewModel.previewSteps) { step in
+                        let steps = viewModel.previewSteps
+                        ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                            if index > 0, !Calendar.current.isDate(steps[index - 1].startTime, inSameDayAs: step.startTime) {
+                                OvernightDivider(from: steps[index - 1].startTime, to: step.startTime)
+                                    .listRowSeparator(.hidden)
+                            }
                             PreviewStepRow(step: step)
                         }
                     } header: {
@@ -182,8 +187,14 @@ struct ScheduleConfigSheet: View {
         case .active:
             return "Your starter is active and ready for this bake."
         case .activating:
+            if viewModel.hasActivationPreamble {
+                return "Peak wait is included in your schedule below."
+            }
             return "Your starter is waking up — wait for it to peak before starting."
         case .dormant:
+            if viewModel.hasActivationPreamble {
+                return "Activation is included in your schedule below."
+            }
             let duration = EarliestBakeEstimator.recipeDurationMinutes(
                 recipe: viewModel.selectedRecipe,
                 kitchenTempC: viewModel.kitchenTemperature
@@ -206,7 +217,8 @@ struct ScheduleConfigSheet: View {
         viewModel.buildPreview(
             availability: availabilities.first,
             windows: Array(windows),
-            feedLogs: Array(feedLogs)
+            feedLogs: Array(feedLogs),
+            starterProfile: profiles.first
         )
     }
 
@@ -262,7 +274,7 @@ private struct PreviewStepRow: View {
                             .background(.green, in: .capsule)
                     }
                 }
-                Text(step.startTime, style: .time)
+                DayTimeLabel(date: step.startTime)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()

@@ -16,6 +16,9 @@ enum StepTypeIcon {
         case .bake: "oven"
         case .bakeCovered: "oven"
         case .bakeUncovered: "oven.fill"
+        case .fridgeRest: "snowflake"
+        case .activateStarter: "bubbles.and.sparkles"
+        case .waitForPeak: "chart.line.uptrend.xyaxis"
         }
     }
 
@@ -25,10 +28,12 @@ enum StepTypeIcon {
             DougTheme.sourdoughBrown
         case .autolyse, .bulkFerment:
             DougTheme.crustGold
-        case .coldRetard:
+        case .coldRetard, .fridgeRest:
             .blue
         case .preheat, .bake, .bakeCovered, .bakeUncovered:
             .orange
+        case .activateStarter, .waitForPeak:
+            .green
         }
     }
 }

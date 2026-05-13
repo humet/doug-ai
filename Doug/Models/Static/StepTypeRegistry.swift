@@ -219,6 +219,48 @@ enum StepTypeRegistry {
                 salvageAdvice: "Remove the lid now. The crust will be pale — give it a full 20–25 minutes uncovered to develop colour. Check it's not burning towards the end."
             )
         ),
+
+        .fridgeRest: StepType(
+            id: .fridgeRest,
+            label: "Starter Resting",
+            classification: .passiveFixed,
+            baseDurationMinutes: 0,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Your starter is resting in the fridge. We'll notify you when it's time to take it out and feed it.",
+            notificationText: "Your starter is resting — nothing to do yet.",
+            successSignal: "Time to activate your starter."
+        ),
+
+        .activateStarter: StepType(
+            id: .activateStarter,
+            label: "Activate Starter",
+            classification: .handsOn,
+            baseDurationMinutes: 10,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Take your starter out of the fridge and feed it at your usual activation ratio. Place it somewhere warm and covered.",
+            notificationText: "Time to activate your starter — take it out of the fridge and feed it.",
+            successSignal: "Starter is fed and on the counter. Now wait for it to peak."
+        ),
+
+        .waitForPeak: StepType(
+            id: .waitForPeak,
+            label: "Wait for Peak",
+            classification: .passiveFixed,
+            baseDurationMinutes: 300,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Your starter is rising. Wait for it to at least double in size with a domed top. Mark the peak when it's ready.",
+            notificationText: "Your starter should be close to peaking — check if it has doubled.",
+            successSignal: "Starter has peaked — doubled in size with a domed, bubbly surface."
+        ),
     ]
 
     static func type(for id: StepTypeID) -> StepType {

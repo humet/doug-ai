@@ -95,10 +95,13 @@ final class ScheduleViewModel {
 
     // MARK: - Schedule Building
 
+    var hasActivationPreamble = false
+
     func buildPreview(
         availability: UserAvailability?,
         windows: [UnavailableWindow],
-        feedLogs: [StarterFeedLog] = []
+        feedLogs: [StarterFeedLog] = [],
+        starterProfile: StarterProfile? = nil
     ) {
         let avail = availability.map { AvailabilityInput(from: $0) }
             ?? AvailabilityInput(startHour: 6, startMinute: 30, endHour: 21, endMinute: 0)
@@ -132,9 +135,41 @@ final class ScheduleViewModel {
 
         switch result {
         case let .success(steps):
-            previewSteps = steps
-            conflict = nil
+            let state = starterProfile?.starterLifecycleState ?? .dormant
+            let preamble = buildActivationPreamble(
+                state: state,
+                recipeSteps: steps,
+                kitchenTemp: kitchenTemperature,
+                feedLogs: feedLogs,
+                peakProfile: peakProfile,
+                starterProfile: starterProfile,
+                availability: avail,
+                unavailableBlocks: AvailabilityResolver.resolve(
+                    from: (steps.first?.startTime ?? targetDate).addingTimeInterval(-3 * 24 * 3600),
+                    to: targetDate,
+                    availability: avail,
+                    windows: windowInputs
+                )
+            )
+            hasActivationPreamble = !preamble.isEmpty
+            let allSteps = preamble + steps
+
+            let firstActionable = allSteps.first(where: { $0.stepTypeID != .fridgeRest })
+            if let firstStart = firstActionable?.startTime, firstStart < Date() {
+                hasActivationPreamble = false
+                previewSteps = []
+                conflict = ScheduleConflict(
+                    conflictingStepLabel: allSteps.first?.label ?? "Schedule",
+                    conflictingWindowName: "schedule constraint",
+                    message: "This bread-ready time requires starting in the past. Pick a later time.",
+                    suggestedAlternativeTime: nil
+                )
+            } else {
+                previewSteps = allSteps
+                conflict = nil
+            }
         case let .conflict(scheduleConflict):
+            hasActivationPreamble = false
             previewSteps = []
             conflict = scheduleConflict
         }
@@ -180,6 +215,105 @@ final class ScheduleViewModel {
             expectedPeakMinutes: expectedPeak,
             kitchenTemperatureCelsius: latest.kitchenTemperatureCelsius
         )
+    }
+
+    // MARK: - Activation Preamble
+
+    private func buildActivationPreamble(
+        state: StarterLifecycleState,
+        recipeSteps: [ScheduledStep],
+        kitchenTemp: Double,
+        feedLogs: [StarterFeedLog],
+        peakProfile: StarterPeakProfile?,
+        starterProfile: StarterProfile?,
+        availability: AvailabilityInput,
+        unavailableBlocks: [UnavailableBlock]
+    ) -> [ScheduledStep] {
+        switch state {
+        case .active:
+            return []
+        case .reviving:
+            return []
+        case .activating:
+            return buildActivatingPreamble(
+                feedLogs: feedLogs,
+                peakProfile: peakProfile,
+                starterProfile: starterProfile,
+                kitchenTemp: kitchenTemp,
+                recipeSteps: recipeSteps
+            )
+        case .dormant:
+            return buildDormantPreamble(
+                recipeSteps: recipeSteps,
+                kitchenTemp: kitchenTemp,
+                peakProfile: peakProfile,
+                starterProfile: starterProfile,
+                unavailableBlocks: unavailableBlocks
+            )
+        }
+    }
+
+    private func buildActivatingPreamble(
+        feedLogs: [StarterFeedLog],
+        peakProfile: StarterPeakProfile?,
+        starterProfile: StarterProfile?,
+        kitchenTemp: Double,
+        recipeSteps: [ScheduledStep]
+    ) -> [ScheduledStep] {
+        return []
+    }
+
+    private func buildDormantPreamble(
+        recipeSteps: [ScheduledStep],
+        kitchenTemp: Double,
+        peakProfile: StarterPeakProfile?,
+        starterProfile: StarterProfile?,
+        unavailableBlocks: [UnavailableBlock]
+    ) -> [ScheduledStep] {
+        guard let levainStart = recipeSteps.first?.startTime else { return [] }
+
+        let peakDuration = starterProfile?.activePeakAverageMinutes
+            ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemp)
+        let activateDuration = 10.0
+        var activateStart = levainStart.addingTimeInterval(-(peakDuration + activateDuration) * 60)
+
+        let conflicts = AvailabilityResolver.overlaps(
+            start: activateStart,
+            end: activateStart.addingTimeInterval(activateDuration * 60),
+            blocks: unavailableBlocks
+        )
+        if let conflict = conflicts.first {
+            activateStart = conflict.start.addingTimeInterval(-activateDuration * 60)
+        }
+
+        let activateEnd = activateStart.addingTimeInterval(activateDuration * 60)
+
+        var steps: [ScheduledStep] = []
+
+        let now = Date()
+        if activateStart.timeIntervalSince(now) > 30 * 60 {
+            steps.append(ScheduledStep(
+                methodStepID: UUID(),
+                stepTypeID: .fridgeRest,
+                label: "Starter Resting",
+                classification: .passiveFixed,
+                startTime: now,
+                endTime: activateStart,
+                durationMinutes: activateStart.timeIntervalSince(now) / 60.0
+            ))
+        }
+
+        steps.append(ScheduledStep(
+            methodStepID: UUID(),
+            stepTypeID: .activateStarter,
+            label: "Activate Starter",
+            classification: .handsOn,
+            startTime: activateStart,
+            endTime: activateEnd,
+            durationMinutes: activateDuration
+        ))
+
+        return steps
     }
 
     // MARK: - Apply Conflict Resolution Option

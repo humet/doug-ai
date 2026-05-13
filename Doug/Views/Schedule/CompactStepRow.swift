@@ -30,7 +30,7 @@ struct CompactStepRow: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.orange)
                 }
-                Text(step.computedStartTime, style: .time)
+                DayTimeLabel(date: step.computedStartTime)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(hasConflict ? .orange : .secondary)
                 Image(systemName: "chevron.right")

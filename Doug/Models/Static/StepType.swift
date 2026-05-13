@@ -15,6 +15,9 @@ enum StepTypeID: String, CaseIterable, Codable {
     case bake
     case bakeCovered
     case bakeUncovered
+    case fridgeRest
+    case activateStarter
+    case waitForPeak
 }
 
 // MARK: - Step Classification

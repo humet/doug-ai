@@ -56,6 +56,13 @@ struct ScheduleTab: View {
                 }
                 .sheet(isPresented: $showConfig) {
                     ScheduleConfigSheet(viewModel: viewModel) {
+                        if viewModel.hasActivationPreamble {
+                            withAnimation(.smooth) {
+                                viewModel.startBake(modelContext: modelContext)
+                            }
+                            showConfig = false
+                            return
+                        }
                         let canBake = viewModel.preBakeHealthCheck(
                             profile: profiles.first,
                             feedLogs: feedLogs
@@ -366,7 +373,12 @@ struct ScheduleTab: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
             }
-            ForEach(rest) { step in
+            let restArray = Array(rest)
+            ForEach(Array(restArray.enumerated()), id: \.element.id) { index, step in
+                if index > 0, !Calendar.current.isDate(restArray[index - 1].computedStartTime, inSameDayAs: step.computedStartTime) {
+                    OvernightDivider(from: restArray[index - 1].computedStartTime, to: step.computedStartTime)
+                }
+
                 CompactStepRow(
                     step: step,
                     referenceDate: now,
