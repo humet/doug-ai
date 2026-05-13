@@ -19,9 +19,6 @@ struct StarterTab: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showCoachChat = false
     @State private var feedLogToDelete: StarterFeedLog?
-    @State private var planAheadDate: Date?
-    @State private var planAheadRecipeID: RecipeID = .countryLoaf
-    @State private var planAheadReminderSet = false
     @State private var now = Date()
 
     private var profile: StarterProfile? {
@@ -230,7 +227,12 @@ struct StarterTab: View {
         if lifecycleState == .dormant, let bakeStart = upcomingBakeStart {
             bakeAwarenessContent(bakeStart: bakeStart)
         } else if lifecycleState == .dormant, upcomingBakeStart == nil {
-            planAheadContent
+            PlanAheadSection(
+                profile: profile,
+                feedLogs: Array(feedLogs),
+                availabilities: Array(availabilities),
+                windows: Array(windows)
+            )
         } else if activeRevivalPlan == nil, let suggestion = currentSuggestion {
             suggestionContent(suggestion)
         }
@@ -267,73 +269,6 @@ struct StarterTab: View {
         }
     }
 
-    private var planAheadContent: some View {
-        Section {
-            Picker("Recipe", selection: $planAheadRecipeID) {
-                ForEach(RecipeBook.all) { recipe in
-                    Text(recipe.name).tag(recipe.id)
-                }
-            }
-
-            DatePicker(
-                "Bread ready by",
-                selection: Binding(
-                    get: { planAheadDate ?? defaultPlanAheadDate() },
-                    set: {
-                        planAheadDate = $0
-                        planAheadReminderSet = false
-                    }
-                ),
-                in: Date()...,
-                displayedComponents: [.date, .hourAndMinute]
-            )
-
-            if let target = planAheadDate {
-                let recipe = RecipeBook.recipe(for: planAheadRecipeID)
-                let duration = EarliestBakeEstimator.recipeDurationMinutes(
-                    recipe: recipe,
-                    kitchenTempC: 22
-                )
-                let activationLead = EarliestBakeEstimator.activationLeadMinutes(
-                    lifecycleState: .dormant,
-                    stateChangedAt: profile?.stateChangedAt ?? Date(),
-                    lastActivationFeed: nil,
-                    activePeakAverage: profile?.activePeakAverageMinutes,
-                    kitchenTempC: 22
-                )
-                let activateBy = target.addingTimeInterval(-(duration + activationLead) * 60)
-
-                HStack {
-                    Label("Take it out by", systemImage: "clock")
-                    Spacer()
-                    Text(activateBy.formatted(.dateTime.weekday(.wide).hour().minute()))
-                        .fontWeight(.medium)
-                }
-                .accessibilityElement(children: .combine)
-
-                if !planAheadReminderSet {
-                    Button {
-                        Task {
-                            await NotificationService.shared.scheduleStarterFeedReminder(
-                                at: activateBy,
-                                context: "Time to take your starter out for your \(recipe.name) bake."
-                            )
-                            planAheadReminderSet = true
-                        }
-                    } label: {
-                        Label("Remind Me", systemImage: "bell")
-                    }
-                } else {
-                    Label("Reminder set", systemImage: "bell.fill")
-                        .foregroundStyle(.green)
-                }
-            }
-        } header: {
-            Text("Plan Ahead")
-        } footer: {
-            Text("Pick when you want bread ready and we'll tell you when to activate your starter.")
-        }
-    }
 
     private func suggestionContent(_ suggestion: FeedSuggestion) -> some View {
         Section {
@@ -364,11 +299,6 @@ struct StarterTab: View {
         }
     }
 
-    private func defaultPlanAheadDate() -> Date {
-        let calendar = Calendar.current
-        let tomorrow = calendar.date(byAdding: .day, value: 2, to: Date()) ?? Date()
-        return calendar.date(bySettingHour: 12, minute: 0, second: 0, of: tomorrow) ?? tomorrow
-    }
 
     // MARK: - Revival
 
