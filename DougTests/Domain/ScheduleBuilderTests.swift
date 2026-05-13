@@ -225,6 +225,183 @@ struct ScheduleBuilderTests {
 
     // MARK: - Viable Range
 
+    // MARK: - Presence Group (Preheat + Bake)
+
+    @Test func bakeEndAvoidsUnavailableWindow() throws {
+        // Set up: bread ready at 9 AM, but user is unavailable 8:30–10:00.
+        // Without presence checking, bake (8:15–9:00) would end at 9:00 which is
+        // inside the unavailable block. With presence checking, the group shifts earlier.
+        let window = WindowInput(
+            name: "Morning Meeting",
+            isRecurring: true,
+            daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+            startHour: 8, startMinute: 30,
+            endHour: 10, endMinute: 0
+        )
+
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability,
+            unavailableWindows: [window]
+        )
+
+        let result = ScheduleBuilder.build(input)
+        guard case let .success(steps) = result else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let bakeStep = try #require(steps.first(where: { $0.stepTypeID == .bake }))
+        let preheatStep = try #require(steps.first(where: { $0.stepTypeID == .preheat }))
+
+        // Bake end must be before the unavailable window starts
+        let calendar = Calendar.current
+        let bakeEndHour = calendar.component(.hour, from: bakeStep.endTime)
+        let bakeEndMinute = calendar.component(.minute, from: bakeStep.endTime)
+        let bakeEndTotal = bakeEndHour * 60 + bakeEndMinute
+        #expect(bakeEndTotal <= 8 * 60 + 30, "Bake must end at or before 8:30")
+
+        // Preheat and bake must be contiguous
+        let gap = abs(preheatStep.endTime.timeIntervalSince(bakeStep.startTime))
+        #expect(gap < 60, "Preheat end must equal bake start (no gap)")
+    }
+
+    @Test func preheatAndBakeContiguousAfterShift() throws {
+        // Unavailable window forces a shift — verify no gap opens between preheat and bake
+        let window = WindowInput(
+            name: "Gym",
+            isRecurring: true,
+            daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+            startHour: 8, startMinute: 0,
+            endHour: 9, endMinute: 30
+        )
+
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 15),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability,
+            unavailableWindows: [window]
+        )
+
+        let result = ScheduleBuilder.build(input)
+        guard case let .success(steps) = result else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let preheatStep = try #require(steps.first(where: { $0.stepTypeID == .preheat }))
+        let bakeStep = try #require(steps.first(where: { $0.stepTypeID == .bake }))
+
+        let gap = abs(preheatStep.endTime.timeIntervalSince(bakeStep.startTime))
+        #expect(gap < 60, "Preheat and bake must remain contiguous")
+    }
+
+    @Test func coldRetardExpandsWhenPresenceGroupShifts() throws {
+        // When the presence group shifts earlier, Cold Retard should expand to fill the gap
+        let window = WindowInput(
+            name: "Out",
+            isRecurring: true,
+            daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+            startHour: 8, startMinute: 30,
+            endHour: 10, endMinute: 0
+        )
+
+        let inputWithWindow = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability,
+            unavailableWindows: [window]
+        )
+        let inputWithout = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability
+        )
+
+        guard case let .success(stepsWithWindow) = ScheduleBuilder.build(inputWithWindow),
+              case let .success(stepsWithout) = ScheduleBuilder.build(inputWithout)
+        else {
+            Issue.record("Expected both to succeed")
+            return
+        }
+
+        let crWith = try #require(stepsWithWindow.first(where: { $0.stepTypeID == .coldRetard }))
+        let crWithout = try #require(stepsWithout.first(where: { $0.stepTypeID == .coldRetard }))
+
+        #expect(crWith.durationMinutes > crWithout.durationMinutes,
+                "Cold Retard should expand when presence group shifts earlier")
+    }
+
+    @Test func briefMidStepUnavailabilityDoesNotShift() throws {
+        // An unavailable window entirely during the passive portion of preheat
+        // (e.g., minutes 15-40 of a 60-min preheat) should NOT cause a shift,
+        // because the interaction points (start and end) are still available.
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability
+        )
+
+        // First build without any extra window to get the baseline schedule
+        guard case let .success(baselineSteps) = ScheduleBuilder.build(input) else {
+            Issue.record("Baseline should succeed")
+            return
+        }
+        let baselinePreheat = try #require(baselineSteps.first(where: { $0.stepTypeID == .preheat }))
+
+        // Now add a window that falls entirely within preheat's passive middle
+        let preheatStartHour = Calendar.current.component(.hour, from: baselinePreheat.startTime)
+        let preheatStartMinute = Calendar.current.component(.minute, from: baselinePreheat.startTime)
+        let windowStartMinute = preheatStartMinute + 15
+        let windowStartHour = preheatStartHour + (windowStartMinute >= 60 ? 1 : 0)
+
+        let window = WindowInput(
+            name: "Quick Errand",
+            isRecurring: true,
+            daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+            startHour: windowStartHour, startMinute: windowStartMinute % 60,
+            endHour: windowStartHour, endMinute: (windowStartMinute + 25) % 60
+        )
+
+        let inputWithWindow = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability,
+            unavailableWindows: [window]
+        )
+
+        guard case let .success(stepsWithWindow) = ScheduleBuilder.build(inputWithWindow) else {
+            Issue.record("Should succeed even with mid-preheat window")
+            return
+        }
+
+        let preheatWithWindow = try #require(stepsWithWindow.first(where: { $0.stepTypeID == .preheat }))
+        let diff = abs(preheatWithWindow.startTime.timeIntervalSince(baselinePreheat.startTime))
+        #expect(diff < 60, "Preheat should not shift when unavailable window is only mid-step")
+    }
+
+    @Test func requiresPresenceFlagValues() {
+        let presenceSteps: Set<StepTypeID> = [.preheat, .bake, .bakeCovered, .bakeUncovered]
+
+        for id in StepTypeID.allCases {
+            let stepType = StepTypeRegistry.type(for: id)
+            if presenceSteps.contains(id) {
+                #expect(stepType.requiresPresence, "\(id.rawValue) should require presence")
+            } else {
+                #expect(!stepType.requiresPresence, "\(id.rawValue) should not require presence")
+            }
+        }
+    }
+
+    // MARK: - Viable Range
+
     @Test func viableRangeReturnsReasonableBounds() throws {
         let availability = AvailabilityInput(
             startHour: 6, startMinute: 30,

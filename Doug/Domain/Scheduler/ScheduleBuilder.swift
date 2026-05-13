@@ -112,7 +112,8 @@ enum ScheduleBuilder {
 
         // Iterate method steps in REVERSE order (backward from target time)
         let method = input.recipe.method
-        for methodStep in method.reversed() {
+        let reversedMethod = Array(method.reversed())
+        for (reversedIndex, methodStep) in reversedMethod.enumerated() {
             let stepType = methodStep.stepType
 
             var duration = TemperatureCalculator.effectiveDuration(
@@ -128,8 +129,8 @@ enum ScheduleBuilder {
                 duration = remaining
             }
 
-            let tentativeEnd = cursor
-            let tentativeStart = calendar.date(
+            var tentativeEnd = cursor
+            var tentativeStart = calendar.date(
                 byAdding: .minute,
                 value: -Int(duration),
                 to: tentativeEnd
@@ -137,6 +138,69 @@ enum ScheduleBuilder {
 
             switch stepType.classification {
             case .passiveFixed, .passiveFlexible:
+                // Check interaction points for steps that require user presence
+                if stepType.requiresPresence {
+                    let (moments, groupDuration) = presenceGroupInteractionMoments(
+                        from: reversedIndex,
+                        in: reversedMethod,
+                        groupEnd: tentativeEnd,
+                        kitchenTemp: input.kitchenTemperatureCelsius,
+                        peakProfile: input.peakProfile,
+                        calendar: calendar
+                    )
+
+                    let conflictingMoment = moments.first { moment in
+                        !AvailabilityResolver.momentOverlaps(moment, blocks: unavailableBlocks).isEmpty
+                    }
+
+                    if let conflictingMoment {
+                        let block = AvailabilityResolver.momentOverlaps(
+                            conflictingMoment, blocks: unavailableBlocks
+                        ).first!
+
+                        let shiftAmount = conflictingMoment.timeIntervalSince(block.start)
+                        let shiftedEnd = tentativeEnd.addingTimeInterval(-shiftAmount)
+                        let shiftedStart = calendar.date(
+                            byAdding: .minute, value: -Int(duration), to: shiftedEnd
+                        ) ?? shiftedEnd
+
+                        let shiftedMoments = moments.map { $0.addingTimeInterval(-shiftAmount) }
+                        let stillConflicting = shiftedMoments.contains { moment in
+                            !AvailabilityResolver.momentOverlaps(moment, blocks: unavailableBlocks).isEmpty
+                        }
+
+                        if stillConflicting {
+                            return .conflict(ScheduleConflict(
+                                conflictingStepLabel: stepType.label,
+                                conflictingWindowName: "unavailable window",
+                                message: "\(stepType.label) conflicts with an unavailable window and cannot be rescheduled. Try a different bread-ready time.",
+                                suggestedAlternativeTime: nil
+                            ))
+                        }
+
+                        // Expand the last scheduled flexible step (Cold Retard) to absorb the gap
+                        if let lastIdx = scheduledSteps.indices.last,
+                           scheduledSteps[lastIdx].classification == .passiveFlexible
+                        {
+                            let lastStep = scheduledSteps[lastIdx]
+                            scheduledSteps[lastIdx] = ScheduledStep(
+                                methodStepID: lastStep.methodStepID,
+                                stepTypeID: lastStep.stepTypeID,
+                                label: lastStep.label,
+                                classification: lastStep.classification,
+                                startTime: shiftedEnd,
+                                endTime: lastStep.endTime,
+                                durationMinutes: lastStep.endTime.timeIntervalSince(shiftedEnd) / 60.0,
+                                subSteps: lastStep.subSteps,
+                                requiresTempReading: lastStep.requiresTempReading
+                            )
+                        }
+
+                        tentativeEnd = shiftedEnd
+                        tentativeStart = shiftedStart
+                    }
+                }
+
                 // Passive steps can run through unavailable windows
                 var step = ScheduledStep(
                     methodStepID: methodStep.id,
@@ -611,5 +675,55 @@ enum ScheduleBuilder {
         )
 
         return nil
+    }
+
+    // MARK: - Presence Group Interaction Moments
+
+    /// Calculates the interaction moments for a group of consecutive `requiresPresence` steps.
+    ///
+    /// Starting from `index` in the reversed method, collects all consecutive presence steps
+    /// and returns the moments where user action is needed (step starts, ends, sub-step transitions).
+    private static func presenceGroupInteractionMoments(
+        from index: Int,
+        in reversedMethod: [MethodStep],
+        groupEnd: Date,
+        kitchenTemp: Double,
+        peakProfile: StarterPeakProfile?,
+        calendar: Calendar
+    ) -> (moments: [Date], groupDuration: Double) {
+        var moments: [Date] = []
+        var totalDuration: Double = 0
+        var stepEnd = groupEnd
+
+        var i = index
+        while i < reversedMethod.count {
+            let step = reversedMethod[i]
+            guard step.stepType.requiresPresence else { break }
+
+            let dur = TemperatureCalculator.effectiveDuration(
+                for: step, kitchenTemp: kitchenTemp, peakProfile: peakProfile
+            )
+            let stepStart = calendar.date(byAdding: .minute, value: -Int(dur), to: stepEnd)
+                ?? stepEnd
+
+            moments.append(stepStart)
+            moments.append(stepEnd)
+
+            if !step.subSteps.isEmpty {
+                var subCursor = stepStart
+                for sub in step.subSteps {
+                    let subDur = sub.effectiveDuration
+                    subCursor = subCursor.addingTimeInterval(subDur * 60)
+                    moments.append(subCursor)
+                }
+            }
+
+            totalDuration += dur
+            stepEnd = stepStart
+            i += 1
+        }
+
+        let unique = Array(Set(moments)).sorted()
+        return (moments: unique, groupDuration: totalDuration)
     }
 }

@@ -47,6 +47,7 @@ struct StepType: Identifiable {
     let referenceTemperatureCelsius: Double?
     let flexRange: ClosedRange<Double>?
     let requiresTempReading: Bool
+    var requiresPresence: Bool = false
     let instructionText: String
     let notificationText: String
     let successSignal: String

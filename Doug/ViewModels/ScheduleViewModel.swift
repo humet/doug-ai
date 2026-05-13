@@ -921,7 +921,9 @@ final class ScheduleViewModel {
         let windowInputs = windows.map { WindowInput(from: $0) }
 
         let upcomingHandsOn = orderedTopLevelSteps(in: schedule).filter {
-            $0.stepStatus == .upcoming && $0.stepType.classification == .handsOn
+            $0.stepStatus == .upcoming && (
+                $0.stepType.classification == .handsOn || $0.stepType.requiresPresence
+            )
         }
 
         guard !upcomingHandsOn.isEmpty else {

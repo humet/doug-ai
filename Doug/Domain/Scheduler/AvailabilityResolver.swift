@@ -116,6 +116,16 @@ enum AvailabilityResolver {
         }
     }
 
+    /// Checks whether a single moment falls inside any unavailable block.
+    static func momentOverlaps(
+        _ moment: Date,
+        blocks: [UnavailableBlock]
+    ) -> [UnavailableBlock] {
+        blocks.filter { block in
+            moment >= block.start && moment < block.end
+        }
+    }
+
     /// Merges overlapping or adjacent blocks into a minimal set.
     private static func mergeOverlapping(_ sorted: [UnavailableBlock]) -> [UnavailableBlock] {
         guard var current = sorted.first else { return [] }
