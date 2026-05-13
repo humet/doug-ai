@@ -487,12 +487,18 @@ struct ScheduleTab: View {
             kitchenTempC: viewModel.kitchenTemperature,
             scheduleDurationMinutes: duration
         )
-        viewModel.targetDate = estimate.earliestBreadReady
+        let earliest = estimate.earliestBreadReady
+        let calendar = Calendar.current
+        let snapped = calendar.date(bySetting: .minute, value: 0, of: earliest)
+            .flatMap { calendar.date(byAdding: .hour, value: 1, to: $0) }
+            ?? earliest
+        viewModel.targetDate = snapped
 
         viewModel.buildPreview(
             availability: availabilities.first,
             windows: Array(windows),
-            feedLogs: Array(feedLogs)
+            feedLogs: Array(feedLogs),
+            starterProfile: profiles.first
         )
         showConfig = true
     }

@@ -101,19 +101,22 @@ struct ScheduleConfigSheet: View {
                     } header: {
                         Text("Schedule Preview")
                     }
+
+                    Section {
+                        Button {
+                            onStartBake()
+                        } label: {
+                            Label("Start Bake", systemImage: "play.fill")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                        }
+                        .adaptiveGlassButtonStyle(prominent: true)
+                    }
                 }
 
-                Section {
-                    Button {
-                        onStartBake()
-                    } label: {
-                        Text("Start Bake")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(viewModel.previewSteps.isEmpty)
-
-                    if let conflict = viewModel.conflict {
+                if let conflict = viewModel.conflict {
+                    Section {
                         Label(conflict.message, systemImage: "exclamationmark.triangle")
                             .font(.subheadline)
                             .foregroundStyle(.orange)

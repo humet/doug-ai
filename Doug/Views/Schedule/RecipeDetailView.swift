@@ -17,15 +17,18 @@ struct RecipeDetailView: View {
                 hero
                 ingredientsSection
                 methodSection
-                if showPlanCTA {
-                    planButton
-                }
             }
             .padding()
         }
         .background(DougTheme.warmCream)
         .navigationTitle(recipe.name)
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            if showPlanCTA {
+                planButton
+                    .padding()
+            }
+        }
     }
 
     // MARK: - Hero
