@@ -38,6 +38,7 @@ final class ScheduleViewModel {
     var previewSteps: [ScheduledStep] = []
     var conflict: ScheduleConflict?
     var isBuilding = false
+    var viableBreadReadyRange: ClosedRange<Date>?
 
     var activeSchedule: Schedule?
     var activeConflicts: [ActiveConflict] = []
@@ -109,6 +110,14 @@ final class ScheduleViewModel {
 
         detectActiveLevain(feedLogs: feedLogs, peakProfile: peakProfile)
 
+        viableBreadReadyRange = ScheduleBuilder.viableRange(
+            recipe: selectedRecipe,
+            kitchenTemperatureCelsius: kitchenTemperature,
+            availability: avail,
+            windows: windowInputs,
+            peakProfile: peakProfile
+        )
+
         let input = ScheduleBuilderInput(
             recipe: selectedRecipe,
             targetBreadReadyTime: targetDate,
@@ -128,7 +137,6 @@ final class ScheduleViewModel {
         case let .conflict(scheduleConflict):
             previewSteps = []
             conflict = scheduleConflict
-            showConflictSheet = true
         }
     }
 

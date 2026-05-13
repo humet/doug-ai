@@ -152,11 +152,52 @@ enum ScheduleBuilder {
 
                 // Sub-schedule folds within bulk ferment
                 if methodStep.stepTypeID == .bulkFerment, let foldCount = methodStep.foldCount {
+                    let spacingFraction = methodStep.foldSpacingFraction ?? 0.67
+                    var bulkStart = tentativeStart
+                    var bulkEnd = tentativeEnd
+
+                    let foldWindowEnd = bulkStart.addingTimeInterval(duration * spacingFraction * 60)
+                    let foldConflicts = AvailabilityResolver.overlaps(
+                        start: bulkStart,
+                        end: foldWindowEnd,
+                        blocks: unavailableBlocks
+                    )
+
+                    if let conflict = foldConflicts.first {
+                        let newBulkStart = conflict.start.addingTimeInterval(-duration * spacingFraction * 60)
+                        let newBulkEnd = newBulkStart.addingTimeInterval(duration * 60)
+                        let delta = tentativeEnd.timeIntervalSince(newBulkEnd)
+
+                        if let resolution = repositionForFoldAvailability(
+                            delta: delta,
+                            scheduledSteps: &scheduledSteps,
+                            unavailableBlocks: unavailableBlocks,
+                            method: method,
+                            calendar: calendar
+                        ) {
+                            return resolution
+                        }
+
+                        bulkStart = newBulkStart
+                        bulkEnd = newBulkEnd
+                        step = ScheduledStep(
+                            methodStepID: methodStep.id,
+                            stepTypeID: methodStep.stepTypeID,
+                            label: stepType.label,
+                            classification: stepType.classification,
+                            startTime: bulkStart,
+                            endTime: bulkEnd,
+                            durationMinutes: duration,
+                            requiresTempReading: stepType.requiresTempReading,
+                            levainElapsedMinutes: levainElapsed
+                        )
+                    }
+
                     let folds = scheduleFolds(
-                        bulkStart: tentativeStart,
-                        bulkEnd: tentativeEnd,
+                        bulkStart: bulkStart,
+                        bulkEnd: bulkEnd,
                         foldCount: foldCount,
-                        spacingFraction: methodStep.foldSpacingFraction ?? 0.67,
+                        spacingFraction: spacingFraction,
                         inclusionAtFold: methodStep.inclusionAtFold,
                         unavailableBlocks: unavailableBlocks,
                         calendar: calendar
@@ -206,7 +247,7 @@ enum ScheduleBuilder {
                 }
 
                 scheduledSteps.append(step)
-                cursor = tentativeStart
+                cursor = step.startTime
 
             case .handsOn:
                 let conflicts = AvailabilityResolver.overlaps(
@@ -249,8 +290,32 @@ enum ScheduleBuilder {
             }
         }
 
-        // Reverse to chronological order
-        return .success(scheduledSteps.reversed())
+        // Reverse to chronological order and validate
+        var result: [ScheduledStep] = []
+        for step in scheduledSteps.reversed() {
+            result.append(step)
+        }
+
+        // Validate Cold Retard flex range
+        if let coldRetardStep = result.first(where: { $0.stepTypeID == .coldRetard }) {
+            let coldRetardMethod = method.first(where: { $0.stepTypeID == .coldRetard })
+            if let flexRange = coldRetardMethod?.effectiveFlexRange {
+                let actualDuration = coldRetardStep.durationMinutes
+                if actualDuration < flexRange.lowerBound || actualDuration > flexRange.upperBound {
+                    let hours = Int(actualDuration / 60)
+                    let maxHours = Int(flexRange.upperBound / 60)
+                    let minHours = Int(flexRange.lowerBound / 60)
+                    return .conflict(ScheduleConflict(
+                        conflictingStepLabel: "Cold Retard",
+                        conflictingWindowName: "schedule constraint",
+                        message: "Cold Retard would be \(hours)h — needs to be between \(minHours)h and \(maxHours)h. Try a different bread-ready time.",
+                        suggestedAlternativeTime: nil
+                    ))
+                }
+            }
+        }
+
+        return .success(result)
     }
 
     // MARK: - Fold Sub-Scheduling
@@ -286,15 +351,16 @@ enum ScheduleBuilder {
 
             if overlapping.isEmpty {
                 foldStart = idealTime
+            } else if let clearSlot = findClearSlot(
+                idealTime: idealTime,
+                duration: foldDurationMinutes * 60,
+                tolerance: foldToleranceMinutes * 60,
+                blocks: unavailableBlocks,
+                calendar: calendar
+            ) {
+                foldStart = clearSlot
             } else {
-                // Try shifting ±15 minutes to find a clear slot
-                foldStart = findClearSlot(
-                    idealTime: idealTime,
-                    duration: foldDurationMinutes * 60,
-                    tolerance: foldToleranceMinutes * 60,
-                    blocks: unavailableBlocks,
-                    calendar: calendar
-                ) ?? idealTime // Fall back to ideal if no clear slot
+                continue
             }
 
             let fold = ScheduledStep(
@@ -442,5 +508,108 @@ enum ScheduleBuilder {
             message: "\(step.stepType.label) conflicts with an unavailable window. Try a different bread-ready time.",
             suggestedAlternativeTime: shiftedEnd
         ))
+    }
+
+    // MARK: - Bulk Ferment Fold Repositioning
+
+    /// Slides already-scheduled steps earlier to accommodate Bulk Ferment repositioning.
+    ///
+    /// When Bulk Ferment's fold window conflicts with an unavailable block, this
+    /// shifts intervening steps (Shape, etc.) earlier by `delta` seconds and expands
+    /// the nearest `passiveFlexible` step (Cold Retard) to absorb the gap.
+    ///
+    /// Returns nil on success, or a conflict if validation fails.
+    private static func repositionForFoldAvailability(
+        delta: TimeInterval,
+        scheduledSteps: inout [ScheduledStep],
+        unavailableBlocks: [UnavailableBlock],
+        method: [MethodStep],
+        calendar _: Calendar
+    ) -> ScheduleResult? {
+        guard delta > 0 else { return nil }
+
+        var flexIdx: Int?
+        for i in stride(from: scheduledSteps.count - 1, through: 0, by: -1) {
+            if scheduledSteps[i].classification == .passiveFlexible {
+                flexIdx = i
+                break
+            }
+        }
+
+        guard let flexIdx else {
+            return .conflict(ScheduleConflict(
+                conflictingStepLabel: "Bulk Ferment",
+                conflictingWindowName: "schedule constraint",
+                message: "Bulk Ferment folds conflict with an unavailable window and no flexible step can absorb the shift. Try a different bread-ready time.",
+                suggestedAlternativeTime: nil
+            ))
+        }
+
+        // Slide all steps after the flexible step earlier by delta
+        for i in (flexIdx + 1) ..< scheduledSteps.count {
+            let old = scheduledSteps[i]
+            let newStart = old.startTime.addingTimeInterval(-delta)
+            let newEnd = old.endTime.addingTimeInterval(-delta)
+
+            if old.classification == .handsOn {
+                let conflicts = AvailabilityResolver.overlaps(
+                    start: newStart, end: newEnd, blocks: unavailableBlocks
+                )
+                if !conflicts.isEmpty {
+                    return .conflict(ScheduleConflict(
+                        conflictingStepLabel: old.label,
+                        conflictingWindowName: "unavailable window",
+                        message: "\(old.label) cannot be rescheduled to fit. Try a different bread-ready time.",
+                        suggestedAlternativeTime: nil
+                    ))
+                }
+            }
+
+            scheduledSteps[i] = ScheduledStep(
+                methodStepID: old.methodStepID,
+                stepTypeID: old.stepTypeID,
+                label: old.label,
+                classification: old.classification,
+                startTime: newStart,
+                endTime: newEnd,
+                durationMinutes: old.durationMinutes,
+                subSteps: old.subSteps,
+                requiresTempReading: old.requiresTempReading,
+                levainElapsedMinutes: old.levainElapsedMinutes
+            )
+        }
+
+        // Expand the flexible step: start moves earlier, end stays fixed
+        let flex = scheduledSteps[flexIdx]
+        let newFlexStart = flex.startTime.addingTimeInterval(-delta)
+        let newFlexDuration = flex.endTime.timeIntervalSince(newFlexStart) / 60.0
+
+        let flexMethodStep = method.first { $0.stepTypeID == flex.stepTypeID }
+        if let flexRange = flexMethodStep?.effectiveFlexRange,
+           newFlexDuration > flexRange.upperBound
+        {
+            let maxHours = Int(flexRange.upperBound / 60)
+            return .conflict(ScheduleConflict(
+                conflictingStepLabel: flex.label,
+                conflictingWindowName: "schedule constraint",
+                message: "\(flex.label) would need to be \(Int(newFlexDuration / 60))h — max is \(maxHours)h. Try an earlier bread-ready time.",
+                suggestedAlternativeTime: nil
+            ))
+        }
+
+        scheduledSteps[flexIdx] = ScheduledStep(
+            methodStepID: flex.methodStepID,
+            stepTypeID: flex.stepTypeID,
+            label: flex.label,
+            classification: flex.classification,
+            startTime: newFlexStart,
+            endTime: flex.endTime,
+            durationMinutes: newFlexDuration,
+            subSteps: flex.subSteps,
+            requiresTempReading: flex.requiresTempReading,
+            levainElapsedMinutes: flex.levainElapsedMinutes
+        )
+
+        return nil
     }
 }

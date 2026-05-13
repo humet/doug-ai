@@ -482,9 +482,7 @@ struct ScheduleTab: View {
             windows: Array(windows),
             feedLogs: Array(feedLogs)
         )
-        if viewModel.conflict == nil {
-            showConfig = true
-        }
+        showConfig = true
     }
 }
 

@@ -140,6 +140,112 @@ struct ScheduleBuilderTests {
         #expect(!steps.isEmpty)
         #expect(try #require(steps.first?.startTime) < steps.last!.endTime)
     }
+    // MARK: - Fold Availability
+
+    @Test func bulkFermentFoldsAvoidSleepWindow() throws {
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 14, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability
+        )
+
+        let result = ScheduleBuilder.build(input)
+        guard case let .success(steps) = result else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let bulkStep = try #require(steps.first(where: { $0.stepTypeID == .bulkFerment }))
+
+        let calendar = Calendar.current
+        for fold in bulkStep.subSteps where fold.classification == .handsOn {
+            let foldHour = calendar.component(.hour, from: fold.startTime)
+            let inSleepWindow = foldHour >= 21 || foldHour < 6
+            #expect(!inSleepWindow, "Fold at \(fold.startTime) lands during sleep hours")
+        }
+    }
+
+    @Test func coldRetardAbsorbsOvernightGap() throws {
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 14, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability
+        )
+
+        let result = ScheduleBuilder.build(input)
+        guard case let .success(steps) = result else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let coldRetard = try #require(steps.first(where: { $0.stepTypeID == .coldRetard }))
+        #expect(coldRetard.durationMinutes >= 480)
+        #expect(coldRetard.durationMinutes <= 1080)
+    }
+
+    @Test func conflictWhenColdRetardExceedsFlexRange() {
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 23, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability
+        )
+
+        let result = ScheduleBuilder.build(input)
+        guard case .conflict = result else {
+            Issue.record("Expected conflict for 11 PM bread-ready time")
+            return
+        }
+    }
+
+    @Test func noChangeWhenFoldsAlreadyInAvailableHours() throws {
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability
+        )
+
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected success")
+            return
+        }
+
+        let bulkStep = try #require(steps.first(where: { $0.stepTypeID == .bulkFerment }))
+        #expect(bulkStep.subSteps.count == 4)
+
+        for fold in bulkStep.subSteps where fold.classification == .handsOn {
+            let hour = Calendar.current.component(.hour, from: fold.startTime)
+            let inAvailable = hour >= 6 && hour < 21
+            #expect(inAvailable, "Fold at \(fold.startTime) should be in available hours")
+        }
+    }
+
+    // MARK: - Viable Range
+
+    @Test func viableRangeReturnsReasonableBounds() throws {
+        let availability = AvailabilityInput(
+            startHour: 6, startMinute: 30,
+            endHour: 21, endMinute: 0
+        )
+
+        let range = try #require(ScheduleBuilder.viableRange(
+            recipe: RecipeBook.countryLoaf,
+            kitchenTemperatureCelsius: 24.0,
+            availability: availability,
+            referenceDate: Self.targetTime(hour: 12, minute: 0)
+        ))
+
+        let calendar = Calendar.current
+        let earliestHour = calendar.component(.hour, from: range.lowerBound)
+        let latestHour = calendar.component(.hour, from: range.upperBound)
+
+        #expect(earliestHour >= 6 && earliestHour <= 10, "Earliest should be morning")
+        #expect(latestHour >= 14 && latestHour <= 21, "Latest should be afternoon/evening")
+        #expect(range.lowerBound < range.upperBound)
+    }
 }
 
 struct AvailabilityResolverTests {

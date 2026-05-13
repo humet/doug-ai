@@ -40,6 +40,10 @@ struct ScheduleConfigSheet: View {
                     )
                 } header: {
                     Text("Target Time")
+                } footer: {
+                    if let range = viewModel.viableBreadReadyRange {
+                        Text("Bread can be ready between \(range.lowerBound, style: .time) and \(range.upperBound, style: .time)")
+                    }
                 }
 
                 Section {
@@ -94,12 +98,20 @@ struct ScheduleConfigSheet: View {
                     }
                 }
 
-                if let conflict = viewModel.conflict {
-                    Section {
+                Section {
+                    Button {
+                        onStartBake()
+                    } label: {
+                        Text("Start Bake")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(viewModel.previewSteps.isEmpty)
+
+                    if let conflict = viewModel.conflict {
                         Label(conflict.message, systemImage: "exclamationmark.triangle")
+                            .font(.subheadline)
                             .foregroundStyle(.orange)
-                    } header: {
-                        Text("Conflict")
                     }
                 }
             }
@@ -107,12 +119,6 @@ struct ScheduleConfigSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Start Bake") {
-                        onStartBake()
-                    }
-                    .disabled(viewModel.previewSteps.isEmpty)
                 }
             }
             .onAppear {
