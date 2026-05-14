@@ -19,7 +19,7 @@ struct StepCountdownLabel: View {
             if remaining > 0 {
                 return "starts in \(Self.format(seconds: remaining))"
             }
-            return "starting now"
+            return "up next"
         case .active:
             let anchor = step.schedule?.pausedAt ?? referenceDate
             let remaining = step.computedEndTime.timeIntervalSince(anchor)
