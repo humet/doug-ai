@@ -801,7 +801,7 @@ final class ScheduleViewModel {
         if step.actualEndTime == nil {
             step.actualEndTime = Date()
         }
-        if step.parentStep != nil, let actual = step.actualEndTime {
+        if let actual = step.actualEndTime {
             let delta = actual.timeIntervalSince(step.computedEndTime)
             if delta > 0 {
                 cascade(afterEnd: step.computedEndTime, delta: delta, in: schedule, excluding: step)
