@@ -15,9 +15,14 @@ When building the `doug-coach/` backend, use the `/ai-sdk` skill (installed at `
 xcodebuild -project Doug.xcodeproj -scheme Doug \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 
-# Run tests (Swift Testing for unit, XCTest for UI)
+# Run all tests (Swift Testing for unit, XCTest for UI)
 xcodebuild -project Doug.xcodeproj -scheme Doug \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+
+# Run a specific test class
+xcodebuild -project Doug.xcodeproj -scheme Doug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test \
+  -only-testing:DougTests/LevainBuildCalculatorTests
 
 # Open in Xcode (Cmd+R to run)
 open Doug.xcodeproj
@@ -68,7 +73,7 @@ MVVM + Domain Services. Five layers under `Doug/`:
 
 ## Recipes
 
-Four built-in recipes defined in `Models/Static/RecipeBook.swift` as static constants. Read-only in v1 — no custom recipe editor. Each recipe has an ingredients list and an ordered method (array of `MethodStep`). The scheduler is agnostic to step names — it only reads classification and duration rules.
+Eight built-in recipes defined in `Models/Static/RecipeBook.swift` as static constants. Read-only in v1 — no custom recipe editor. Each recipe has an ingredients list and an ordered method (array of `MethodStep`). The scheduler is agnostic to step names — it only reads classification and duration rules.
 
 Step classifications:
 - `handsOn` — must avoid unavailable windows
@@ -91,3 +96,5 @@ Anthropic API key via xcconfig pattern:
 Swift Testing (`@Test`, `#expect`) for unit tests. XCTest for UI tests.
 
 Domain tests are the priority — they validate the scheduler, temperature math, degree-hours, and hydration calculations as pure Swift functions without needing UI or SwiftData. ViewModel tests use in-memory `ModelContainer`. UI tests cover critical flows (onboarding, schedule creation).
+
+New `Domain/` code must include Swift Testing unit tests. ViewModel changes that affect scheduling or state transitions should include in-memory `ModelContainer` tests.
