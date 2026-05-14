@@ -34,6 +34,8 @@ struct ContentView: View {
                     SettingsView()
                 }
             }
+            .toolbarBackgroundVisibility(.hidden, for: .tabBar)
+            .background(DougTheme.warmCream.ignoresSafeArea())
         }
     }
 }

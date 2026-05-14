@@ -39,7 +39,6 @@ struct StepDetailSheet: View {
                     .padding()
                 }
             }
-            .background(DougTheme.warmCream)
             .navigationTitle(step.stepType.label)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

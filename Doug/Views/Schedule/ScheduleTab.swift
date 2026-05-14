@@ -239,7 +239,6 @@ struct ScheduleTab: View {
             }
             .padding()
         }
-        .background(DougTheme.warmCream)
     }
 
     // MARK: - Active bake
@@ -331,7 +330,6 @@ struct ScheduleTab: View {
                 }
                 .padding()
             }
-            .background(DougTheme.warmCream)
             .task(id: effectiveTickBucket(now: now)) {
                 viewModel.advanceIfReady(now: now, modelContext: modelContext)
             }

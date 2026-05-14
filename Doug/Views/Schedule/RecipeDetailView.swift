@@ -20,7 +20,6 @@ struct RecipeDetailView: View {
             }
             .padding()
         }
-        .background(DougTheme.warmCream)
         .navigationTitle(recipe.name)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {

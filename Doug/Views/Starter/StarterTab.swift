@@ -99,6 +99,7 @@ struct StarterTab: View {
                 revivalSection
                 feedHistorySection
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Starter")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

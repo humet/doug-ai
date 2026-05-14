@@ -125,6 +125,7 @@ struct SettingsView: View {
                     debugSection
                 #endif
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Settings")
             .sheet(isPresented: $showAddWindow) {
                 AddUnavailableWindowSheet(modelContext: modelContext)

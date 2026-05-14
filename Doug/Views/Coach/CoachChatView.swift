@@ -20,7 +20,6 @@ struct CoachChatView: View {
                 messageList
                 inputBar
             }
-            .background(DougTheme.warmCream)
             .navigationTitle("Coach")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

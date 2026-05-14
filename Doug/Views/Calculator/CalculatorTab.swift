@@ -86,6 +86,7 @@ struct CalculatorTab: View {
                     .disabled(targetWeight <= 0)
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Calculator")
         }
     }
