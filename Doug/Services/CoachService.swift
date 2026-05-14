@@ -263,6 +263,9 @@ struct StarterContextPayload {
         let kitchenTempCelsius: Double
         let timeToPeakMinutes: Double?
         let intent: String
+        let starterGrams: Double?
+        let flourGrams: Double?
+        let waterGrams: Double?
     }
 
     struct RevivalPayload {
@@ -289,6 +292,9 @@ struct StarterContextPayload {
                     "intent": feed.intent,
                 ]
                 d["timeToPeakMinutes"] = feed.timeToPeakMinutes as Any
+                if let sg = feed.starterGrams { d["starterGrams"] = sg }
+                if let fg = feed.flourGrams { d["flourGrams"] = fg }
+                if let wg = feed.waterGrams { d["waterGrams"] = wg }
                 return d
             },
         ]

@@ -629,9 +629,20 @@ struct NowStepHero: View {
         case .activateStarter:
             feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
         case .buildLevain:
-            feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
-            if let levainGrams = step.schedule?.recipe.ingredients.levainGrams {
-                feedStarterGrams = String(Int(levainGrams / 11.0))
+            if let recipe = step.schedule?.recipe {
+                let kitchenTemp = step.schedule?.kitchenTemperatureCelsius ?? temp
+                let build = LevainBuildCalculator.calculate(.init(
+                    levainGramsNeeded: recipe.ingredients.levainGrams,
+                    baseRatio: recipe.levainBuildRatio,
+                    referenceTemp: recipe.referenceTemperatureCelsius,
+                    kitchenTemp: kitchenTemp
+                ))
+                feedRatioStarter = build.ratio.starter
+                feedRatioFlour = build.ratio.flour
+                feedRatioWater = build.ratio.water
+                feedStarterGrams = String(Int(build.starterGrams))
+            } else {
+                feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
             }
         case .refeedAndRefrigerate:
             feedRatioStarter = 1; feedRatioFlour = 1; feedRatioWater = 1

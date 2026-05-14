@@ -107,4 +107,8 @@ struct Recipe: Identifiable {
     func bakeTemperature(for stepTypeID: StepTypeID) -> Int {
         method.first { $0.stepTypeID == stepTypeID }?.bakeTemperatureCelsius ?? bakeTemperatureCelsius
     }
+
+    var levainBuildRatio: (starter: Int, flour: Int, water: Int) {
+        method.first { $0.stepTypeID == .buildLevain }?.levainBuildRatio ?? (1, 5, 5)
+    }
 }

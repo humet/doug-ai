@@ -19,6 +19,10 @@ final class StarterViewModel {
     var feedTimestamp = Date()
     var logFeedStarterGrams = ""
 
+    // Levain build state
+    var pendingLevainBuild: LevainBuildCalculator.Result?
+    var pendingLevainRecipeName: String?
+
     // Revival wizard form state
     var revivalDaysSinceLastFed: Int?
     var revivalHasHooch = false
@@ -86,6 +90,23 @@ final class StarterViewModel {
         await NotificationService.shared.scheduleStarterFeedReminder(at: nextFeed, context: context)
     }
 
+    func prepareLevainBuild(for recipe: Recipe, kitchenTemp: Double) {
+        let result = LevainBuildCalculator.calculate(.init(
+            levainGramsNeeded: recipe.ingredients.levainGrams,
+            baseRatio: recipe.levainBuildRatio,
+            referenceTemp: recipe.referenceTemperatureCelsius,
+            kitchenTemp: kitchenTemp
+        ))
+        pendingLevainBuild = result
+        pendingLevainRecipeName = recipe.name
+
+        feedRatioStarter = result.ratio.starter
+        feedRatioFlour = result.ratio.flour
+        feedRatioWater = result.ratio.water
+        logFeedStarterGrams = "\(Int(result.starterGrams))"
+        feedKitchenTemp = kitchenTemp
+    }
+
     func logFeed(modelContext: ModelContext, profile: StarterProfile? = nil, intent: FeedIntent? = nil) {
         let resolvedIntent = intent ?? inferFeedIntent(profile: profile)
         let grams = Double(logFeedStarterGrams.trimmingCharacters(in: .whitespaces))
@@ -107,12 +128,15 @@ final class StarterViewModel {
         feedFlourType = "white"
         feedTimestamp = Date()
         logFeedStarterGrams = ""
+        pendingLevainBuild = nil
+        pendingLevainRecipeName = nil
 
         showLogFeed = false
     }
 
     private func inferFeedIntent(profile: StarterProfile?) -> FeedIntent {
-        switch profile?.starterLifecycleState {
+        if pendingLevainBuild != nil { return .levain }
+        return switch profile?.starterLifecycleState {
         case .activating: .activation
         case .active: .postBake
         default: .maintenance

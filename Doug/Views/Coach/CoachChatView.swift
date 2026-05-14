@@ -292,7 +292,10 @@ struct CoachChatView: View {
                     flourType: log.flourType,
                     kitchenTempCelsius: log.kitchenTemperatureCelsius,
                     timeToPeakMinutes: log.timeToPeakMinutes,
-                    intent: log.feedIntent
+                    intent: log.feedIntent,
+                    starterGrams: log.starterGrams,
+                    flourGrams: log.flourGrams,
+                    waterGrams: log.waterGrams
                 )
             },
             revivalPlan: nil

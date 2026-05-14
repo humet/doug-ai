@@ -10,9 +10,33 @@ struct LogFeedSheet: View {
 
     @State private var showRatioCustomisation = false
 
+    private var isLevainBuild: Bool {
+        viewModel.pendingLevainBuild != nil
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if let build = viewModel.pendingLevainBuild {
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bubbles.and.sparkles")
+                                .font(.title3)
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Levain for \(viewModel.pendingLevainRecipeName ?? "your recipe")")
+                                    .font(.subheadline.bold())
+                                Text("Needs \(Int(build.totalGrams))g total — leftover goes to the fridge")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("~\(String(format: "%.0f", build.estimatedPeakHours))h to peak at \(Int(viewModel.feedKitchenTemp))°C")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
                 Section("Date & Time") {
                     DatePicker("Fed at", selection: $viewModel.feedTimestamp, in: ...Date())
                 }
@@ -76,8 +100,19 @@ struct LogFeedSheet: View {
                             value: $viewModel.feedRatioStarter,
                             in: 1 ... 10
                         )
-                        Stepper("Flour: \(viewModel.feedRatioFlour)", value: $viewModel.feedRatioFlour, in: 1 ... 20)
-                        Stepper("Water: \(viewModel.feedRatioWater)", value: $viewModel.feedRatioWater, in: 1 ... 20)
+                        if isLevainBuild {
+                            Stepper(
+                                "Flour & Water: \(viewModel.feedRatioFlour)",
+                                value: Binding(
+                                    get: { viewModel.feedRatioFlour },
+                                    set: { viewModel.feedRatioFlour = $0; viewModel.feedRatioWater = $0 }
+                                ),
+                                in: 1 ... 20
+                            )
+                        } else {
+                            Stepper("Flour: \(viewModel.feedRatioFlour)", value: $viewModel.feedRatioFlour, in: 1 ... 20)
+                            Stepper("Water: \(viewModel.feedRatioWater)", value: $viewModel.feedRatioWater, in: 1 ... 20)
+                        }
                     }
                 } header: {
                     Text("Amount")
@@ -119,7 +154,9 @@ struct LogFeedSheet: View {
                 }
             }
             .onAppear {
-                if isActivationFeed {
+                if isLevainBuild {
+                    // prepareLevainBuild already set ratio and grams
+                } else if isActivationFeed {
                     viewModel.feedRatioFlour = 5
                     viewModel.feedRatioWater = 5
                 } else {
@@ -138,6 +175,11 @@ struct LogFeedSheet: View {
     }
 
     private var ratioGuidance: String {
+        if isLevainBuild {
+            let ratio = viewModel.pendingLevainBuild?.ratio
+            let r = ratio.map { "\($0.starter):\($0.flour):\($0.water)" } ?? ""
+            return "\(r) adjusted for your kitchen temperature. The amounts include a buffer so the leftover can go straight to the fridge."
+        }
         if isActivationFeed {
             return "1:5:5 gives a strong, predictable rise over ~5–6 hours. Use 1:3:3 for a faster peak (~3–4h), or 1:10:10 to time an overnight feed."
         }
@@ -150,7 +192,7 @@ struct LogFeedSheet: View {
         let flour = retain * Double(viewModel.feedRatioFlour) / Double(viewModel.feedRatioStarter)
         let water = retain * Double(viewModel.feedRatioWater) / Double(viewModel.feedRatioStarter)
 
-        let feedKind: FeedStepKind = isActivationFeed ? .activation : .maintenance
+        let feedKind: FeedStepKind = isLevainBuild ? .levain : isActivationFeed ? .activation : .maintenance
 
         let instruction = FeedInstructions.instruction(
             for: FeedInstructionInput(

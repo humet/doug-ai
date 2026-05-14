@@ -1,0 +1,37 @@
+{
+  "configurations" : [
+    {
+      "id" : "1F371494-B74A-4BDD-807B-2B8F73AA2752",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Doug.xcodeproj",
+      "identifier" : "10DB37C42F912E00003679E8",
+      "name" : "Doug"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:Doug.xcodeproj",
+        "identifier" : "10DB37DD2F912E00003679E8",
+        "name" : "DougUITests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:Doug.xcodeproj",
+        "identifier" : "10DB37D32F912E00003679E8",
+        "name" : "DougTests"
+      }
+    }
+  ],
+  "version" : 1
+}

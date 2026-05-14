@@ -168,7 +168,13 @@ ${
     ? starterContext.recentFeeds
         .map(
           (f) =>
-            `- ${f.timestamp}: ${f.ratio} ${f.flourType} at ${f.kitchenTempCelsius}°C${f.timeToPeakMinutes != null ? ` (peaked in ${f.timeToPeakMinutes}min)` : ""}`
+            `- ${f.timestamp}: ${f.ratio} ${f.flourType} at ${f.kitchenTempCelsius}°C${
+              f.starterGrams != null
+                ? ` (${f.starterGrams}g starter → ${f.flourGrams}g flour + ${f.waterGrams}g water)`
+                : ""
+            }${f.timeToPeakMinutes != null ? ` peaked in ${f.timeToPeakMinutes}min` : ""}${
+              f.intent ? ` [${f.intent}]` : ""
+            }`
         )
         .join("\n")
     : "No recent feeds logged."

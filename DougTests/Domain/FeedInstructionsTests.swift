@@ -71,8 +71,27 @@ struct FeedInstructionsTests {
         #expect(instr.steps.contains { $0.contains("50 g") })
     }
 
+    @Test func levainBuildIncludesGramsAndPeakGuidance() {
+        let input = FeedInstructionInput(
+            retainGrams: 11,
+            addFlourGrams: 57,
+            addWaterGrams: 57,
+            flourType: "white",
+            kitchenTempC: 24,
+            expectedPeakMinutes: 300,
+            kind: .levain,
+            hadHooch: false,
+            neglect: nil
+        )
+        let instr = FeedInstructions.instruction(for: input)
+        #expect(instr.title == "Build your levain")
+        #expect(instr.steps.contains { $0.contains("11 g") })
+        #expect(instr.steps.contains { $0.contains("57 g") })
+        #expect(instr.peakGuidance.contains("fridge"))
+    }
+
     @Test func allKindsYieldNonEmpty() {
-        let kinds: [FeedStepKind] = [.revivalFirst, .revivalMiddle, .revivalFinal, .maintenance]
+        let kinds: [FeedStepKind] = [.revivalFirst, .revivalMiddle, .revivalFinal, .maintenance, .levain]
         for kind in kinds {
             let input = FeedInstructionInput(
                 retainGrams: 20, addFlourGrams: 40, addWaterGrams: 40,

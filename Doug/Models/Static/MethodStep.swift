@@ -10,6 +10,7 @@ struct MethodStep: Identifiable {
     let foldSpacingFraction: Double?
     let inclusionAtFold: Int?
     let bakeTemperatureCelsius: Int?
+    let levainBuildRatio: (starter: Int, flour: Int, water: Int)?
     let subSteps: [MethodStep]
 
     var stepType: StepType {
@@ -33,6 +34,7 @@ struct MethodStep: Identifiable {
         foldSpacingFraction: Double? = nil,
         inclusionAtFold: Int? = nil,
         bakeTemperatureCelsius: Int? = nil,
+        levainBuildRatio: (starter: Int, flour: Int, water: Int)? = nil,
         subSteps: [MethodStep] = []
     ) {
         id = UUID()
@@ -44,6 +46,7 @@ struct MethodStep: Identifiable {
         self.foldSpacingFraction = foldSpacingFraction
         self.inclusionAtFold = inclusionAtFold
         self.bakeTemperatureCelsius = bakeTemperatureCelsius
+        self.levainBuildRatio = levainBuildRatio
         self.subSteps = subSteps
     }
 }

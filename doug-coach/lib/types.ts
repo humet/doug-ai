@@ -69,6 +69,10 @@ export const StarterContextSchema = z.object({
       flourType: z.string(),
       kitchenTempCelsius: z.number(),
       timeToPeakMinutes: z.number().nullable(),
+      intent: z.string().optional(),
+      starterGrams: z.number().nullable().optional(),
+      flourGrams: z.number().nullable().optional(),
+      waterGrams: z.number().nullable().optional(),
     })
   ),
   revivalPlan: z

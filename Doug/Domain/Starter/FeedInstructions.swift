@@ -7,6 +7,7 @@ enum FeedStepKind {
     case revivalFinal
     case maintenance
     case activation
+    case levain
     case postBake
 }
 
@@ -49,6 +50,8 @@ enum FeedInstructions {
             maintenance(input)
         case .activation:
             activation(input)
+        case .levain:
+            levain(input)
         case .postBake:
             postBake(input)
         }
@@ -156,6 +159,24 @@ enum FeedInstructions {
             watchFor: "Doubled in volume with a domed, bubbly top. That's your peak — your starter is active and ready for a levain build.",
             expectedWait: waitString(input.expectedPeakMinutes),
             peakGuidance: "Leave it on the counter and watch for doubling. When the dome just starts to flatten, that's peak. Mark it in the app and your starter is ready to bake with."
+        )
+    }
+
+    // MARK: - Levain Build
+
+    private static func levain(_ input: FeedInstructionInput) -> FeedInstruction {
+        FeedInstruction(
+            title: "Build your levain",
+            steps: [
+                "Weigh \(gramString(input.retainGrams)) of active starter into a clean jar.",
+                "Add \(gramString(input.addFlourGrams)) flour and \(gramString(input.addWaterGrams)) water at ~\(tempString(input.kitchenTempC)).",
+                "Stir until no dry flour remains; mark the starting height on the jar.",
+                "Cover loosely and leave at \(tempString(input.kitchenTempC)). Wait for it to double.",
+                "Use the levain when it peaks — domed top, bubbly throughout. Put any leftover straight in the fridge.",
+            ],
+            watchFor: "Domed top with bubbles throughout, roughly doubled in volume. Use it at or just past peak.",
+            expectedWait: waitString(input.expectedPeakMinutes),
+            peakGuidance: "Watch for the dome to form and the starter to double. When the rise just starts to slow, that's peak — time to mix your dough. Any leftover levain goes straight to the fridge as your maintenance feed."
         )
     }
 

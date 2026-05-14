@@ -45,6 +45,30 @@ struct StarterTab: View {
         return levainStarts.filter { $0 > now }.min()
     }
 
+    private var upcomingRecipe: Recipe? {
+        schedules
+            .first { $0.scheduleStatus == .planning || $0.scheduleStatus == .active }
+            .map { $0.recipe }
+    }
+
+    private var levainBuild: LevainBuildCalculator.Result? {
+        guard let recipe = upcomingRecipe else { return nil }
+        let kitchenTemp = feedLogs.first?.kitchenTemperatureCelsius ?? 22
+        return LevainBuildCalculator.calculate(.init(
+            levainGramsNeeded: recipe.ingredients.levainGrams,
+            baseRatio: recipe.levainBuildRatio,
+            referenceTemp: recipe.referenceTemperatureCelsius,
+            kitchenTemp: kitchenTemp
+        ))
+    }
+
+    private var hasRecentLevainFeed: Bool {
+        guard let latest = feedLogs.first,
+              latest.starterFeedIntent == .levain,
+              Date().timeIntervalSince(latest.timestamp) < 12 * 3600 else { return false }
+        return true
+    }
+
     private var currentSuggestion: FeedSuggestion? {
         viewModel.feedSuggestion(
             profile: profile,
@@ -60,13 +84,17 @@ struct StarterTab: View {
     }
 
     private var risingFeed: StarterFeedLog? {
-        feedLogs.first { $0.starterFeedIntent == .activation && $0.peakTimestamp == nil }
+        feedLogs.first {
+            ($0.starterFeedIntent == .activation || $0.starterFeedIntent == .levain)
+                && $0.peakTimestamp == nil
+        }
     }
 
     var body: some View {
         NavigationStack {
             List {
                 lifecycleSection
+                levainGuidanceSection
                 whatsNextSection
                 revivalSection
                 feedHistorySection
@@ -240,6 +268,67 @@ struct StarterTab: View {
             }
         case .reviving:
             EmptyView()
+        }
+    }
+
+    // MARK: - Levain Build Guidance
+
+    @ViewBuilder
+    private var levainGuidanceSection: some View {
+        if let recipe = upcomingRecipe,
+           let build = levainBuild,
+           (lifecycleState == .active || lifecycleState == .activating),
+           !hasRecentLevainFeed,
+           activeBake == nil
+        {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "bubbles.and.sparkles")
+                            .font(.title3)
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Build Levain for \(recipe.name)")
+                                .font(.subheadline.bold())
+                            let ratio = build.ratio
+                            Text("\(ratio.starter):\(ratio.flour):\(ratio.water) adjusted for \(Int(feedLogs.first?.kitchenTemperatureCelsius ?? 22))°C")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Keep \(Int(build.starterGrams))g starter")
+                            Text("Add \(Int(build.flourGrams))g flour + \(Int(build.waterGrams))g water")
+                        }
+                        .font(.subheadline)
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("\(Int(build.totalGrams))g total")
+                                .font(.subheadline.bold())
+                            Text("~\(String(format: "%.0f", build.estimatedPeakHours))h to peak")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button {
+                        let kitchenTemp = feedLogs.first?.kitchenTemperatureCelsius ?? 22
+                        viewModel.prepareLevainBuild(for: recipe, kitchenTemp: kitchenTemp)
+                        viewModel.showLogFeed = true
+                    } label: {
+                        Label("Log Levain Build", systemImage: "plus.circle.fill")
+                    }
+                    .tint(.green)
+                }
+            } header: {
+                Text("Levain Build")
+            } footer: {
+                Text("Recipe needs \(Int(recipe.ingredients.levainGrams))g levain — extra goes to the fridge as maintenance.")
+            }
         }
     }
 

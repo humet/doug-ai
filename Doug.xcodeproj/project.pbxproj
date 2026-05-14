@@ -51,6 +51,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1022E2802FB62D4D0002579D /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		1022E3232FB62FAE0002579D /* Doug.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = file; path = Doug.xctestplan; sourceTree = "<group>"; };
 		10798AD32FB0D8A2007695FA /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		1084BA652FB4FB74008BDE7D /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		1084BC932FB5CB89008BDE7D /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
@@ -144,6 +146,11 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1022E2822FB62D4D0002579D /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 		10798AD52FB0D8A2007695FA /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
@@ -202,6 +209,7 @@
 		10DB37BC2F912E00003679E8 = {
 			isa = PBXGroup;
 			children = (
+				1022E3232FB62FAE0002579D /* Doug.xctestplan */,
 				10DB37C72F912E00003679E8 /* Doug */,
 				10AA10022FA10000003679E8 /* DougLiveActivity */,
 				10AA10032FA10000003679E8 /* DougLiveActivityShared */,
@@ -420,6 +428,10 @@
 				{
 					ProductGroup = 1084BA672FB4FB74008BDE7D /* Products */;
 					ProjectRef = 1084BA652FB4FB74008BDE7D /* Doug.xcodeproj */;
+				},
+				{
+					ProductGroup = 1022E2822FB62D4D0002579D /* Products */;
+					ProjectRef = 1022E2802FB62D4D0002579D /* Doug.xcodeproj */;
 				},
 			);
 			projectRoot = "";
