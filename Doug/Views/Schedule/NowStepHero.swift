@@ -259,7 +259,7 @@ struct NowStepHero: View {
                     } label: {
                         Label(
                             isSubOverdue
-                                ? (isCovered ? "Remove Lid" : "Done")
+                                ? (isCovered ? "Lid Removed" : "Bread Out")
                                 : (isCovered ? "Remove Lid Early" : "Finish Early"),
                             systemImage: isSubOverdue ? "checkmark.circle.fill" : "forward.fill"
                         )
@@ -273,14 +273,17 @@ struct NowStepHero: View {
                         "Mark Peak"
                     } else if isOverdueFlexible {
                         "Move On"
+                    } else if let label = manualCompletionLabel {
+                        label
                     } else if isPassive {
                         "Finish Early"
                     } else {
                         "Done"
                     }
+                    let isManualReady = manualCompletionLabel != nil
                     let buttonIcon = if isWaitForPeakStep || isLevainAwaitingPeak {
                         "arrow.up.to.line"
-                    } else if isOverdueFlexible {
+                    } else if isOverdueFlexible || isManualReady {
                         "checkmark.circle.fill"
                     } else if isPassive {
                         "forward.fill"
@@ -296,7 +299,7 @@ struct NowStepHero: View {
                             .padding(.vertical, 10)
                     }
                     .adaptiveGlassButtonStyle(
-                        prominent: isWaitForPeakStep || isLevainAwaitingPeak || isOverdueFlexible || !isPassive
+                        prominent: isWaitForPeakStep || isLevainAwaitingPeak || isOverdueFlexible || isManualReady || !isPassive
                     )
                 }
             }
@@ -604,6 +607,16 @@ struct NowStepHero: View {
 
     private var isLevainAwaitingPeak: Bool {
         stepTypeIDEnum == .buildLevain && step.computedEndTime <= Date()
+    }
+
+    private var manualCompletionLabel: String? {
+        guard step.stepStatus == .active, step.computedEndTime <= referenceDate else { return nil }
+        switch stepTypeIDEnum {
+        case .bulkFerment: return "Bulk Done"
+        case .preheat: return "Dough Loaded"
+        case .bakeSheet: return "Bread Out"
+        default: return nil
+        }
     }
 
     @ViewBuilder

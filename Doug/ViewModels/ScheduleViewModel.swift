@@ -901,9 +901,14 @@ final class ScheduleViewModel {
                         advanceSubSteps(in: schedule, now: now)
                         return
                     }
-                    if step.stepTypeID == StepTypeID.buildLevain.rawValue
-                        || step.stepTypeID == StepTypeID.waitForPeak.rawValue
-                    {
+                    let manualSteps: Set<String> = [
+                        StepTypeID.buildLevain.rawValue,
+                        StepTypeID.waitForPeak.rawValue,
+                        StepTypeID.bulkFerment.rawValue,
+                        StepTypeID.preheat.rawValue,
+                        StepTypeID.bakeSheet.rawValue,
+                    ]
+                    if manualSteps.contains(step.stepTypeID) {
                         advanceSubSteps(in: schedule, now: now)
                         return
                     }
