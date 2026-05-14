@@ -163,12 +163,14 @@ final class StarterViewModel {
     func activate(profile: StarterProfile) {
         if let result = StarterStateMachine.activate(currentState: profile.starterLifecycleState) {
             profile.starterLifecycleState = result.newState
+            profile.starterStorageType = .counter
         }
     }
 
     func refrigerate(profile: StarterProfile) {
         if let result = StarterStateMachine.refrigerate(currentState: profile.starterLifecycleState) {
             profile.starterLifecycleState = result.newState
+            profile.starterStorageType = .fridge
         }
     }
 
@@ -176,6 +178,7 @@ final class StarterViewModel {
         logFeed(modelContext: modelContext, profile: profile, intent: .postBake)
         if let result = StarterStateMachine.refrigerate(currentState: profile.starterLifecycleState) {
             profile.starterLifecycleState = result.newState
+            profile.starterStorageType = .fridge
         }
     }
 

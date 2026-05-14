@@ -57,7 +57,7 @@ struct ScheduleTab: View {
                 }
                 .sheet(isPresented: $showConfig) {
                     ScheduleConfigSheet(viewModel: viewModel) {
-                        if viewModel.hasActivationPreamble {
+                        if viewModel.hasActivationPreamble || viewModel.detectedLevain != nil {
                             withAnimation(.smooth) {
                                 viewModel.startBake(modelContext: modelContext)
                             }
