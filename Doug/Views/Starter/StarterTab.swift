@@ -29,6 +29,10 @@ struct StarterTab: View {
         revivalPlans.first(where: { $0.revivalStatus == .active })
     }
 
+    private var activeBake: Schedule? {
+        schedules.first { $0.scheduleStatus == .active }
+    }
+
     private var upcomingBakeStart: Date? {
         let candidates = schedules.filter {
             $0.scheduleStatus == .planning || $0.scheduleStatus == .active
@@ -169,6 +173,35 @@ struct StarterTab: View {
 
     @ViewBuilder
     private var lifecycleActions: some View {
+        if let bake = activeBake {
+            HStack(spacing: 8) {
+                Image(systemName: "oven")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Bake in progress")
+                        .font(.subheadline.weight(.medium))
+                    Text(bake.recipe.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if lifecycleState == .activating, risingFeed != nil {
+                Button {
+                    if let feed = risingFeed {
+                        viewModel.markPeak(for: feed, profile: profile, allLogs: Array(feedLogs))
+                    }
+                } label: {
+                    Label("Mark Peak", systemImage: "chart.line.uptrend.xyaxis")
+                }
+                .tint(.green)
+            }
+        } else {
+            lifecycleActionsContent
+        }
+    }
+
+    @ViewBuilder
+    private var lifecycleActionsContent: some View {
         switch lifecycleState {
         case .dormant:
             Button {
