@@ -276,13 +276,13 @@ struct ScheduleBuilderTests {
             name: "Gym",
             isRecurring: true,
             daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
-            startHour: 8, startMinute: 0,
-            endHour: 9, endMinute: 30
+            startHour: 8, startMinute: 30,
+            endHour: 10, endMinute: 0
         )
 
         let input = ScheduleBuilderInput(
             recipe: RecipeBook.countryLoaf,
-            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 15),
+            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 0),
             kitchenTemperatureCelsius: 24.0,
             availability: Self.defaultAvailability,
             unavailableWindows: [window]

@@ -112,6 +112,7 @@ enum ScheduleBuilder {
 
         var cursor = input.targetBreadReadyTime
         var scheduledSteps: [ScheduledStep] = []
+        var pendingPresenceGap: TimeInterval = 0
 
         // Iterate method steps in REVERSE order (backward from target time)
         let method = input.recipe.method
@@ -152,7 +153,7 @@ enum ScheduleBuilder {
                         calendar: calendar
                     )
 
-                    let conflictingMoment = moments.first { moment in
+                    let conflictingMoment = moments.last { moment in
                         !AvailabilityResolver.momentOverlaps(moment, blocks: unavailableBlocks).isEmpty
                     }
 
@@ -161,7 +162,7 @@ enum ScheduleBuilder {
                             conflictingMoment, blocks: unavailableBlocks
                         ).first!
 
-                        let shiftAmount = conflictingMoment.timeIntervalSince(block.start)
+                        let shiftAmount = conflictingMoment.timeIntervalSince(block.start) + 60
                         let shiftedEnd = tentativeEnd.addingTimeInterval(-shiftAmount)
                         let shiftedStart = calendar.date(
                             byAdding: .minute, value: -Int(duration), to: shiftedEnd
@@ -181,27 +182,18 @@ enum ScheduleBuilder {
                             ))
                         }
 
-                        // Expand the last scheduled flexible step (Cold Retard) to absorb the gap
-                        if let lastIdx = scheduledSteps.indices.last,
-                           scheduledSteps[lastIdx].classification == .passiveFlexible
-                        {
-                            let lastStep = scheduledSteps[lastIdx]
-                            scheduledSteps[lastIdx] = ScheduledStep(
-                                methodStepID: lastStep.methodStepID,
-                                stepTypeID: lastStep.stepTypeID,
-                                label: lastStep.label,
-                                classification: lastStep.classification,
-                                startTime: shiftedEnd,
-                                endTime: lastStep.endTime,
-                                durationMinutes: lastStep.endTime.timeIntervalSince(shiftedEnd) / 60.0,
-                                subSteps: lastStep.subSteps,
-                                requiresTempReading: lastStep.requiresTempReading
-                            )
-                        }
-
+                        pendingPresenceGap = shiftAmount
                         tentativeEnd = shiftedEnd
                         tentativeStart = shiftedStart
                     }
+                }
+
+                if stepType.classification == .passiveFlexible, pendingPresenceGap > 0 {
+                    duration += pendingPresenceGap / 60
+                    tentativeStart = calendar.date(
+                        byAdding: .minute, value: -Int(duration), to: tentativeEnd
+                    ) ?? tentativeEnd
+                    pendingPresenceGap = 0
                 }
 
                 // Passive steps can run through unavailable windows
