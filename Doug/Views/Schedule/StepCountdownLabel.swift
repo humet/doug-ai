@@ -30,6 +30,10 @@ struct StepCountdownLabel: View {
             if step.stepType.classification == .passiveFlexible {
                 return "\(Self.format(seconds: overdue)) over — resting"
             }
+            let stepID = StepTypeID(rawValue: step.stepTypeID)
+            if stepID == .buildLevain || stepID == .waitForPeak {
+                return "waiting for peak"
+            }
             return "\(Self.format(seconds: overdue)) overdue"
         case .done:
             let actualEnd = step.actualEndTime ?? step.computedEndTime
@@ -51,8 +55,13 @@ struct StepCountdownLabel: View {
             let anchor = step.schedule?.pausedAt ?? referenceDate
             let remaining = step.computedEndTime.timeIntervalSince(anchor)
             if remaining < 0 {
-                return step.stepType.classification == .passiveFlexible
-                    ? DougTheme.stepActive : .red
+                let stepID = StepTypeID(rawValue: step.stepTypeID)
+                if step.stepType.classification == .passiveFlexible
+                    || stepID == .buildLevain || stepID == .waitForPeak
+                {
+                    return DougTheme.stepActive
+                }
+                return .red
             }
             if remaining < 5 * 60 { return .red }
             return DougTheme.stepActive

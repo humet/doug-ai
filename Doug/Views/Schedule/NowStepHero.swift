@@ -269,7 +269,7 @@ struct NowStepHero: View {
                     }
                     .adaptiveGlassButtonStyle(prominent: isSubOverdue)
                 } else {
-                    let buttonLabel = if isWaitForPeakStep {
+                    let buttonLabel = if isWaitForPeakStep || isLevainAwaitingPeak {
                         "Mark Peak"
                     } else if isOverdueFlexible {
                         "Move On"
@@ -278,7 +278,7 @@ struct NowStepHero: View {
                     } else {
                         "Done"
                     }
-                    let buttonIcon = if isWaitForPeakStep {
+                    let buttonIcon = if isWaitForPeakStep || isLevainAwaitingPeak {
                         "arrow.up.to.line"
                     } else if isOverdueFlexible {
                         "checkmark.circle.fill"
@@ -296,7 +296,7 @@ struct NowStepHero: View {
                             .padding(.vertical, 10)
                     }
                     .adaptiveGlassButtonStyle(
-                        prominent: isWaitForPeakStep || isOverdueFlexible || !isPassive
+                        prominent: isWaitForPeakStep || isLevainAwaitingPeak || isOverdueFlexible || !isPassive
                     )
                 }
             }
@@ -602,6 +602,10 @@ struct NowStepHero: View {
         stepTypeIDEnum == .waitForPeak
     }
 
+    private var isLevainAwaitingPeak: Bool {
+        stepTypeIDEnum == .buildLevain && step.computedEndTime <= Date()
+    }
+
     @ViewBuilder
     private var inlineFeedEntry: some View {
         if isStarterRelatedStep, step.stepStatus == .active {
@@ -649,7 +653,7 @@ struct NowStepHero: View {
     }
 
     private func completeCurrent() {
-        if isStarterRelatedStep || isWaitForPeakStep {
+        if isStarterRelatedStep || isWaitForPeakStep || isLevainAwaitingPeak {
             viewModel.markStepDone(
                 step,
                 feedDetails: isStarterRelatedStep ? currentFeedDetails : nil,
