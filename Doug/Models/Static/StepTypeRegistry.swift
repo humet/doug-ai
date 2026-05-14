@@ -23,7 +23,7 @@ enum StepTypeRegistry {
             baseDurationMinutes: 45,
             isTemperatureAdjusted: false,
             referenceTemperatureCelsius: nil,
-            flexRange: 30 ... 60,
+            flexRange: 30 ... 180,
             requiresTempReading: false,
             instructionText: "Mix flour and water until no dry flour remains. Cover and rest. Do not add salt or levain yet.",
             notificationText: "Time to autolyse — mix flour and water, then rest. No salt or levain yet.",

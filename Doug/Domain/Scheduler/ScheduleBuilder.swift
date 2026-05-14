@@ -363,23 +363,56 @@ enum ScheduleBuilder {
             result.append(step)
         }
 
-        // Anchor in-progress levain to its real fed time
+        // Anchor in-progress levain to its real fed time and close the gap
         if let ctx = input.levainContext,
            let levainIdx = result.firstIndex(where: { $0.levainElapsedMinutes != nil })
         {
             let old = result[levainIdx]
+            let levainEnd = max(
+                ctx.fedAt.addingTimeInterval(ctx.expectedPeakMinutes * 60),
+                Date()
+            )
+
             result[levainIdx] = ScheduledStep(
                 methodStepID: old.methodStepID,
                 stepTypeID: old.stepTypeID,
                 label: old.label,
                 classification: old.classification,
                 startTime: ctx.fedAt,
-                endTime: old.endTime,
+                endTime: levainEnd,
                 durationMinutes: old.durationMinutes,
                 subSteps: old.subSteps,
                 requiresTempReading: old.requiresTempReading,
                 levainElapsedMinutes: old.levainElapsedMinutes
             )
+
+            let nextIdx = levainIdx + 1
+            if nextIdx < result.count {
+                let next = result[nextIdx]
+                let gap = next.startTime.timeIntervalSince(levainEnd)
+
+                if gap > 0, next.classification == .passiveFlexible {
+                    let methodFlex = method.first { $0.stepTypeID == next.stepTypeID }
+                    let maxDuration = methodFlex?.effectiveFlexRange?.upperBound
+                        ?? next.durationMinutes
+                    let extendBy = min(gap, (maxDuration - next.durationMinutes) * 60)
+
+                    if extendBy > 0 {
+                        result[nextIdx] = ScheduledStep(
+                            methodStepID: next.methodStepID,
+                            stepTypeID: next.stepTypeID,
+                            label: next.label,
+                            classification: next.classification,
+                            startTime: next.startTime.addingTimeInterval(-extendBy),
+                            endTime: next.endTime,
+                            durationMinutes: next.durationMinutes + (extendBy / 60.0),
+                            subSteps: next.subSteps,
+                            requiresTempReading: next.requiresTempReading
+                        )
+                        print("[ScheduleBuilder] extended \(next.label) earlier by \(Int(extendBy / 60))min to close levain gap")
+                    }
+                }
+            }
         }
 
         // Enforce earliest start: shift pre-flex steps forward, compress flex step

@@ -898,6 +898,12 @@ final class ScheduleViewModel {
                         advanceSubSteps(in: schedule, now: now)
                         return
                     }
+                    if step.stepTypeID == StepTypeID.buildLevain.rawValue
+                        || step.stepTypeID == StepTypeID.waitForPeak.rawValue
+                    {
+                        advanceSubSteps(in: schedule, now: now)
+                        return
+                    }
                     step.stepStatus = .done
                     step.actualEndTime = step.subSteps.isEmpty ? step.computedEndTime : now
                     didChange = true
