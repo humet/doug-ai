@@ -23,16 +23,18 @@ struct ScheduleViewModelApplyOptionTests {
         // ScheduleBuilder's single-shot local resolution fails: the shape
         // can't fit in its tentative evening slot AND can't shift earlier
         // into the narrow 15-minute gap between the blocks.
-        let saturday = try #require(Calendar.current.date(
-            from: DateComponents(year: 2026, month: 4, day: 18)
-        ))
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let nextSaturday = try #require(
+            cal.nextDate(after: today, matching: DateComponents(weekday: 7), matchingPolicy: .nextTime)
+        )
         let blockEarly = UnavailableWindow(
             name: "Saturday afternoon errand",
             isRecurring: false,
             daysOfWeek: [],
             startHour: 17, startMinute: 0,
             endHour: 17, endMinute: 45,
-            specificDate: saturday
+            specificDate: nextSaturday
         )
         let blockLate = UnavailableWindow(
             name: "Saturday evening out",
@@ -40,19 +42,17 @@ struct ScheduleViewModelApplyOptionTests {
             daysOfWeek: [],
             startHour: 18, startMinute: 0,
             endHour: 22, endMinute: 0,
-            specificDate: saturday
+            specificDate: nextSaturday
         )
         ctx.insert(blockEarly)
         ctx.insert(blockLate)
 
-        // Target: Sunday 2026-04-19 09:00 → shape lands Saturday evening
+        // Target: Sunday 09:00 → shape lands Saturday evening
         // in blockLate; resolution shifts it to just-before blockLate where
         // it overlaps blockEarly → .conflict.
-        let sunday9am = try #require(Calendar.current.date(
-            from: DateComponents(
-                year: 2026, month: 4, day: 19, hour: 9, minute: 0
-            )
-        ))
+        let sunday9am = try #require(
+            cal.date(byAdding: .day, value: 1, to: cal.date(bySettingHour: 9, minute: 0, second: 0, of: nextSaturday)!)
+        )
 
         let viewModel = ScheduleViewModel()
         viewModel.selectedRecipeID = .countryLoaf

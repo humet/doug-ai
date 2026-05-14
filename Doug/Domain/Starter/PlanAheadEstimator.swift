@@ -37,6 +37,13 @@ enum PlanAheadEstimator {
             )
         }
 
+        let twoDaysBefore = calendar.date(byAdding: .day, value: -2, to: targetBreadReadyTime)
+            ?? targetBreadReadyTime
+        var earliestComponents = calendar.dateComponents([.year, .month, .day, .timeZone], from: twoDaysBefore)
+        earliestComponents.hour = avail.startHour
+        earliestComponents.minute = avail.startMinute
+        let earliestStart = calendar.date(from: earliestComponents)
+
         let input = ScheduleBuilderInput(
             recipe: recipe,
             targetBreadReadyTime: targetBreadReadyTime,
@@ -45,7 +52,8 @@ enum PlanAheadEstimator {
             unavailableWindows: unavailableWindows,
             calendar: calendar,
             peakProfile: peakProfile,
-            levainContext: nil
+            levainContext: nil,
+            earliestStartTime: earliestStart
         )
 
         let scheduleResult = ScheduleBuilder.build(input)

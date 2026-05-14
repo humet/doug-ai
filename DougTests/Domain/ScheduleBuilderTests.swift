@@ -43,7 +43,7 @@ struct ScheduleBuilderTests {
 
         #expect(!steps.isEmpty)
         #expect(steps.first?.stepTypeID == StepTypeID.buildLevain)
-        #expect(steps.last?.stepTypeID == StepTypeID.bakeUncovered)
+        #expect(steps.last?.stepTypeID == StepTypeID.bake)
 
         // Steps should be in chronological order
         for i in 1 ..< steps.count {
@@ -125,7 +125,7 @@ struct ScheduleBuilderTests {
     @Test(arguments: RecipeBook.all)
     func allRecipesBuildSuccessfully(recipe: Recipe) throws {
         let hasColdRetard = recipe.method.contains { $0.stepTypeID == .coldRetard }
-        let targetHour = hasColdRetard ? 9 : 18
+        let targetHour = hasColdRetard ? 9 : 20
         let input = ScheduleBuilderInput(
             recipe: recipe,
             targetBreadReadyTime: Self.targetTime(hour: targetHour),

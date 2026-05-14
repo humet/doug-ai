@@ -814,6 +814,13 @@ final class ScheduleViewModel {
             }
         }
 
+        if let parent = step.parentStep {
+            let lastSubEnd = parent.subSteps.map(\.computedEndTime).max()
+            if let end = lastSubEnd, end > parent.computedEndTime {
+                parent.computedEndTime = end
+            }
+        }
+
         applyStepSideEffects(
             step, event: .completed, feedDetails: feedDetails,
             profile: starterProfile, modelContext: modelContext
@@ -841,24 +848,9 @@ final class ScheduleViewModel {
             candidate.stepStatus = .upcoming
         }
 
-        let now = Date()
-        let oldEnd = step.computedEndTime
-        let elapsed = (step.actualEndTime ?? now).timeIntervalSince(step.computedStartTime)
-        let remaining = max((step.computedDurationMinutes * 60) - elapsed, 60)
-
         step.stepStatus = .active
         step.actualEndTime = nil
-        step.computedStartTime = now
-        step.computedEndTime = now.addingTimeInterval(remaining)
 
-        cascade(
-            afterEnd: oldEnd,
-            delta: step.computedEndTime.timeIntervalSince(oldEnd),
-            in: schedule,
-            excluding: step
-        )
-
-        rescheduleSubSteps(of: step)
         syncLiveActivity()
     }
 

@@ -3,7 +3,7 @@ import Testing
 
 struct RecipeTests {
     @Test func allRecipesExist() {
-        #expect(RecipeBook.all.count == 4)
+        #expect(RecipeBook.all.count == 8)
     }
 
     @Test func recipeIDsAreUnique() {
@@ -25,7 +25,7 @@ struct RecipeTests {
 
         let stepTypes = recipe.method.map(\.stepTypeID)
         #expect(stepTypes.first == .buildLevain)
-        #expect(stepTypes.last == .bakeUncovered)
+        #expect(stepTypes.last == .bake)
         #expect(stepTypes.contains(.bulkFerment))
     }
 

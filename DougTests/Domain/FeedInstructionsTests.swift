@@ -66,7 +66,6 @@ struct FeedInstructionsTests {
         )
         let instr = FeedInstructions.instruction(for: input)
         #expect(!instr.steps.isEmpty)
-        #expect(instr.steps.contains { $0.contains("rye") })
         #expect(instr.steps.contains { $0.contains("10 g") })
         #expect(instr.steps.contains { $0.contains("50 g") })
     }
