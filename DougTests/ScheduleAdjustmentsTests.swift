@@ -181,7 +181,7 @@ struct ScheduleAdjustmentsTests {
         #expect(steps[2].stepStatus == .upcoming)
     }
 
-    @Test func advanceIfReadyAutoCompletesPassiveFixed() throws {
+    @Test func advanceIfReadyDoesNotAutoCompleteBulkFerment() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
         // Anchor so all three steps ended in the past.
@@ -197,9 +197,9 @@ struct ScheduleAdjustmentsTests {
 
         vm.advanceIfReady(now: Date(), modelContext: context)
 
-        // Bulk ferment (passiveFixed) auto-completes when timer expires.
-        #expect(steps[2].stepStatus == .done)
-        #expect(steps[2].actualEndTime != nil)
+        // Bulk ferment requires baker judgment — stays active past timer.
+        #expect(steps[2].stepStatus == .active)
+        #expect(steps[2].actualEndTime == nil)
     }
 
     @Test func advanceIfReadyWaitsOnUnconfirmedHandsOn() throws {

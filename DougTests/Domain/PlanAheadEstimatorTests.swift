@@ -33,7 +33,7 @@ struct PlanAheadEstimatorTests {
     @Test func feasibleEstimateReturnsActivateByBeforeLevainStart() {
         let result = PlanAheadEstimator.estimate(
             recipe: RecipeBook.countryLoaf,
-            targetBreadReadyTime: Self.date(day: 16, hour: 21),
+            targetBreadReadyTime: Self.date(day: 16, hour: 9),
             kitchenTemperatureCelsius: 22,
             availability: Self.defaultAvailability,
             unavailableWindows: [],
@@ -55,7 +55,7 @@ struct PlanAheadEstimatorTests {
     @Test func activateByLandsDuringAvailableHours() {
         let result = PlanAheadEstimator.estimate(
             recipe: RecipeBook.countryLoaf,
-            targetBreadReadyTime: Self.date(day: 16, hour: 21),
+            targetBreadReadyTime: Self.date(day: 16, hour: 9),
             kitchenTemperatureCelsius: 22,
             availability: Self.defaultAvailability,
             unavailableWindows: [],
@@ -93,7 +93,7 @@ struct PlanAheadEstimatorTests {
 
         let result = PlanAheadEstimator.estimate(
             recipe: RecipeBook.countryLoaf,
-            targetBreadReadyTime: Self.date(day: 16, hour: 21),
+            targetBreadReadyTime: Self.date(day: 16, hour: 9),
             kitchenTemperatureCelsius: 22,
             availability: Self.defaultAvailability,
             unavailableWindows: [eveningBlock],
@@ -115,9 +115,11 @@ struct PlanAheadEstimatorTests {
 
     @Test(arguments: RecipeBook.all)
     func allRecipesProduceFeasibleEstimate(recipe: Recipe) {
+        let hasColdRetard = recipe.method.contains { $0.stepTypeID == .coldRetard }
+        let targetHour = hasColdRetard ? 9 : 20
         let result = PlanAheadEstimator.estimate(
             recipe: recipe,
-            targetBreadReadyTime: Self.date(day: 18, hour: 18),
+            targetBreadReadyTime: Self.date(day: 18, hour: targetHour),
             kitchenTemperatureCelsius: 23,
             availability: Self.defaultAvailability,
             unavailableWindows: [],
@@ -202,7 +204,7 @@ struct PlanAheadEstimatorTests {
     @Test func usesActivePeakAverageWhenProvided() {
         let result = PlanAheadEstimator.estimate(
             recipe: RecipeBook.countryLoaf,
-            targetBreadReadyTime: Self.date(day: 18, hour: 18),
+            targetBreadReadyTime: Self.date(day: 18, hour: 9),
             kitchenTemperatureCelsius: 22,
             availability: Self.defaultAvailability,
             unavailableWindows: [],
