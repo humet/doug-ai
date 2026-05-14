@@ -58,7 +58,11 @@ enum BakeCoordinator {
             )
 
         case (.buildLevain, .completed):
-            return [.markPeakOnLatestFeed(.levain)]
+            var effects: [StarterSideEffect] = [.markPeakOnLatestFeed(.levain)]
+            if let transition = StarterStateMachine.markPeakConfirmed(currentState: starterState) {
+                effects.insert(.transitionLifecycle(transition), at: 0)
+            }
+            return effects
 
         case (.refeedAndRefrigerate, .completed):
             return refeedAndRefrigerateCompleted(

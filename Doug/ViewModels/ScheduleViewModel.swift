@@ -666,9 +666,14 @@ final class ScheduleViewModel {
         }
 
         activeSchedule = schedule
+        promoteNextUpcoming(in: schedule)
 
-        if useActiveLevain {
-            promoteNextUpcoming(in: schedule)
+        if let firstActive = orderedTopLevelSteps(in: schedule).first(where: { $0.stepStatus == .active }) {
+            let profiles = (try? modelContext.fetch(FetchDescriptor<StarterProfile>())) ?? []
+            applyStepSideEffects(
+                firstActive, event: .started, feedDetails: nil,
+                profile: profiles.first, modelContext: modelContext
+            )
         }
 
         Task {
@@ -1179,14 +1184,16 @@ final class ScheduleViewModel {
                 let descriptor = FetchDescriptor<StarterFeedLog>(
                     sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
                 )
-                if let logs = try? modelContext.fetch(descriptor),
-                   let latest = logs.first(where: { $0.starterFeedIntent == intent && $0.peakTimestamp == nil })
-                {
-                    latest.markPeak(at: Date())
-                    if let avg = profile.activePeakAverageMinutes, let peak = latest.timeToPeakMinutes {
-                        profile.activePeakAverageMinutes = (avg + peak) / 2.0
-                    } else if let peak = latest.timeToPeakMinutes {
-                        profile.activePeakAverageMinutes = peak
+                if let logs = try? modelContext.fetch(descriptor) {
+                    let target = logs.first(where: { $0.starterFeedIntent == intent && $0.peakTimestamp == nil })
+                        ?? logs.first(where: { $0.starterFeedIntent == .activation && $0.peakTimestamp == nil })
+                    if let feed = target {
+                        feed.markPeak(at: Date())
+                        if let avg = profile.activePeakAverageMinutes, let peak = feed.timeToPeakMinutes {
+                            profile.activePeakAverageMinutes = (avg + peak) / 2.0
+                        } else if let peak = feed.timeToPeakMinutes {
+                            profile.activePeakAverageMinutes = peak
+                        }
                     }
                 }
             case let .updateStorageType(type):
