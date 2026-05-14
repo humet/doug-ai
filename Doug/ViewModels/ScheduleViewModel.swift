@@ -236,30 +236,7 @@ final class ScheduleViewModel {
                 }
             }
 
-            var combinedSteps = preamble + shiftedSteps
-
-            let refeedAfterIndex = combinedSteps.lastIndex(where: {
-                $0.stepTypeID == .buildLevain
-            }) ?? combinedSteps.firstIndex(where: {
-                $0.stepTypeID == .autolyse || $0.stepTypeID == .mix
-            })
-
-            if let insertIdx = refeedAfterIndex {
-                let anchor = combinedSteps[insertIdx]
-                let refeedStart = anchor.endTime
-                let refeedStep = ScheduledStep(
-                    methodStepID: UUID(),
-                    stepTypeID: .refeedAndRefrigerate,
-                    label: "Feed & Refrigerate Starter",
-                    classification: .handsOn,
-                    startTime: refeedStart,
-                    endTime: refeedStart.addingTimeInterval(10 * 60),
-                    durationMinutes: 10
-                )
-                combinedSteps.insert(refeedStep, at: insertIdx + 1)
-            }
-
-            let allSteps = combinedSteps
+            let allSteps = preamble + shiftedSteps
 
             let firstActionable = allSteps.first(where: {
                 $0.stepTypeID != .fridgeRest && $0.levainElapsedMinutes == nil
@@ -700,6 +677,13 @@ final class ScheduleViewModel {
 
         Task {
             await NotificationService.shared.scheduleNotifications(for: persistedSteps)
+
+            if let autolyseStep = persistedSteps.first(where: {
+                StepTypeID(rawValue: $0.stepTypeID) == .autolyse
+            }) {
+                let reminderTime = autolyseStep.computedStartTime.addingTimeInterval(5 * 60)
+                await NotificationService.shared.scheduleRefeedReminder(at: reminderTime)
+            }
         }
         syncLiveActivity()
     }
@@ -1295,6 +1279,7 @@ final class ScheduleViewModel {
         guard let schedule = activeSchedule else { return }
         let steps = allSteps(in: schedule)
         NotificationService.shared.cancelNotifications(for: steps)
+        NotificationService.shared.cancelRefeedReminder()
         activeSchedule = nil
         activeConflicts = []
         modelContext.delete(schedule)

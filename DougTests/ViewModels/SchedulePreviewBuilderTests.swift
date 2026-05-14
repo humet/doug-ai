@@ -175,7 +175,7 @@ struct SchedulePreviewBuilderTests {
         #expect(stepTypes.contains(.activateStarter))
         #expect(stepTypes.contains(.waitForPeak))
         #expect(stepTypes.contains(.buildLevain))
-        #expect(stepTypes.contains(.refeedAndRefrigerate))
+        #expect(!stepTypes.contains(.refeedAndRefrigerate))
     }
 
     @Test func dormantStarterPreambleIsChronological() throws {
@@ -268,7 +268,7 @@ struct SchedulePreviewBuilderTests {
         #expect(!stepTypes.contains(.waitForPeak))
         #expect(!stepTypes.contains(.fridgeRest))
         #expect(stepTypes.first == .buildLevain)
-        #expect(stepTypes.contains(.refeedAndRefrigerate))
+        #expect(!stepTypes.contains(.refeedAndRefrigerate))
     }
 
     // MARK: - Activating Starter
@@ -408,40 +408,6 @@ struct SchedulePreviewBuilderTests {
         }
     }
 
-    // MARK: - Post-Bake Step
-
-    @Test func everyRecipeIncludesRefeedAndRefrigerate() throws {
-        let container = try makeContainer()
-        let ctx = container.mainContext
-        let avail = setupAvailability(context: ctx)
-        let profile = setupStarterProfile(context: ctx, state: .active)
-
-        let recipes: [RecipeID] = [.countryLoaf, .highHydrationArtisan, .wholeWheatHoney, .oliveRosemary]
-
-        for recipeID in recipes {
-            let vm = ScheduleViewModel()
-            vm.selectedRecipeID = recipeID
-            vm.kitchenTemperature = 22
-            vm.targetDate = targetDayAfterTomorrow(hour: 9)
-
-            vm.buildPreview(
-                availability: avail,
-                windows: [],
-                feedLogs: [],
-                starterProfile: profile
-            )
-
-            #expect(
-                vm.conflict == nil,
-                "\(recipeID.rawValue) had conflict: \(vm.conflict?.message ?? "")"
-            )
-            let hasRefeed = vm.previewSteps.contains { $0.stepTypeID == .refeedAndRefrigerate }
-            #expect(
-                hasRefeed,
-                "\(recipeID.rawValue) should include refeedAndRefrigerate"
-            )
-        }
-    }
 
     // MARK: - Levain Detection
 

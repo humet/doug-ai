@@ -246,6 +246,41 @@ final class NotificationService {
         } catch {}
     }
 
+    // MARK: - Refeed Reminder
+
+    private static let refeedReminderIdentifier = "refeed-starter-reminder"
+
+    func scheduleRefeedReminder(at date: Date) async {
+        guard date > Date() else { return }
+        let authorized = await requestAuthorization()
+        guard authorized else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Feed & Refrigerate Your Starter"
+        content.body = "Your autolyse is resting — good time to feed your starter and put it back in the fridge."
+        content.sound = .default
+        content.categoryIdentifier = Category.starterFeed
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: max(date.timeIntervalSinceNow, 1),
+            repeats: false
+        )
+
+        let request = UNNotificationRequest(
+            identifier: Self.refeedReminderIdentifier,
+            content: content,
+            trigger: trigger
+        )
+
+        do {
+            try await center.add(request)
+        } catch {}
+    }
+
+    func cancelRefeedReminder() {
+        center.removePendingNotificationRequests(withIdentifiers: [Self.refeedReminderIdentifier])
+    }
+
     // MARK: - Cancel & Reschedule
 
     /// Cancels all notifications for a schedule's steps.
