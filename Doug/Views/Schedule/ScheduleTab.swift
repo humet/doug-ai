@@ -8,7 +8,6 @@ struct ScheduleTab: View {
     @State private var showCancelConfirm = false
     @State private var showCoachChat = false
     @State private var coachPrefill: String?
-    @State private var showRecipeSwitcher = false
 
     @Query private var availabilities: [UserAvailability]
     @Query private var windows: [UnavailableWindow]
@@ -162,9 +161,6 @@ struct ScheduleTab: View {
                         initialMessage: coachPrefill
                     )
                     .onDisappear { coachPrefill = nil }
-                }
-                .sheet(isPresented: $showRecipeSwitcher) {
-                    RecipeSwitcherSheet(viewModel: viewModel)
                 }
                 .alert(
                     "Cancel this bake?",
@@ -423,11 +419,6 @@ struct ScheduleTab: View {
                 } label: {
                     Label("Finish bake", systemImage: "checkmark.seal")
                 }
-            }
-            Button {
-                showRecipeSwitcher = true
-            } label: {
-                Label("Switch recipe", systemImage: "arrow.triangle.2.circlepath")
             }
             Button(role: .destructive) {
                 showCancelConfirm = true
