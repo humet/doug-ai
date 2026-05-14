@@ -236,17 +236,30 @@ final class ScheduleViewModel {
                 }
             }
 
-            let bakeEnd = shiftedSteps.last?.endTime ?? targetDate
-            let postBakeStep = ScheduledStep(
-                methodStepID: UUID(),
-                stepTypeID: .refeedAndRefrigerate,
-                label: "Feed & Refrigerate Starter",
-                classification: .handsOn,
-                startTime: bakeEnd,
-                endTime: bakeEnd.addingTimeInterval(10 * 60),
-                durationMinutes: 10
-            )
-            let allSteps = preamble + shiftedSteps + [postBakeStep]
+            var combinedSteps = preamble + shiftedSteps
+
+            let refeedAfterIndex = combinedSteps.lastIndex(where: {
+                $0.stepTypeID == .buildLevain
+            }) ?? combinedSteps.firstIndex(where: {
+                $0.stepTypeID == .autolyse || $0.stepTypeID == .mix
+            })
+
+            if let insertIdx = refeedAfterIndex {
+                let anchor = combinedSteps[insertIdx]
+                let refeedStart = anchor.endTime
+                let refeedStep = ScheduledStep(
+                    methodStepID: UUID(),
+                    stepTypeID: .refeedAndRefrigerate,
+                    label: "Feed & Refrigerate Starter",
+                    classification: .handsOn,
+                    startTime: refeedStart,
+                    endTime: refeedStart.addingTimeInterval(10 * 60),
+                    durationMinutes: 10
+                )
+                combinedSteps.insert(refeedStep, at: insertIdx + 1)
+            }
+
+            let allSteps = combinedSteps
 
             let firstActionable = allSteps.first(where: {
                 $0.stepTypeID != .fridgeRest && $0.levainElapsedMinutes == nil

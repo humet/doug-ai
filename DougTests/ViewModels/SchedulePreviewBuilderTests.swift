@@ -175,7 +175,7 @@ struct SchedulePreviewBuilderTests {
         #expect(stepTypes.contains(.activateStarter))
         #expect(stepTypes.contains(.waitForPeak))
         #expect(stepTypes.contains(.buildLevain))
-        #expect(stepTypes.last == .refeedAndRefrigerate)
+        #expect(stepTypes.contains(.refeedAndRefrigerate))
     }
 
     @Test func dormantStarterPreambleIsChronological() throws {
@@ -268,7 +268,7 @@ struct SchedulePreviewBuilderTests {
         #expect(!stepTypes.contains(.waitForPeak))
         #expect(!stepTypes.contains(.fridgeRest))
         #expect(stepTypes.first == .buildLevain)
-        #expect(stepTypes.last == .refeedAndRefrigerate)
+        #expect(stepTypes.contains(.refeedAndRefrigerate))
     }
 
     // MARK: - Activating Starter
@@ -410,7 +410,7 @@ struct SchedulePreviewBuilderTests {
 
     // MARK: - Post-Bake Step
 
-    @Test func everyRecipeEndsWithRefeedAndRefrigerate() throws {
+    @Test func everyRecipeIncludesRefeedAndRefrigerate() throws {
         let container = try makeContainer()
         let ctx = container.mainContext
         let avail = setupAvailability(context: ctx)
@@ -435,10 +435,10 @@ struct SchedulePreviewBuilderTests {
                 vm.conflict == nil,
                 "\(recipeID.rawValue) had conflict: \(vm.conflict?.message ?? "")"
             )
-            let lastType = vm.previewSteps.last?.stepTypeID
+            let hasRefeed = vm.previewSteps.contains { $0.stepTypeID == .refeedAndRefrigerate }
             #expect(
-                lastType == .refeedAndRefrigerate,
-                "\(recipeID.rawValue) should end with refeedAndRefrigerate, got \(lastType?.rawValue ?? "empty")"
+                hasRefeed,
+                "\(recipeID.rawValue) should include refeedAndRefrigerate"
             )
         }
     }
