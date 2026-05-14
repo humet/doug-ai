@@ -33,7 +33,7 @@ struct ScheduleConfigSheet: View {
 
                 Section {
                     DatePicker(
-                        "Bread ready by",
+                        "\(viewModel.selectedRecipe.completionLabel) by",
                         selection: $viewModel.targetDate,
                         in: (viewModel.viableBreadReadyRange?.lowerBound ?? Date())...,
                         displayedComponents: [.date, .hourAndMinute]
@@ -42,7 +42,7 @@ struct ScheduleConfigSheet: View {
                     Text("Target Time")
                 } footer: {
                     if let range = viewModel.viableBreadReadyRange {
-                        Text("Bread can be ready between \(range.lowerBound, style: .time) and \(range.upperBound, style: .time)")
+                        Text("\(viewModel.selectedRecipe.completionLabel) between \(range.lowerBound, style: .time) and \(range.upperBound, style: .time)")
                     }
                 }
 
@@ -210,7 +210,8 @@ struct ScheduleConfigSheet: View {
                 kitchenTempC: viewModel.kitchenTemperature,
                 scheduleDurationMinutes: duration
             )
-            return "Feed it on the counter first. Earliest bread ready: \(estimate.earliestBreadReady.formatted(date: .abbreviated, time: .shortened))"
+            let label = viewModel.selectedRecipe.completionLabel.lowercased()
+            return "Feed it on the counter first. Earliest \(label): \(estimate.earliestBreadReady.formatted(date: .abbreviated, time: .shortened))"
         case .reviving:
             return "Your starter needs to finish revival before you can bake."
         }

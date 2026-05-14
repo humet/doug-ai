@@ -1,7 +1,10 @@
 import Foundation
 
 enum RecipeBook {
-    static let all: [Recipe] = [countryLoaf, highHydrationArtisan, wholeWheatHoney, oliveRosemary]
+    static let all: [Recipe] = [
+        countryLoaf, highHydrationArtisan, wholeWheatHoney, oliveRosemary,
+        sameDayCountry, focaccia, pizzaDough, softRolls,
+    ]
 
     static func recipe(for id: RecipeID) -> Recipe {
         guard let recipe = all.first(where: { $0.id == id }) else {
@@ -184,6 +187,174 @@ enum RecipeBook {
         ],
         bakeTemperatureCelsius: 250,
         degreeHourTarget: 80,
+        referenceTemperatureCelsius: 24.0
+    )
+
+    // MARK: - Same-Day Country Loaf
+
+    static let sameDayCountry = Recipe(
+        id: .sameDayCountry,
+        name: "Same-Day Country Loaf",
+        description: "The classic country loaf without an overnight retard. Build your levain at a higher ratio (1:2:2) so it peaks in about 3 hours, then straight into a full bulk ferment. Ready in 8–12 hours.",
+        difficulty: .intermediate,
+        hydrationPercent: 70,
+        approximateTotalHours: 8 ... 12,
+        ingredients: Ingredients(
+            flourGrams: 500,
+            waterGrams: 350,
+            saltGrams: 10,
+            levainGrams: 100
+        ),
+        method: [
+            MethodStep(stepTypeID: .buildLevain, durationOverrideMinutes: 180),
+            MethodStep(stepTypeID: .autolyse),
+            MethodStep(stepTypeID: .mix),
+            MethodStep(
+                stepTypeID: .bulkFerment,
+                durationOverrideMinutes: 240,
+                foldCount: 4,
+                degreeHourTarget: 80,
+                foldSpacingFraction: 0.67
+            ),
+            MethodStep(stepTypeID: .shape),
+            MethodStep(
+                stepTypeID: .finalProof,
+                flexRangeOverride: 60 ... 180
+            ),
+            MethodStep(stepTypeID: .preheat),
+            MethodStep(stepTypeID: .bake, durationOverrideMinutes: 45, subSteps: [
+                MethodStep(stepTypeID: .bakeCovered, durationOverrideMinutes: 20),
+                MethodStep(stepTypeID: .bakeUncovered, durationOverrideMinutes: 25),
+            ]),
+        ],
+        bakeTemperatureCelsius: 250,
+        degreeHourTarget: 80,
+        referenceTemperatureCelsius: 24.0
+    )
+
+    // MARK: - Focaccia
+
+    static let focaccia = Recipe(
+        id: .focaccia,
+        name: "Focaccia",
+        description: "High hydration, olive oil enriched, baked on a sheet pan. No shaping stress — just stretch, dimple, and bake. A great first bake.",
+        difficulty: .beginner,
+        hydrationPercent: 78,
+        approximateTotalHours: 8 ... 12,
+        ingredients: Ingredients(
+            flourGrams: 500,
+            waterGrams: 390,
+            saltGrams: 10,
+            levainGrams: 100,
+            extras: [
+                ExtraIngredient("Olive oil", grams: 30, note: "plus more for the pan"),
+                ExtraIngredient("Flaky salt", grams: 5, note: "for topping"),
+            ]
+        ),
+        method: [
+            MethodStep(stepTypeID: .buildLevain, durationOverrideMinutes: 180),
+            MethodStep(stepTypeID: .autolyse),
+            MethodStep(stepTypeID: .mix),
+            MethodStep(
+                stepTypeID: .bulkFerment,
+                durationOverrideMinutes: 240,
+                foldCount: 4,
+                degreeHourTarget: 80,
+                foldSpacingFraction: 0.67
+            ),
+            MethodStep(stepTypeID: .panShape),
+            MethodStep(
+                stepTypeID: .finalProof,
+                flexRangeOverride: 45 ... 120
+            ),
+            MethodStep(stepTypeID: .preheat),
+            MethodStep(stepTypeID: .bakeSheet, durationOverrideMinutes: 25),
+        ],
+        bakeTemperatureCelsius: 220,
+        degreeHourTarget: 80,
+        referenceTemperatureCelsius: 24.0
+    )
+
+    // MARK: - Pizza Dough
+
+    static let pizzaDough = Recipe(
+        id: .pizzaDough,
+        name: "Pizza Dough",
+        description: "Sourdough pizza dough — 65% hydration with olive oil. Divide into balls and proof at room temperature. You handle the bake.",
+        difficulty: .beginner,
+        hydrationPercent: 65,
+        approximateTotalHours: 7 ... 10,
+        ingredients: Ingredients(
+            flourGrams: 450,
+            waterGrams: 293,
+            saltGrams: 9,
+            levainGrams: 90,
+            extras: [
+                ExtraIngredient("Olive oil", grams: 15),
+            ]
+        ),
+        method: [
+            MethodStep(stepTypeID: .buildLevain, durationOverrideMinutes: 180),
+            MethodStep(stepTypeID: .autolyse),
+            MethodStep(stepTypeID: .mix),
+            MethodStep(
+                stepTypeID: .bulkFerment,
+                durationOverrideMinutes: 210,
+                foldCount: 3,
+                degreeHourTarget: 70,
+                foldSpacingFraction: 0.67
+            ),
+            MethodStep(stepTypeID: .shape),
+            MethodStep(
+                stepTypeID: .finalProof,
+                flexRangeOverride: 60 ... 150
+            ),
+        ],
+        bakeTemperatureCelsius: 0,
+        degreeHourTarget: 70,
+        referenceTemperatureCelsius: 24.0,
+        completionLabel: "Dough Ready"
+    )
+
+    // MARK: - Soft Rolls
+
+    static let softRolls = Recipe(
+        id: .softRolls,
+        name: "Soft Rolls",
+        description: "Enriched sourdough rolls with butter for a soft, tender crumb. Shape into balls in the evening, cold retard overnight, and bake straight from the fridge in the morning. Makes 8 rolls.",
+        difficulty: .intermediate,
+        hydrationPercent: 62,
+        approximateTotalHours: 18 ... 26,
+        ingredients: Ingredients(
+            flourGrams: 500,
+            waterGrams: 310,
+            saltGrams: 9,
+            levainGrams: 100,
+            extras: [
+                ExtraIngredient("Butter", grams: 40, note: "softened"),
+            ]
+        ),
+        method: [
+            MethodStep(stepTypeID: .buildLevain),
+            MethodStep(stepTypeID: .autolyse),
+            MethodStep(stepTypeID: .mix),
+            MethodStep(
+                stepTypeID: .bulkFerment,
+                durationOverrideMinutes: 210,
+                foldCount: 3,
+                degreeHourTarget: 70,
+                foldSpacingFraction: 0.67
+            ),
+            MethodStep(stepTypeID: .shape),
+            MethodStep(
+                stepTypeID: .coldRetard,
+                flexRangeOverride: 480 ... 1080
+            ),
+            MethodStep(stepTypeID: .preheat),
+            MethodStep(stepTypeID: .bakeSheet, durationOverrideMinutes: 22),
+        ],
+        bakeTemperatureCelsius: 200,
+        degreeHourTarget: 70,
         referenceTemperatureCelsius: 24.0
     )
 }

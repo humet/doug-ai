@@ -360,21 +360,38 @@ enum ScheduleBuilder {
             result.append(step)
         }
 
-        // Validate Cold Retard flex range
-        if let coldRetardStep = result.first(where: { $0.stepTypeID == .coldRetard }) {
-            let coldRetardMethod = method.first(where: { $0.stepTypeID == .coldRetard })
-            if let flexRange = coldRetardMethod?.effectiveFlexRange {
-                let actualDuration = coldRetardStep.durationMinutes
-                if actualDuration < flexRange.lowerBound || actualDuration > flexRange.upperBound {
-                    let hours = Int(actualDuration / 60)
-                    let maxHours = Int(flexRange.upperBound / 60)
-                    let minHours = Int(flexRange.lowerBound / 60)
-                    return .conflict(ScheduleConflict(
-                        conflictingStepLabel: "Cold Retard",
-                        conflictingWindowName: "schedule constraint",
-                        message: "Cold Retard would be \(hours)h — needs to be between \(minHours)h and \(maxHours)h. Try a different bread-ready time.",
-                        suggestedAlternativeTime: nil
-                    ))
+        // Validate all flexible steps stay within their flex range
+        for methodStep in method where methodStep.stepType.classification == .passiveFlexible {
+            guard let flexRange = methodStep.effectiveFlexRange,
+                  let scheduled = result.first(where: { $0.methodStepID == methodStep.id })
+            else { continue }
+            let actualDuration = scheduled.durationMinutes
+            if actualDuration < flexRange.lowerBound || actualDuration > flexRange.upperBound {
+                let hours = Int(actualDuration / 60)
+                let maxHours = Int(flexRange.upperBound / 60)
+                let minHours = Int(flexRange.lowerBound / 60)
+                return .conflict(ScheduleConflict(
+                    conflictingStepLabel: scheduled.label,
+                    conflictingWindowName: "schedule constraint",
+                    message: "\(scheduled.label) would be \(hours)h — needs to be between \(minHours)h and \(maxHours)h. Try a different bread-ready time.",
+                    suggestedAlternativeTime: nil
+                ))
+            }
+        }
+
+        // Same-day recipes: verify no step starts during unavailable hours
+        let isSameDay = !method.contains { $0.stepTypeID == .coldRetard }
+        if isSameDay {
+            for scheduled in result {
+                for block in unavailableBlocks {
+                    if scheduled.startTime >= block.start, scheduled.startTime < block.end {
+                        return .conflict(ScheduleConflict(
+                            conflictingStepLabel: scheduled.label,
+                            conflictingWindowName: "unavailable window",
+                            message: "\(scheduled.label) would start at \(scheduled.startTime.formatted(date: .omitted, time: .shortened)) during an unavailable window. Try a later bread-ready time.",
+                            suggestedAlternativeTime: nil
+                        ))
+                    }
                 }
             }
         }

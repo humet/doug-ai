@@ -124,9 +124,11 @@ struct ScheduleBuilderTests {
 
     @Test(arguments: RecipeBook.all)
     func allRecipesBuildSuccessfully(recipe: Recipe) throws {
+        let hasColdRetard = recipe.method.contains { $0.stepTypeID == .coldRetard }
+        let targetHour = hasColdRetard ? 9 : 18
         let input = ScheduleBuilderInput(
             recipe: recipe,
-            targetBreadReadyTime: Self.targetTime(),
+            targetBreadReadyTime: Self.targetTime(hour: targetHour),
             kitchenTemperatureCelsius: 22.0,
             availability: Self.defaultAvailability
         )
@@ -388,7 +390,7 @@ struct ScheduleBuilderTests {
     }
 
     @Test func requiresPresenceFlagValues() {
-        let presenceSteps: Set<StepTypeID> = [.preheat, .bake, .bakeCovered, .bakeUncovered]
+        let presenceSteps: Set<StepTypeID> = [.preheat, .bake, .bakeCovered, .bakeUncovered, .bakeSheet]
 
         for id in StepTypeID.allCases {
             let stepType = StepTypeRegistry.type(for: id)

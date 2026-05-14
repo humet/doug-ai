@@ -103,8 +103,8 @@ enum TemperatureCalculator {
             return step.effectiveDuration
         }
 
-        // Special case: levain uses stepped estimates, not exponential — and
-        // prefers the user's observed average when the bucket has enough data.
+        // Levain: prefer user's observed peak time, then recipe override
+        // (adjusted via exponential model), then the generic stepped estimate.
         if step.stepTypeID == .buildLevain {
             if let profile = peakProfile,
                let observed = profile.averageMinutes(
@@ -113,6 +113,13 @@ enum TemperatureCalculator {
                )
             {
                 return observed
+            }
+            if step.durationOverrideMinutes != nil {
+                return adjustedDuration(
+                    baseDurationMinutes: step.effectiveDuration,
+                    referenceTemp: refTemp,
+                    actualTemp: kitchenTemp
+                )
             }
             return levainBuildMinutes(kitchenTemp: kitchenTemp)
         }

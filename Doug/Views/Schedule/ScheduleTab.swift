@@ -91,15 +91,20 @@ struct ScheduleTab: View {
                         }
                     }
                 }
-                .sheet(isPresented: $viewModel.showColdRetardSlider) {
-                    if let step = viewModel.coldRetardStep,
-                       let range = viewModel.coldRetardFlexRange
+                .sheet(isPresented: $viewModel.showFlexStepSlider) {
+                    if let step = viewModel.flexibleStep,
+                       let range = viewModel.flexibleStepFlexRange
                     {
-                        ColdRetardSliderView(
-                            coldRetardStep: step,
-                            flexRange: range
+                        let recipe = viewModel.activeSchedule.map {
+                            RecipeBook.recipe(for: RecipeID(rawValue: $0.recipeID)!)
+                        }
+                        FlexStepSliderView(
+                            step: step,
+                            flexRange: range,
+                            remainingMinutesAfterStep: viewModel.remainingMinutesAfterFlexStep,
+                            completionLabel: recipe?.completionLabel ?? "Bread Ready"
                         ) { newDuration in
-                            viewModel.adjustColdRetard(to: newDuration, modelContext: modelContext)
+                            viewModel.adjustFlexibleStep(to: newDuration, modelContext: modelContext)
                         }
                     }
                 }
@@ -307,11 +312,13 @@ struct ScheduleTab: View {
                         }
                     }
 
-                    if let _ = viewModel.coldRetardStep {
+                    if let flexStep = viewModel.flexibleStep,
+                       let stepID = StepTypeID(rawValue: flexStep.stepTypeID)
+                    {
                         Button {
-                            viewModel.showColdRetardSlider = true
+                            viewModel.showFlexStepSlider = true
                         } label: {
-                            Label("Adjust Cold Retard", systemImage: "clock.arrow.2.circlepath")
+                            Label("Adjust \(StepTypeRegistry.type(for: stepID).label)", systemImage: "clock.arrow.2.circlepath")
                                 .font(.subheadline)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)

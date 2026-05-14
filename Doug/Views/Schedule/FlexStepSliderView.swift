@@ -1,22 +1,36 @@
 import SwiftUI
 
-struct ColdRetardSliderView: View {
-    let coldRetardStep: ScheduleStep
+struct FlexStepSliderView: View {
+    let step: ScheduleStep
     let flexRange: ClosedRange<Double>
+    let remainingMinutesAfterStep: Double
+    let completionLabel: String
     let onAdjust: (Double) -> Void
 
     @State private var durationMinutes: Double
     @Environment(\.dismiss) private var dismiss
 
     init(
-        coldRetardStep: ScheduleStep,
+        step: ScheduleStep,
         flexRange: ClosedRange<Double>,
+        remainingMinutesAfterStep: Double,
+        completionLabel: String = "Bread Ready",
         onAdjust: @escaping (Double) -> Void
     ) {
-        self.coldRetardStep = coldRetardStep
+        self.step = step
         self.flexRange = flexRange
+        self.remainingMinutesAfterStep = remainingMinutesAfterStep
+        self.completionLabel = completionLabel
         self.onAdjust = onAdjust
-        _durationMinutes = State(initialValue: coldRetardStep.computedDurationMinutes)
+        _durationMinutes = State(initialValue: step.computedDurationMinutes)
+    }
+
+    private var stepTypeID: StepTypeID? {
+        StepTypeID(rawValue: step.stepTypeID)
+    }
+
+    private var isColdRetard: Bool {
+        stepTypeID == .coldRetard
     }
 
     private var durationHours: Double {
@@ -24,7 +38,15 @@ struct ColdRetardSliderView: View {
     }
 
     private var newEndTime: Date {
-        coldRetardStep.computedStartTime.addingTimeInterval(durationMinutes * 60)
+        step.computedStartTime.addingTimeInterval(durationMinutes * 60)
+    }
+
+    private var stepLabel: String {
+        stepTypeID.map { StepTypeRegistry.type(for: $0).label } ?? "Step"
+    }
+
+    private var sliderStep: Double {
+        isColdRetard ? 30 : 15
     }
 
     var body: some View {
@@ -33,7 +55,7 @@ struct ColdRetardSliderView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Cold retard duration")
+                            Text("\(stepLabel) duration")
                             Spacer()
                             Text(String(format: "%.1fh", durationHours))
                                 .font(.title3.bold().monospacedDigit())
@@ -42,11 +64,11 @@ struct ColdRetardSliderView: View {
                         Slider(
                             value: $durationMinutes,
                             in: flexRange,
-                            step: 30
+                            step: sliderStep
                         ) {
                             Text("Duration")
                         }
-                        .accessibilityLabel("Cold retard duration")
+                        .accessibilityLabel("\(stepLabel) duration")
                         .accessibilityValue("\(Int(durationHours)) hours")
 
                         HStack {
@@ -65,35 +87,36 @@ struct ColdRetardSliderView: View {
 
                 Section {
                     HStack {
-                        Text("Into fridge")
+                        Text(isColdRetard ? "Into fridge" : "Starts")
                         Spacer()
-                        Text(coldRetardStep.computedStartTime, style: .time)
+                        Text(step.computedStartTime, style: .time)
                             .foregroundStyle(.secondary)
                     }
                     HStack {
-                        Text("Out of fridge")
+                        Text(isColdRetard ? "Out of fridge" : "Ends")
                         Spacer()
                         Text(newEndTime, style: .time)
                             .foregroundStyle(.secondary)
                     }
-                    HStack {
-                        Text("Bread ready")
-                        Spacer()
-                        // Preheat (60m) + bake covered (~20m) + bake uncovered (~25m)
-                        Text(newEndTime.addingTimeInterval(105 * 60), style: .time)
-                            .foregroundStyle(.secondary)
+                    if remainingMinutesAfterStep > 0 {
+                        HStack {
+                            Text(completionLabel)
+                            Spacer()
+                            Text(newEndTime.addingTimeInterval(remainingMinutesAfterStep * 60), style: .time)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 } header: {
                     Text("Updated Timeline")
                 }
 
                 Section {
-                    flavourNote
+                    impactNote
                 } header: {
-                    Text("Flavour Impact")
+                    Text(isColdRetard ? "Flavour Impact" : "Proofing Note")
                 }
             }
-            .navigationTitle("Life Happened")
+            .navigationTitle("Adjust Timing")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -109,7 +132,19 @@ struct ColdRetardSliderView: View {
     }
 
     @ViewBuilder
-    private var flavourNote: some View {
+    private var impactNote: some View {
+        if isColdRetard {
+            coldRetardNote
+        } else if stepTypeID == .finalProof {
+            finalProofNote
+        } else {
+            Label("Adjust within the allowed range to fit your schedule.", systemImage: "clock")
+                .font(.subheadline)
+        }
+    }
+
+    @ViewBuilder
+    private var coldRetardNote: some View {
         if durationHours < 10 {
             Label("Shorter retard — milder, less sour flavour.", systemImage: "leaf")
                 .font(.subheadline)
@@ -118,6 +153,20 @@ struct ColdRetardSliderView: View {
                 .font(.subheadline)
         } else {
             Label("Long retard — more sour, deeper flavour development.", systemImage: "flame")
+                .font(.subheadline)
+        }
+    }
+
+    @ViewBuilder
+    private var finalProofNote: some View {
+        if durationMinutes < 75 {
+            Label("Short proof — may be slightly under-proofed. Watch the poke test.", systemImage: "exclamationmark.triangle")
+                .font(.subheadline)
+        } else if durationMinutes <= 120 {
+            Label("Good proof window — expect a well-risen, airy crumb.", systemImage: "leaf.fill")
+                .font(.subheadline)
+        } else {
+            Label("Long proof — risk of over-proofing in a warm kitchen. Bake promptly.", systemImage: "exclamationmark.triangle")
                 .font(.subheadline)
         }
     }

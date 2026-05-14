@@ -3,9 +3,9 @@ import Foundation
 extension ScheduleBuilder {
     /// Computes the viable bread-ready time range for a recipe and availability.
     ///
-    /// - **Earliest**: wake-up time + post-Cold-Retard steps (Preheat + Bake) + Cold Retard minimum.
-    /// - **Latest**: sleep time + Cold Retard max + post-Cold-Retard steps, capped so morning steps
-    ///   finish before the next sleep window.
+    /// Overnight recipes (with cold retard) split across two days: pre-retard steps before sleep,
+    /// retard overnight, post-retard steps after wake-up.
+    /// Same-day recipes fit entirely within one wake window.
     static func viableRange(
         recipe: Recipe,
         kitchenTemperatureCelsius: Double,
@@ -16,14 +16,45 @@ extension ScheduleBuilder {
         peakProfile: StarterPeakProfile? = nil
     ) -> ClosedRange<Date>? {
         let method = recipe.method
+        let hasColdRetard = method.contains { $0.stepTypeID == .coldRetard }
 
+        if hasColdRetard {
+            return overnightViableRange(
+                method: method,
+                kitchenTemperatureCelsius: kitchenTemperatureCelsius,
+                availability: availability,
+                referenceDate: referenceDate,
+                calendar: calendar,
+                peakProfile: peakProfile
+            )
+        } else {
+            return sameDayViableRange(
+                method: method,
+                kitchenTemperatureCelsius: kitchenTemperatureCelsius,
+                availability: availability,
+                referenceDate: referenceDate,
+                calendar: calendar,
+                peakProfile: peakProfile
+            )
+        }
+    }
+
+    // MARK: - Overnight (Cold Retard)
+
+    private static func overnightViableRange(
+        method: [MethodStep],
+        kitchenTemperatureCelsius: Double,
+        availability: AvailabilityInput,
+        referenceDate: Date,
+        calendar: Calendar,
+        peakProfile: StarterPeakProfile?
+    ) -> ClosedRange<Date>? {
         guard let coldRetardMethod = method.first(where: { $0.stepTypeID == .coldRetard }),
               let flexRange = coldRetardMethod.effectiveFlexRange
         else {
             return nil
         }
 
-        // Sum durations of steps after Cold Retard (Preheat + Bake and sub-steps)
         let coldRetardIndex = method.firstIndex(where: { $0.stepTypeID == .coldRetard })!
         let postColdRetardSteps = method[(coldRetardIndex + 1)...]
         let postColdRetardMinutes = postColdRetardSteps.reduce(0.0) { total, step in
@@ -34,8 +65,6 @@ extension ScheduleBuilder {
             )
         }
 
-        // Sum durations of hands-on steps before and including Shape
-        // (everything before Cold Retard that needs to fit before sleep)
         let preColdRetardSteps = method[..<coldRetardIndex]
         let preColdRetardMinutes = preColdRetardSteps.reduce(0.0) { total, step in
             total + TemperatureCalculator.effectiveDuration(
@@ -45,7 +74,6 @@ extension ScheduleBuilder {
             )
         }
 
-        // Find the next occurrence of wake-up and sleep times from the reference date
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: referenceDate)!
         let tomorrowStart = calendar.startOfDay(for: tomorrow)
 
@@ -65,23 +93,17 @@ extension ScheduleBuilder {
             return nil
         }
 
-        // Earliest: morning steps must start after wake-up
-        // Cold Retard at minimum duration ends just in time for preheat
         let earliestBreadReady = wakeUp.addingTimeInterval(postColdRetardMinutes * 60)
 
-        // Latest: all pre-Cold-Retard steps must finish by sleep time
-        // Cold Retard starts at sleep time, runs at max flex
         let latestColdRetardStart = sleepTime
         let latestColdRetardEnd = latestColdRetardStart.addingTimeInterval(flexRange.upperBound * 60)
         let latestBreadReady = latestColdRetardEnd.addingTimeInterval(postColdRetardMinutes * 60)
 
-        // Also verify that pre-Cold-Retard steps actually fit before sleep
         let earliestPreColdRetardStart = sleepTime.addingTimeInterval(-preColdRetardMinutes * 60)
         guard earliestPreColdRetardStart >= wakeUp.addingTimeInterval(-24 * 60 * 60) else {
             return nil
         }
 
-        // Ensure morning steps don't extend past the next sleep window
         let nextSleep = calendar.date(
             bySettingHour: availability.endHour,
             minute: availability.endMinute,
@@ -93,5 +115,65 @@ extension ScheduleBuilder {
         guard earliestBreadReady <= cappedLatest else { return nil }
 
         return earliestBreadReady ... cappedLatest
+    }
+
+    // MARK: - Same-Day (No Cold Retard)
+
+    private static func sameDayViableRange(
+        method: [MethodStep],
+        kitchenTemperatureCelsius: Double,
+        availability: AvailabilityInput,
+        referenceDate: Date,
+        calendar: Calendar,
+        peakProfile: StarterPeakProfile?
+    ) -> ClosedRange<Date>? {
+        var totalMinMinutes = 0.0
+        var totalMaxMinutes = 0.0
+
+        for step in method {
+            if step.stepType.classification == .passiveFlexible,
+               let flexRange = step.effectiveFlexRange
+            {
+                totalMinMinutes += flexRange.lowerBound
+                totalMaxMinutes += flexRange.upperBound
+            } else {
+                let duration = TemperatureCalculator.effectiveDuration(
+                    for: step,
+                    kitchenTemp: kitchenTemperatureCelsius,
+                    peakProfile: peakProfile
+                )
+                totalMinMinutes += duration
+                totalMaxMinutes += duration
+            }
+        }
+
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: referenceDate)!
+        let tomorrowStart = calendar.startOfDay(for: tomorrow)
+
+        guard let wakeUp = calendar.date(
+            bySettingHour: availability.startHour,
+            minute: availability.startMinute,
+            second: 0,
+            of: tomorrowStart
+        ),
+            let sleepTime = calendar.date(
+                bySettingHour: availability.endHour,
+                minute: availability.endMinute,
+                second: 0,
+                of: tomorrowStart
+            )
+        else {
+            return nil
+        }
+
+        let earliestReady = wakeUp.addingTimeInterval(totalMinMinutes * 60)
+        let latestReady = min(
+            sleepTime,
+            wakeUp.addingTimeInterval(totalMaxMinutes * 60)
+        )
+
+        guard earliestReady <= latestReady else { return nil }
+
+        return earliestReady ... latestReady
     }
 }

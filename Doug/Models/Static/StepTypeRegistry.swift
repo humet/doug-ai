@@ -149,6 +149,59 @@ enum StepTypeRegistry {
             )
         ),
 
+        .finalProof: StepType(
+            id: .finalProof,
+            label: "Final Proof",
+            classification: .passiveFlexible,
+            baseDurationMinutes: 90,
+            isTemperatureAdjusted: true,
+            referenceTemperatureCelsius: 24.0,
+            flexRange: 60 ... 180,
+            requiresTempReading: false,
+            instructionText: "Cover the shaped dough and leave at room temperature. It will puff up gradually — use the poke test to judge readiness.",
+            notificationText: "Your dough is proofing at room temperature. Keep an eye on it — over-proofing is the main risk.",
+            successSignal: "Dough springs back slowly when poked with a floured finger, leaving a slight indent. If it springs back fast, it needs more time.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 30,
+                warning: "Your dough has been proofing at room temperature longer than planned. It may be over-proofed — puffy, jiggly, and lacking tension.",
+                salvageAdvice: "If it still holds some shape, bake it now — don't wait. If it's completely slack, press it into an oiled tray and bake as focaccia."
+            )
+        ),
+
+        .panShape: StepType(
+            id: .panShape,
+            label: "Pan Shape",
+            classification: .handsOn,
+            baseDurationMinutes: 10,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Generously oil a sheet pan or baking tray. Turn the dough out onto it and gently stretch to fill the pan. Dimple the surface with your fingertips and drizzle with olive oil.",
+            notificationText: "Time to pan-shape — oil the tray, stretch the dough in, dimple, and drizzle.",
+            successSignal: "Dough fills most of the pan evenly, with a dimpled surface glistening with olive oil."
+        ),
+
+        .bakeSheet: StepType(
+            id: .bakeSheet,
+            label: "Bake",
+            classification: .passiveFixed,
+            baseDurationMinutes: 25,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            requiresPresence: true,
+            instructionText: "Place the pan in the preheated oven and bake until golden on top and crisp underneath.",
+            notificationText: "Time to bake — get the pan in the oven.",
+            successSignal: "Top is golden brown and crisp, bottom sounds hollow when tapped, and the edges have pulled away from the pan slightly.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 30,
+                warning: "Your oven has been at temperature for a long time — wasting energy, but the dough on the counter is still fine.",
+                salvageAdvice: "Turn the oven off and try again when you're ready."
+            )
+        ),
+
         .preheat: StepType(
             id: .preheat,
             label: "Preheat",

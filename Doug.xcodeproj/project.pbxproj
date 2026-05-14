@@ -54,6 +54,8 @@
 		10798AD32FB0D8A2007695FA /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		108A67112FB22DB600D16E23 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		108A68022FB22DDC00D16E23 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		108CA64B2FB4711400045AD0 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		108CAA6A2FB4B70000045AD0 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10AA10012FA10000003679E8 /* DougLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DougLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		10ABBB092FB1D545000D4F3F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10ABBB952FB1E510000D4F3F /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
@@ -151,6 +153,16 @@
 			sourceTree = "<group>";
 		};
 		108A68042FB22DDC00D16E23 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		108CA64D2FB4711400045AD0 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		108CAA6C2FB4B70000045AD0 /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -376,6 +388,14 @@
 				{
 					ProductGroup = 108A67142FB22DB600D16E23 /* Products */;
 					ProjectRef = 108A67112FB22DB600D16E23 /* Doug.xcodeproj */;
+				},
+				{
+					ProductGroup = 108CAA6C2FB4B70000045AD0 /* Products */;
+					ProjectRef = 108CAA6A2FB4B70000045AD0 /* Doug.xcodeproj */;
+				},
+				{
+					ProductGroup = 108CA64D2FB4711400045AD0 /* Products */;
+					ProjectRef = 108CA64B2FB4711400045AD0 /* Doug.xcodeproj */;
 				},
 				{
 					ProductGroup = 10CF46602FA9FCE600843F8F /* Products */;

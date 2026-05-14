@@ -7,6 +7,10 @@ enum RecipeID: String, CaseIterable, Codable {
     case highHydrationArtisan
     case wholeWheatHoney
     case oliveRosemary
+    case sameDayCountry
+    case focaccia
+    case pizzaDough
+    case softRolls
 }
 
 // MARK: - Difficulty
@@ -70,6 +74,35 @@ struct Recipe: Identifiable {
     let bakeTemperatureCelsius: Int
     let degreeHourTarget: Double
     let referenceTemperatureCelsius: Double
+    let completionLabel: String
+
+    init(
+        id: RecipeID,
+        name: String,
+        description: String,
+        difficulty: Difficulty,
+        hydrationPercent: Int,
+        approximateTotalHours: ClosedRange<Int>,
+        ingredients: Ingredients,
+        method: [MethodStep],
+        bakeTemperatureCelsius: Int,
+        degreeHourTarget: Double,
+        referenceTemperatureCelsius: Double,
+        completionLabel: String = "Bread Ready"
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.difficulty = difficulty
+        self.hydrationPercent = hydrationPercent
+        self.approximateTotalHours = approximateTotalHours
+        self.ingredients = ingredients
+        self.method = method
+        self.bakeTemperatureCelsius = bakeTemperatureCelsius
+        self.degreeHourTarget = degreeHourTarget
+        self.referenceTemperatureCelsius = referenceTemperatureCelsius
+        self.completionLabel = completionLabel
+    }
 
     func bakeTemperature(for stepTypeID: StepTypeID) -> Int {
         method.first { $0.stepTypeID == stepTypeID }?.bakeTemperatureCelsius ?? bakeTemperatureCelsius

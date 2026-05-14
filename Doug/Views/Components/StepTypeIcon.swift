@@ -12,6 +12,9 @@ enum StepTypeIcon {
         case .addInclusions: "leaf"
         case .shape: "circle.circle"
         case .coldRetard: "snowflake"
+        case .finalProof: "sun.max"
+        case .panShape: "hand.raised"
+        case .bakeSheet: "flame"
         case .preheat: "flame"
         case .bake: "oven"
         case .bakeCovered: "oven"
@@ -30,7 +33,11 @@ enum StepTypeIcon {
             DougTheme.crustGold
         case .coldRetard, .fridgeRest:
             .blue
-        case .preheat, .bake, .bakeCovered, .bakeUncovered:
+        case .finalProof:
+            DougTheme.crustGold
+        case .panShape:
+            DougTheme.sourdoughBrown
+        case .preheat, .bake, .bakeCovered, .bakeUncovered, .bakeSheet:
             .orange
         case .activateStarter, .waitForPeak:
             .green

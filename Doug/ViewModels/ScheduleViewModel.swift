@@ -45,7 +45,7 @@ final class ScheduleViewModel {
 
     // UI state
     var showConflictSheet = false
-    var showColdRetardSlider = false
+    var showFlexStepSlider = false
     var showTemperatureEntry = false
     var showRecipeDetailSheet = false
     var selectedFoldStep: ScheduleStep?
@@ -440,22 +440,24 @@ final class ScheduleViewModel {
         syncLiveActivity()
     }
 
-    // MARK: - Cold Retard Adjustment
+    // MARK: - Flexible Step Adjustment
 
-    func adjustColdRetard(to newDurationMinutes: Double, modelContext _: ModelContext) {
+    func adjustFlexibleStep(to newDurationMinutes: Double, modelContext _: ModelContext) {
         guard let schedule = activeSchedule else { return }
 
         let steps = allSteps(in: schedule)
-        guard let coldRetardStep = steps.first(where: {
-            StepTypeID(rawValue: $0.stepTypeID) == .coldRetard
+        guard let flexStep = steps.first(where: { step in
+            guard let id = StepTypeID(rawValue: step.stepTypeID) else { return false }
+            return StepTypeRegistry.type(for: id).classification == .passiveFlexible
+                && StepTypeRegistry.type(for: id).flexRange != nil
         }) else { return }
 
-        let oldEnd = coldRetardStep.computedEndTime
-        let newEnd = coldRetardStep.computedStartTime.addingTimeInterval(newDurationMinutes * 60)
+        let oldEnd = flexStep.computedEndTime
+        let newEnd = flexStep.computedStartTime.addingTimeInterval(newDurationMinutes * 60)
         let delta = newEnd.timeIntervalSince(oldEnd)
 
-        coldRetardStep.computedEndTime = newEnd
-        coldRetardStep.computedDurationMinutes = newDurationMinutes
+        flexStep.computedEndTime = newEnd
+        flexStep.computedDurationMinutes = newDurationMinutes
 
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
         syncLiveActivity()
@@ -510,18 +512,34 @@ final class ScheduleViewModel {
         )
     }
 
-    // MARK: - Cold Retard Step Lookup
+    // MARK: - Flexible Step Lookup
 
-    var coldRetardStep: ScheduleStep? {
-        activeSchedule?.steps.first(where: {
-            StepTypeID(rawValue: $0.stepTypeID) == .coldRetard
+    var flexibleStep: ScheduleStep? {
+        activeSchedule?.steps.first(where: { step in
+            guard let id = StepTypeID(rawValue: step.stepTypeID) else { return false }
+            let stepType = StepTypeRegistry.type(for: id)
+            return stepType.classification == .passiveFlexible && stepType.flexRange != nil
         })
     }
 
-    var coldRetardFlexRange: ClosedRange<Double>? {
+    var flexibleStepFlexRange: ClosedRange<Double>? {
+        guard let step = flexibleStep,
+              let id = StepTypeID(rawValue: step.stepTypeID)
+        else { return nil }
         let recipe = activeSchedule.map { RecipeBook.recipe(for: RecipeID(rawValue: $0.recipeID)!) }
-        let coldRetardMethod = recipe?.method.first(where: { $0.stepTypeID == .coldRetard })
-        return coldRetardMethod?.effectiveFlexRange
+        let methodStep = recipe?.method.first(where: { $0.stepTypeID == id })
+        return methodStep?.effectiveFlexRange
+    }
+
+    var remainingMinutesAfterFlexStep: Double {
+        guard let schedule = activeSchedule,
+              let flexStep = flexibleStep
+        else { return 0 }
+        let steps = allSteps(in: schedule)
+        let flexEnd = flexStep.computedEndTime
+        return steps
+            .filter { $0.computedStartTime >= flexEnd }
+            .reduce(0.0) { $0 + $1.computedDurationMinutes }
     }
 
     // MARK: - Per-step adjustment controls

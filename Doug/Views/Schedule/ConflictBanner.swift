@@ -28,7 +28,7 @@ struct ConflictBanner: View {
             }
 
             Text(
-                "Some hands-on steps have moved outside your available hours. Try extending cold retard or adjusting step times to shift them."
+                "Some hands-on steps have moved outside your available hours. Try adjusting flexible step durations or picking a different target time."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
