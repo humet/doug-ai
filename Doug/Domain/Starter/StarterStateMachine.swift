@@ -60,6 +60,16 @@ enum StarterStateMachine {
         return TransitionResult(newState: .dormant, reason: "Revival cancelled")
     }
 
+    static func markPeakConfirmed(
+        currentState: StarterLifecycleState
+    ) -> TransitionResult? {
+        guard currentState == .activating else { return nil }
+        return TransitionResult(
+            newState: .active,
+            reason: "Starter peak confirmed during bake — ready to build levain"
+        )
+    }
+
     // MARK: - Auto Transitions
 
     static func evaluateAutoTransition(

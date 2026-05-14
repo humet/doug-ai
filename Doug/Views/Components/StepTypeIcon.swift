@@ -22,6 +22,7 @@ enum StepTypeIcon {
         case .fridgeRest: "snowflake"
         case .activateStarter: "bubbles.and.sparkles"
         case .waitForPeak: "chart.line.uptrend.xyaxis"
+        case .refeedAndRefrigerate: "arrow.uturn.backward"
         }
     }
 
@@ -41,6 +42,8 @@ enum StepTypeIcon {
             .orange
         case .activateStarter, .waitForPeak:
             .green
+        case .refeedAndRefrigerate:
+            .blue
         }
     }
 }

@@ -113,11 +113,34 @@ final class ScheduleViewModel {
 
         detectActiveLevain(feedLogs: feedLogs, peakProfile: peakProfile)
 
+        let starterState = starterProfile?.starterLifecycleState ?? .dormant
+        if detectedLevain == nil, (starterState == .activating || starterState == .active) {
+            detectActivationAsLevain(feedLogs: feedLogs, peakProfile: peakProfile)
+        }
+
+        print("[starter] state=\(starterState.rawValue) storage=\(starterProfile?.starterStorageType.rawValue ?? "nil") health=\(starterProfile?.starterHealthStatus.rawValue ?? "nil")")
+        if let feed = feedLogs.first {
+            let ago = Date().timeIntervalSince(feed.timestamp) / 60
+            print("[starter] latestFeed: \(feed.starterFeedIntent.rawValue) \(feed.ratioStarter):\(feed.ratioFlour):\(feed.ratioWater) \(Int(ago))min ago peaked=\(feed.peakTimestamp != nil)")
+        }
+        if let ctx = detectedLevain {
+            print("[starter] levainContext: fedAt=\(ctx.fedAt) elapsed=\(Int(ctx.elapsedMinutes()))min remaining=\(Int(ctx.remainingMinutes()))min expected=\(Int(ctx.expectedPeakMinutes))min")
+        } else {
+            print("[starter] levainContext: none")
+        }
+
+        let earliestStart = computeEarliestStartTime(
+            starterProfile: starterProfile,
+            feedLogs: feedLogs,
+            peakProfile: peakProfile
+        )
+
         viableBreadReadyRange = ScheduleBuilder.viableRange(
             recipe: selectedRecipe,
             kitchenTemperatureCelsius: kitchenTemperature,
             availability: avail,
             windows: windowInputs,
+            earliestStartTime: earliestStart,
             peakProfile: peakProfile
         )
 
@@ -128,13 +151,26 @@ final class ScheduleViewModel {
             availability: avail,
             unavailableWindows: windowInputs,
             peakProfile: peakProfile,
-            levainContext: useActiveLevain ? detectedLevain : nil
+            levainContext: (useActiveLevain || starterState == .activating || starterState == .active) ? detectedLevain : nil,
+            earliestStartTime: earliestStart
         )
+
+        print("[buildPreview] recipe=\(selectedRecipe.name) target=\(targetDate) temp=\(kitchenTemperature)°C")
+        print("[buildPreview] starterState=\(starterProfile?.starterLifecycleState.rawValue ?? "nil") earliestStart=\(earliestStart)")
+        print("[buildPreview] viableRange=\(viableBreadReadyRange.map { "\($0.lowerBound) ... \($0.upperBound)" } ?? "nil")")
 
         let result = ScheduleBuilder.build(input)
 
         switch result {
         case let .success(steps):
+            print("[buildPreview] builder SUCCESS — \(steps.count) steps")
+            if let first = steps.first {
+                print("[buildPreview]   firstStep=\(first.label) start=\(first.startTime)")
+            }
+            if let last = steps.last {
+                print("[buildPreview]   lastStep=\(last.label) end=\(last.endTime)")
+            }
+
             let state = starterProfile?.starterLifecycleState ?? .dormant
             let preamble = buildActivationPreamble(
                 state: state,
@@ -152,23 +188,78 @@ final class ScheduleViewModel {
                 )
             )
             hasActivationPreamble = !preamble.isEmpty
-            let allSteps = preamble + steps
+            print("[buildPreview] preamble=\(preamble.count) steps, hasActivationPreamble=\(hasActivationPreamble)")
+            for p in preamble {
+                print("[buildPreview]   preamble: \(p.label) start=\(p.startTime) end=\(p.endTime)")
+            }
 
-            let firstActionable = allSteps.first(where: { $0.stepTypeID != .fridgeRest })
-            if let firstStart = firstActionable?.startTime, firstStart < Date() {
+            var shiftedSteps = steps
+            if let preambleEnd = preamble.last?.endTime,
+               let recipeStart = steps.first?.startTime,
+               preambleEnd > recipeStart
+            {
+                let shift = preambleEnd.timeIntervalSince(recipeStart)
+                print("[buildPreview] SHIFTING recipe steps by \(shift / 60)min")
+                shiftedSteps = steps.map { step in
+                    ScheduledStep(
+                        methodStepID: step.methodStepID,
+                        stepTypeID: step.stepTypeID,
+                        label: step.label,
+                        classification: step.classification,
+                        startTime: step.startTime.addingTimeInterval(shift),
+                        endTime: step.endTime.addingTimeInterval(shift),
+                        durationMinutes: step.durationMinutes,
+                        subSteps: step.subSteps.map { sub in
+                            ScheduledStep(
+                                methodStepID: sub.methodStepID,
+                                stepTypeID: sub.stepTypeID,
+                                label: sub.label,
+                                classification: sub.classification,
+                                startTime: sub.startTime.addingTimeInterval(shift),
+                                endTime: sub.endTime.addingTimeInterval(shift),
+                                durationMinutes: sub.durationMinutes,
+                                requiresTempReading: sub.requiresTempReading
+                            )
+                        },
+                        requiresTempReading: step.requiresTempReading,
+                        levainElapsedMinutes: step.levainElapsedMinutes
+                    )
+                }
+            }
+
+            let bakeEnd = shiftedSteps.last?.endTime ?? targetDate
+            let postBakeStep = ScheduledStep(
+                methodStepID: UUID(),
+                stepTypeID: .refeedAndRefrigerate,
+                label: "Feed & Refrigerate Starter",
+                classification: .handsOn,
+                startTime: bakeEnd,
+                endTime: bakeEnd.addingTimeInterval(10 * 60),
+                durationMinutes: 10
+            )
+            let allSteps = preamble + shiftedSteps + [postBakeStep]
+
+            let firstActionable = allSteps.first(where: {
+                $0.stepTypeID != .fridgeRest && $0.levainElapsedMinutes == nil
+            })
+            let pastThreshold = Date().addingTimeInterval(-60)
+            if let firstStart = firstActionable?.startTime, firstStart < pastThreshold {
+                print("[buildPreview] REJECTED — \(firstActionable?.label ?? "") at \(firstStart) before \(pastThreshold)")
                 hasActivationPreamble = false
                 previewSteps = []
                 conflict = ScheduleConflict(
-                    conflictingStepLabel: allSteps.first?.label ?? "Schedule",
+                    conflictingStepLabel: firstActionable?.label ?? "Schedule",
                     conflictingWindowName: "schedule constraint",
                     message: "This bread-ready time requires starting in the past. Pick a later time.",
                     suggestedAlternativeTime: nil
                 )
             } else {
+                print("[buildPreview] ACCEPTED — \(allSteps.count) steps")
                 previewSteps = allSteps
                 conflict = nil
             }
         case let .conflict(scheduleConflict):
+            print("[buildPreview] builder CONFLICT — \(scheduleConflict.message)")
             hasActivationPreamble = false
             previewSteps = []
             conflict = scheduleConflict
@@ -180,7 +271,8 @@ final class ScheduleViewModel {
         peakProfile: StarterPeakProfile?
     ) {
         guard let latest = feedLogs.first,
-              latest.peakTimestamp == nil
+              latest.peakTimestamp == nil,
+              latest.starterFeedIntent == .levain
         else {
             detectedLevain = nil
             return
@@ -215,6 +307,93 @@ final class ScheduleViewModel {
             expectedPeakMinutes: expectedPeak,
             kitchenTemperatureCelsius: latest.kitchenTemperatureCelsius
         )
+    }
+
+    private func detectActivationAsLevain(
+        feedLogs: [StarterFeedLog],
+        peakProfile: StarterPeakProfile?
+    ) {
+        guard let latest = feedLogs.first,
+              latest.peakTimestamp == nil,
+              latest.starterFeedIntent == .activation
+        else { return }
+
+        let tempBracket = TemperatureBracket.bracket(celsius: latest.kitchenTemperatureCelsius)
+        let ratioBucket = FeedRatioBucket.bucket(
+            starter: latest.ratioStarter,
+            flour: latest.ratioFlour,
+            water: latest.ratioWater
+        )
+
+        let expectedPeak: Double = if let bucket = ratioBucket,
+                                      let profile = peakProfile,
+                                      let observed = profile.averageMinutes(ratio: bucket, tempBracket: tempBracket)
+        {
+            observed
+        } else {
+            TemperatureCalculator.levainBuildMinutes(
+                kitchenTemp: latest.kitchenTemperatureCelsius
+            )
+        }
+
+        let elapsed = Date().timeIntervalSince(latest.timestamp) / 60.0
+        guard elapsed < expectedPeak * 1.5 else { return }
+
+        detectedLevain = LevainContext(
+            fedAt: latest.timestamp,
+            expectedPeakMinutes: expectedPeak,
+            kitchenTemperatureCelsius: latest.kitchenTemperatureCelsius
+        )
+        useActiveLevain = true
+    }
+
+    // MARK: - Earliest Start Time
+
+    private func computeEarliestStartTime(
+        starterProfile: StarterProfile?,
+        feedLogs: [StarterFeedLog],
+        peakProfile: StarterPeakProfile?
+    ) -> Date {
+        let now = Date()
+        guard let profile = starterProfile else { return now }
+
+        switch profile.starterLifecycleState {
+        case .active:
+            return now
+        case .activating:
+            let lastActivation = feedLogs.first(where: { $0.starterFeedIntent == .activation })
+            if lastActivation?.peakTimestamp != nil { return now }
+
+            let bracket = TemperatureBracket.bracket(celsius: kitchenTemperature)
+            let peakDuration: Double = if let pp = peakProfile,
+                                          let observed = pp.averageMinutes(ratio: .oneToFive, tempBracket: bracket)
+            {
+                observed
+            } else {
+                profile.activePeakAverageMinutes
+                    ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemperature)
+            }
+
+            if let activationTime = lastActivation?.timestamp {
+                let peakExpected = activationTime.addingTimeInterval(peakDuration * 60)
+                return max(now, peakExpected)
+            }
+            return now
+        case .dormant:
+            let activateDuration = 10.0
+            let bracket = TemperatureBracket.bracket(celsius: kitchenTemperature)
+            let peakDuration: Double = if let pp = peakProfile,
+                                          let observed = pp.averageMinutes(ratio: .oneToFive, tempBracket: bracket)
+            {
+                observed
+            } else {
+                profile.activePeakAverageMinutes
+                    ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemperature)
+            }
+            return now.addingTimeInterval((activateDuration + peakDuration) * 60)
+        case .reviving:
+            return now.addingTimeInterval(24 * 3600)
+        }
     }
 
     // MARK: - Activation Preamble
@@ -260,7 +439,42 @@ final class ScheduleViewModel {
         kitchenTemp: Double,
         recipeSteps: [ScheduledStep]
     ) -> [ScheduledStep] {
-        return []
+        let lastActivation = feedLogs.first(where: { $0.starterFeedIntent == .activation })
+        let hasPeaked = lastActivation?.peakTimestamp != nil
+
+        if hasPeaked { return [] }
+
+        let bracket = TemperatureBracket.bracket(celsius: kitchenTemp)
+        let peakDuration: Double = if let profile = peakProfile,
+                                      let observed = profile.averageMinutes(ratio: .oneToFive, tempBracket: bracket)
+        {
+            observed
+        } else {
+            starterProfile?.activePeakAverageMinutes
+                ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemp)
+        }
+
+        var remainingPeakMinutes = peakDuration
+        if let activationTime = lastActivation?.timestamp {
+            let elapsed = Date().timeIntervalSince(activationTime) / 60.0
+            remainingPeakMinutes = max(0, peakDuration - elapsed)
+        }
+
+        guard remainingPeakMinutes > 0 else { return [] }
+
+        let now = Date()
+        let peakStart = now
+        let peakEnd = now.addingTimeInterval(remainingPeakMinutes * 60)
+
+        return [ScheduledStep(
+            methodStepID: UUID(),
+            stepTypeID: .waitForPeak,
+            label: "Wait for Peak",
+            classification: .passiveFixed,
+            startTime: peakStart,
+            endTime: peakEnd,
+            durationMinutes: remainingPeakMinutes
+        )]
     }
 
     private func buildDormantPreamble(
@@ -272,8 +486,16 @@ final class ScheduleViewModel {
     ) -> [ScheduledStep] {
         guard let levainStart = recipeSteps.first?.startTime else { return [] }
 
-        let peakDuration = starterProfile?.activePeakAverageMinutes
-            ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemp)
+        let bracket = TemperatureBracket.bracket(celsius: kitchenTemp)
+        let peakDuration: Double = if let profile = peakProfile,
+                                      let observed = profile.averageMinutes(ratio: .oneToFive, tempBracket: bracket)
+        {
+            observed
+        } else {
+            starterProfile?.activePeakAverageMinutes
+                ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemp)
+        }
+
         let activateDuration = 10.0
         var activateStart = levainStart.addingTimeInterval(-(peakDuration + activateDuration) * 60)
 
@@ -287,6 +509,8 @@ final class ScheduleViewModel {
         }
 
         let activateEnd = activateStart.addingTimeInterval(activateDuration * 60)
+        let waitForPeakStart = activateEnd
+        let waitForPeakEnd = levainStart
 
         var steps: [ScheduledStep] = []
 
@@ -312,6 +536,19 @@ final class ScheduleViewModel {
             endTime: activateEnd,
             durationMinutes: activateDuration
         ))
+
+        let waitDuration = waitForPeakEnd.timeIntervalSince(waitForPeakStart) / 60.0
+        if waitDuration > 0 {
+            steps.append(ScheduledStep(
+                methodStepID: UUID(),
+                stepTypeID: .waitForPeak,
+                label: "Wait for Peak",
+                classification: .passiveFixed,
+                startTime: waitForPeakStart,
+                endTime: waitForPeakEnd,
+                durationMinutes: waitDuration
+            ))
+        }
 
         return steps
     }
@@ -544,9 +781,16 @@ final class ScheduleViewModel {
 
     // MARK: - Per-step adjustment controls
 
-    /// Marks a hands-on step complete and advances to the next step.
-    /// Used when the user confirms "Mark Step Done" on a hands-on step.
-    func markStepDone(_ step: ScheduleStep, modelContext _: ModelContext) {
+    func markStepDone(_ step: ScheduleStep, modelContext: ModelContext) {
+        markStepDone(step, feedDetails: nil, starterProfile: nil, modelContext: modelContext)
+    }
+
+    func markStepDone(
+        _ step: ScheduleStep,
+        feedDetails: FeedDetails?,
+        starterProfile: StarterProfile?,
+        modelContext: ModelContext
+    ) {
         guard let schedule = activeSchedule else { return }
         step.stepStatus = .done
         if step.actualEndTime == nil {
@@ -558,7 +802,21 @@ final class ScheduleViewModel {
                 cascade(afterEnd: step.computedEndTime, delta: delta, in: schedule, excluding: step)
             }
         }
+
+        applyStepSideEffects(
+            step, event: .completed, feedDetails: feedDetails,
+            profile: starterProfile, modelContext: modelContext
+        )
+
         promoteNextUpcoming(in: schedule)
+
+        if let next = nextStep(after: step, in: schedule) {
+            applyStepSideEffects(
+                next, event: .started, feedDetails: nil,
+                profile: starterProfile, modelContext: modelContext
+            )
+        }
+
         syncLiveActivity()
     }
 
@@ -783,7 +1041,11 @@ final class ScheduleViewModel {
         syncLiveActivity()
     }
 
-    func startStepNow(_ step: ScheduleStep, modelContext _: ModelContext) {
+    func startStepNow(
+        _ step: ScheduleStep,
+        starterProfile: StarterProfile? = nil,
+        modelContext: ModelContext
+    ) {
         guard let schedule = activeSchedule else { return }
         let now = Date()
         let delta = now.timeIntervalSince(step.computedStartTime)
@@ -799,6 +1061,11 @@ final class ScheduleViewModel {
         {
             candidate.stepStatus = .upcoming
         }
+
+        applyStepSideEffects(
+            step, event: .started, feedDetails: nil,
+            profile: starterProfile, modelContext: modelContext
+        )
 
         cascade(afterEnd: oldStart, delta: delta, in: schedule, excluding: step)
         syncLiveActivity()
@@ -864,6 +1131,102 @@ final class ScheduleViewModel {
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
         promoteNextUpcoming(in: schedule)
         syncLiveActivity()
+    }
+
+    // MARK: - Bake Coordinator Side Effects
+
+    private func applyStepSideEffects(
+        _ step: ScheduleStep,
+        event: StepEvent,
+        feedDetails: FeedDetails?,
+        profile: StarterProfile?,
+        modelContext: ModelContext
+    ) {
+        guard let profile,
+              let stepTypeID = StepTypeID(rawValue: step.stepTypeID)
+        else { return }
+
+        let effects = BakeCoordinator.sideEffects(
+            forStep: stepTypeID,
+            event: event,
+            starterState: profile.starterLifecycleState,
+            feedDetails: feedDetails,
+            kitchenTempCelsius: activeSchedule?.kitchenTemperatureCelsius ?? 22
+        )
+
+        for effect in effects {
+            switch effect {
+            case let .transitionLifecycle(result):
+                profile.starterLifecycleState = result.newState
+            case let .logFeed(input):
+                let log = StarterFeedLog(
+                    timestamp: input.timestamp,
+                    ratioStarter: input.ratioStarter,
+                    ratioFlour: input.ratioFlour,
+                    ratioWater: input.ratioWater,
+                    flourType: input.flourType,
+                    kitchenTemperatureCelsius: input.kitchenTemperatureCelsius,
+                    feedIntent: input.feedIntent
+                )
+                modelContext.insert(log)
+            case let .markPeakOnLatestFeed(intent):
+                let descriptor = FetchDescriptor<StarterFeedLog>(
+                    sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+                )
+                if let logs = try? modelContext.fetch(descriptor),
+                   let latest = logs.first(where: { $0.starterFeedIntent == intent && $0.peakTimestamp == nil })
+                {
+                    latest.markPeak(at: Date())
+                    if let avg = profile.activePeakAverageMinutes, let peak = latest.timeToPeakMinutes {
+                        profile.activePeakAverageMinutes = (avg + peak) / 2.0
+                    } else if let peak = latest.timeToPeakMinutes {
+                        profile.activePeakAverageMinutes = peak
+                    }
+                }
+            case let .updateStorageType(type):
+                profile.starterStorageType = type
+            }
+        }
+    }
+
+    private func nextStep(after step: ScheduleStep, in schedule: Schedule) -> ScheduleStep? {
+        let steps = orderedTopLevelSteps(in: schedule)
+        guard let idx = steps.firstIndex(where: { $0 === step }),
+              idx + 1 < steps.count
+        else { return nil }
+        let next = steps[idx + 1]
+        return next.stepStatus == .active ? next : nil
+    }
+
+    // MARK: - Switch Recipe
+
+    func switchRecipe(
+        to recipeID: RecipeID,
+        availability: UserAvailability?,
+        windows: [UnavailableWindow],
+        feedLogs: [StarterFeedLog],
+        starterProfile: StarterProfile?,
+        modelContext: ModelContext
+    ) {
+        cancelBake(modelContext: modelContext)
+        selectedRecipeID = recipeID
+
+        detectActiveLevain(
+            feedLogs: feedLogs,
+            peakProfile: feedLogs.isEmpty
+                ? nil
+                : StarterPeakProfile(feedLogs: feedLogs.map { FeedLogInput(from: $0) })
+        )
+        if detectedLevain != nil {
+            useActiveLevain = true
+        }
+
+        buildPreview(
+            availability: availability,
+            windows: Array(windows),
+            feedLogs: Array(feedLogs),
+            starterProfile: starterProfile
+        )
     }
 
     // MARK: - Finish / Cancel bake
@@ -977,13 +1340,14 @@ final class ScheduleViewModel {
         activeConflicts = conflicts
     }
 
-    /// Marks the earliest still-upcoming step active. Leaves hands-on steps alone —
-    /// they're only promoted via `advanceIfReady` once their start time arrives.
+    private var lastPromotedStepTypeID: String?
+
     private func promoteNextUpcoming(in schedule: Schedule) {
         let steps = orderedTopLevelSteps(in: schedule)
         guard !steps.contains(where: { $0.stepStatus == .active }) else { return }
         if let next = steps.first(where: { $0.stepStatus == .upcoming }) {
             next.stepStatus = .active
+            lastPromotedStepTypeID = next.stepTypeID
         }
     }
 

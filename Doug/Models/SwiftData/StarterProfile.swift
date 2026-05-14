@@ -68,5 +68,6 @@ enum StarterLifecycleState: String, Codable {
 enum FeedIntent: String, Codable {
     case maintenance
     case activation
+    case levain
     case postBake
 }

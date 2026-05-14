@@ -8,11 +8,18 @@ struct NowStepHero: View {
     let referenceDate: Date
     let onOpenDetail: (ScheduleStep) -> Void
     var onOpenCoach: ((String) -> Void)?
+    var starterProfile: StarterProfile?
 
     @Environment(\.modelContext) private var modelContext
     @State private var showTemperatureEntry = false
     @State private var showAbandonConfirm = false
     @State private var showAlreadyStarted = false
+    @State private var feedRatioStarter: Int = 1
+    @State private var feedRatioFlour: Int = 5
+    @State private var feedRatioWater: Int = 5
+    @State private var feedStarterGrams: String = ""
+    @State private var feedKitchenTemp: Double = 22
+    @State private var feedInitialized = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -41,6 +48,7 @@ struct NowStepHero: View {
 
             activeFoldCallout
             bakePhaseCallout
+            inlineFeedEntry
             primaryActions
             secondaryActions
             subStepsList
@@ -261,19 +269,35 @@ struct NowStepHero: View {
                     }
                     .adaptiveGlassButtonStyle(prominent: isSubOverdue)
                 } else {
+                    let buttonLabel = if isWaitForPeakStep {
+                        "Mark Peak"
+                    } else if isOverdueFlexible {
+                        "Move On"
+                    } else if isPassive {
+                        "Finish Early"
+                    } else {
+                        "Done"
+                    }
+                    let buttonIcon = if isWaitForPeakStep {
+                        "arrow.up.to.line"
+                    } else if isOverdueFlexible {
+                        "checkmark.circle.fill"
+                    } else if isPassive {
+                        "forward.fill"
+                    } else {
+                        "checkmark.circle.fill"
+                    }
                     Button {
                         completeCurrent()
                     } label: {
-                        Label(
-                            isOverdueFlexible ? "Move On" : (isPassive ? "Finish Early" : "Done"),
-                            systemImage: isOverdueFlexible ? "checkmark.circle.fill"
-                                : (isPassive ? "forward.fill" : "checkmark.circle.fill")
-                        )
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        Label(buttonLabel, systemImage: buttonIcon)
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
                     }
-                    .adaptiveGlassButtonStyle(prominent: isOverdueFlexible || !isPassive)
+                    .adaptiveGlassButtonStyle(
+                        prominent: isWaitForPeakStep || isOverdueFlexible || !isPassive
+                    )
                 }
             }
         }
@@ -569,8 +593,70 @@ struct NowStepHero: View {
         step.schedule?.pausedAt != nil
     }
 
+    private var isStarterRelatedStep: Bool {
+        let id = stepTypeIDEnum
+        return id == .activateStarter || id == .buildLevain || id == .refeedAndRefrigerate
+    }
+
+    private var isWaitForPeakStep: Bool {
+        stepTypeIDEnum == .waitForPeak
+    }
+
+    @ViewBuilder
+    private var inlineFeedEntry: some View {
+        if isStarterRelatedStep, step.stepStatus == .active {
+            InlineFeedEntryView(
+                ratioStarter: $feedRatioStarter,
+                ratioFlour: $feedRatioFlour,
+                ratioWater: $feedRatioWater,
+                starterGrams: $feedStarterGrams,
+                kitchenTemp: $feedKitchenTemp
+            )
+            .onAppear { initializeFeedDefaults() }
+        }
+    }
+
+    private func initializeFeedDefaults() {
+        guard !feedInitialized else { return }
+        feedInitialized = true
+        let temp = step.schedule?.kitchenTemperatureCelsius ?? 22
+        feedKitchenTemp = temp
+        switch stepTypeIDEnum {
+        case .activateStarter:
+            feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
+        case .buildLevain:
+            feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
+            if let levainGrams = step.schedule?.recipe.ingredients.levainGrams {
+                feedStarterGrams = String(Int(levainGrams / 11.0))
+            }
+        case .refeedAndRefrigerate:
+            feedRatioStarter = 1; feedRatioFlour = 1; feedRatioWater = 1
+            feedStarterGrams = "10"
+        default:
+            break
+        }
+    }
+
+    private var currentFeedDetails: FeedDetails {
+        FeedDetails(
+            ratioStarter: feedRatioStarter,
+            ratioFlour: feedRatioFlour,
+            ratioWater: feedRatioWater,
+            flourType: "white",
+            kitchenTemperatureCelsius: feedKitchenTemp,
+            starterGrams: Double(feedStarterGrams)
+        )
+    }
+
     private func completeCurrent() {
-        if step.stepType.classification == .handsOn {
+        if isStarterRelatedStep || isWaitForPeakStep {
+            viewModel.markStepDone(
+                step,
+                feedDetails: isStarterRelatedStep ? currentFeedDetails : nil,
+                starterProfile: starterProfile,
+                modelContext: modelContext
+            )
+        } else if step.stepType.classification == .handsOn {
             viewModel.markStepDone(step, modelContext: modelContext)
         } else {
             viewModel.finishStepEarly(step, modelContext: modelContext)

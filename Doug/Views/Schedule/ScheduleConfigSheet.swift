@@ -68,25 +68,7 @@ struct ScheduleConfigSheet: View {
                     Text("Temperature")
                 }
 
-                starterStatusSection
-
-                if let ctx = viewModel.detectedLevain {
-                    Section {
-                        Toggle(isOn: $viewModel.useActiveLevain) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Use active levain")
-                                Text(levainSummary(ctx))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .onChange(of: viewModel.useActiveLevain) {
-                            rebuildPreview()
-                        }
-                    } header: {
-                        Text("Levain")
-                    }
-                }
+                starterSection
 
                 if !viewModel.previewSteps.isEmpty {
                     Section {
@@ -138,8 +120,10 @@ struct ScheduleConfigSheet: View {
         }
     }
 
+    // MARK: - Starter Section (merged starter + levain)
+
     @ViewBuilder
-    private var starterStatusSection: some View {
+    private var starterSection: some View {
         let state = starterProfile?.starterLifecycleState ?? .dormant
         Section {
             HStack(spacing: 10) {
@@ -153,10 +137,26 @@ struct ScheduleConfigSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            if let ctx = viewModel.detectedLevain, state == .dormant {
+                Toggle(isOn: $viewModel.useActiveLevain) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Use active levain")
+                        Text(levainSummary(ctx))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .onChange(of: viewModel.useActiveLevain) {
+                    rebuildPreview()
+                }
+            }
         } header: {
             Text("Starter")
         }
     }
+
+    // MARK: - Helpers
 
     private func starterStatusIcon(_ state: StarterLifecycleState) -> String {
         switch state {

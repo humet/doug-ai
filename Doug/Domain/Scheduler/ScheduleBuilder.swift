@@ -11,6 +11,7 @@ struct ScheduleBuilderInput {
     let calendar: Calendar
     let peakProfile: StarterPeakProfile?
     let levainContext: LevainContext?
+    let earliestStartTime: Date?
 
     init(
         recipe: Recipe,
@@ -20,7 +21,8 @@ struct ScheduleBuilderInput {
         unavailableWindows: [WindowInput] = [],
         calendar: Calendar = .current,
         peakProfile: StarterPeakProfile? = nil,
-        levainContext: LevainContext? = nil
+        levainContext: LevainContext? = nil,
+        earliestStartTime: Date? = nil
     ) {
         self.recipe = recipe
         self.targetBreadReadyTime = targetBreadReadyTime
@@ -30,6 +32,7 @@ struct ScheduleBuilderInput {
         self.calendar = calendar
         self.peakProfile = peakProfile
         self.levainContext = levainContext
+        self.earliestStartTime = earliestStartTime
     }
 }
 
@@ -126,7 +129,7 @@ enum ScheduleBuilder {
             if methodStep.stepTypeID == .buildLevain, let ctx = input.levainContext {
                 let remaining = ctx.remainingMinutes()
                 levainElapsed = ctx.elapsedMinutes()
-                duration = remaining
+                duration = remaining > 0 ? remaining : 10
             }
 
             var tentativeEnd = cursor
@@ -354,10 +357,139 @@ enum ScheduleBuilder {
             }
         }
 
-        // Reverse to chronological order and validate
+        // Reverse to chronological order
         var result: [ScheduledStep] = []
         for step in scheduledSteps.reversed() {
             result.append(step)
+        }
+
+        // Anchor in-progress levain to its real fed time
+        if let ctx = input.levainContext,
+           let levainIdx = result.firstIndex(where: { $0.levainElapsedMinutes != nil })
+        {
+            let old = result[levainIdx]
+            result[levainIdx] = ScheduledStep(
+                methodStepID: old.methodStepID,
+                stepTypeID: old.stepTypeID,
+                label: old.label,
+                classification: old.classification,
+                startTime: ctx.fedAt,
+                endTime: old.endTime,
+                durationMinutes: old.durationMinutes,
+                subSteps: old.subSteps,
+                requiresTempReading: old.requiresTempReading,
+                levainElapsedMinutes: old.levainElapsedMinutes
+            )
+        }
+
+        // Enforce earliest start: shift pre-flex steps forward, compress flex step
+        let firstNonLevain = result.first(where: { $0.levainElapsedMinutes == nil })
+        let shiftAnchor = firstNonLevain?.startTime ?? result.first?.startTime
+        print("[ScheduleBuilder] pre-shift check: earliestStart=\(input.earliestStartTime?.description ?? "nil") shiftAnchor=\(shiftAnchor?.description ?? "nil") (\(firstNonLevain?.label ?? result.first?.label ?? "nil"))")
+        for (i, s) in result.enumerated() {
+            print("[ScheduleBuilder]   [\(i)] \(s.label) start=\(s.startTime) dur=\(Int(s.durationMinutes))min levainElapsed=\(s.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")")
+        }
+        if let earliest = input.earliestStartTime,
+           let firstStart = shiftAnchor,
+           firstStart < earliest
+        {
+            let delay = earliest.timeIntervalSince(firstStart)
+            print("[ScheduleBuilder] earliest=\(earliest) firstStart=\(firstStart) delay=\(Int(delay/60))min")
+
+            if let flexIdx = result.indices.max(by: { a, b in
+                result[a].classification != .passiveFlexible ? true
+                    : result[b].classification != .passiveFlexible ? false
+                    : result[a].durationMinutes < result[b].durationMinutes
+            }), result[flexIdx].classification == .passiveFlexible {
+                let flexStep = result[flexIdx]
+                let newDuration = flexStep.durationMinutes - (delay / 60.0)
+                let methodFlex = method.first { $0.stepTypeID == flexStep.stepTypeID }
+                let minDuration = methodFlex?.effectiveFlexRange?.lowerBound ?? 0
+                print("[ScheduleBuilder] flexStep=\(flexStep.label) idx=\(flexIdx) oldDur=\(Int(flexStep.durationMinutes))min newDur=\(Int(newDuration))min min=\(Int(minDuration))min")
+
+                if newDuration >= minDuration {
+                    print("[ScheduleBuilder] shifting \(flexIdx) steps forward by \(Int(delay/60))min")
+                    for i in 0 ..< flexIdx {
+                        let old = result[i]
+                        print("[ScheduleBuilder]   [\(i)] \(old.label) start=\(old.startTime) dur=\(Int(old.durationMinutes))min levainElapsed=\(old.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")")
+                        if old.levainElapsedMinutes != nil {
+                            let fedAt = input.levainContext?.fedAt ?? old.startTime
+                            let levainEnd = old.startTime.addingTimeInterval((old.durationMinutes + (old.levainElapsedMinutes ?? 0)) * 60)
+                            print("[ScheduleBuilder]   → levain: fedAt=\(fedAt) levainEnd=\(levainEnd)")
+                            result[i] = ScheduledStep(
+                                methodStepID: old.methodStepID,
+                                stepTypeID: old.stepTypeID,
+                                label: old.label,
+                                classification: old.classification,
+                                startTime: input.levainContext?.fedAt ?? old.startTime,
+                                endTime: max(levainEnd, old.endTime.addingTimeInterval(delay)),
+                                durationMinutes: old.durationMinutes,
+                                subSteps: old.subSteps,
+                                requiresTempReading: old.requiresTempReading,
+                                levainElapsedMinutes: old.levainElapsedMinutes
+                            )
+                            continue
+                        }
+                        result[i] = ScheduledStep(
+                            methodStepID: old.methodStepID,
+                            stepTypeID: old.stepTypeID,
+                            label: old.label,
+                            classification: old.classification,
+                            startTime: old.startTime.addingTimeInterval(delay),
+                            endTime: old.endTime.addingTimeInterval(delay),
+                            durationMinutes: old.durationMinutes,
+                            subSteps: old.subSteps.map { sub in
+                                ScheduledStep(
+                                    methodStepID: sub.methodStepID,
+                                    stepTypeID: sub.stepTypeID,
+                                    label: sub.label,
+                                    classification: sub.classification,
+                                    startTime: sub.startTime.addingTimeInterval(delay),
+                                    endTime: sub.endTime.addingTimeInterval(delay),
+                                    durationMinutes: sub.durationMinutes,
+                                    requiresTempReading: sub.requiresTempReading
+                                )
+                            },
+                            requiresTempReading: old.requiresTempReading,
+                            levainElapsedMinutes: old.levainElapsedMinutes
+                        )
+                    }
+                    result[flexIdx] = ScheduledStep(
+                        methodStepID: flexStep.methodStepID,
+                        stepTypeID: flexStep.stepTypeID,
+                        label: flexStep.label,
+                        classification: flexStep.classification,
+                        startTime: flexStep.startTime.addingTimeInterval(delay),
+                        endTime: flexStep.endTime,
+                        durationMinutes: newDuration,
+                        subSteps: flexStep.subSteps,
+                        requiresTempReading: flexStep.requiresTempReading
+                    )
+
+                    print("[ScheduleBuilder] after shift:")
+                    for i in 0 ... flexIdx {
+                        print("[ScheduleBuilder]   [\(i)] \(result[i].label) start=\(result[i].startTime) end=\(result[i].endTime) dur=\(Int(result[i].durationMinutes))min")
+                    }
+                    for i in 0 ..< flexIdx where result[i].classification == .handsOn {
+                        let shifted = result[i]
+                        let conflicts = AvailabilityResolver.overlaps(
+                            start: shifted.startTime, end: shifted.endTime, blocks: unavailableBlocks
+                        )
+                        if !conflicts.isEmpty {
+                            return .conflict(ScheduleConflict(
+                                conflictingStepLabel: shifted.label,
+                                conflictingWindowName: "unavailable window",
+                                message: "\(shifted.label) would land at \(shifted.startTime.formatted(date: .omitted, time: .shortened)) during an unavailable window. Try a later bread-ready time.",
+                                suggestedAlternativeTime: nil
+                            ))
+                        }
+                    }
+                } else {
+                    print("[ScheduleBuilder] flex compress rejected: \(Int(newDuration))min < min \(Int(minDuration))min")
+                }
+            } else {
+                print("[ScheduleBuilder] no flex step found to absorb delay")
+            }
         }
 
         // Validate all flexible steps stay within their flex range

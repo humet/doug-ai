@@ -138,4 +138,23 @@ struct StarterStateMachineTests {
         )
         #expect(result == nil)
     }
+
+    // MARK: - Mark Peak Confirmed
+
+    @Test func markPeakConfirmedFromActivating() {
+        let result = StarterStateMachine.markPeakConfirmed(currentState: .activating)
+        #expect(result?.newState == .active)
+    }
+
+    @Test func markPeakConfirmedFromDormantIsNil() {
+        #expect(StarterStateMachine.markPeakConfirmed(currentState: .dormant) == nil)
+    }
+
+    @Test func markPeakConfirmedFromActiveIsNil() {
+        #expect(StarterStateMachine.markPeakConfirmed(currentState: .active) == nil)
+    }
+
+    @Test func markPeakConfirmedFromRevivingIsNil() {
+        #expect(StarterStateMachine.markPeakConfirmed(currentState: .reviving) == nil)
+    }
 }

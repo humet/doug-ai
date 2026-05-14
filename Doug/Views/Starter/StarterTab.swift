@@ -513,6 +513,10 @@ struct FeedLogRow: View {
             Label("Counter", systemImage: "flame")
                 .font(.caption2)
                 .foregroundStyle(.orange)
+        case .levain:
+            Label("Levain", systemImage: "bubbles.and.sparkles")
+                .font(.caption2)
+                .foregroundStyle(.green)
         case .postBake:
             Label("Post-bake", systemImage: "arrow.uturn.down")
                 .font(.caption2)

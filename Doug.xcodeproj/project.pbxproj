@@ -52,6 +52,8 @@
 
 /* Begin PBXFileReference section */
 		10798AD32FB0D8A2007695FA /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		1084BA652FB4FB74008BDE7D /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		1084BC932FB5CB89008BDE7D /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		108A67112FB22DB600D16E23 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		108A68022FB22DDC00D16E23 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		108CA64B2FB4711400045AD0 /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
@@ -143,6 +145,16 @@
 
 /* Begin PBXGroup section */
 		10798AD52FB0D8A2007695FA /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1084BA672FB4FB74008BDE7D /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1084BC952FB5CB89008BDE7D /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -394,12 +406,20 @@
 					ProjectRef = 108CAA6A2FB4B70000045AD0 /* Doug.xcodeproj */;
 				},
 				{
+					ProductGroup = 1084BC952FB5CB89008BDE7D /* Products */;
+					ProjectRef = 1084BC932FB5CB89008BDE7D /* Doug.xcodeproj */;
+				},
+				{
 					ProductGroup = 108CA64D2FB4711400045AD0 /* Products */;
 					ProjectRef = 108CA64B2FB4711400045AD0 /* Doug.xcodeproj */;
 				},
 				{
 					ProductGroup = 10CF46602FA9FCE600843F8F /* Products */;
 					ProjectRef = 10CF465E2FA9FCE600843F8F /* Doug.xcodeproj */;
+				},
+				{
+					ProductGroup = 1084BA672FB4FB74008BDE7D /* Products */;
+					ProjectRef = 1084BA652FB4FB74008BDE7D /* Doug.xcodeproj */;
 				},
 			);
 			projectRoot = "";

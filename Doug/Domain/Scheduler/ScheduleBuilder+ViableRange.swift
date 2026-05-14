@@ -1,20 +1,17 @@
 import Foundation
 
 extension ScheduleBuilder {
-    /// Computes the viable bread-ready time range for a recipe and availability.
-    ///
-    /// Overnight recipes (with cold retard) split across two days: pre-retard steps before sleep,
-    /// retard overnight, post-retard steps after wake-up.
-    /// Same-day recipes fit entirely within one wake window.
     static func viableRange(
         recipe: Recipe,
         kitchenTemperatureCelsius: Double,
         availability: AvailabilityInput,
         windows: [WindowInput] = [],
+        earliestStartTime: Date? = nil,
         referenceDate: Date = Date(),
         calendar: Calendar = .current,
         peakProfile: StarterPeakProfile? = nil
     ) -> ClosedRange<Date>? {
+        let effectiveStart = earliestStartTime ?? referenceDate
         let method = recipe.method
         let hasColdRetard = method.contains { $0.stepTypeID == .coldRetard }
 
@@ -23,6 +20,7 @@ extension ScheduleBuilder {
                 method: method,
                 kitchenTemperatureCelsius: kitchenTemperatureCelsius,
                 availability: availability,
+                earliestStart: effectiveStart,
                 referenceDate: referenceDate,
                 calendar: calendar,
                 peakProfile: peakProfile
@@ -32,6 +30,7 @@ extension ScheduleBuilder {
                 method: method,
                 kitchenTemperatureCelsius: kitchenTemperatureCelsius,
                 availability: availability,
+                earliestStart: effectiveStart,
                 referenceDate: referenceDate,
                 calendar: calendar,
                 peakProfile: peakProfile
@@ -45,6 +44,7 @@ extension ScheduleBuilder {
         method: [MethodStep],
         kitchenTemperatureCelsius: Double,
         availability: AvailabilityInput,
+        earliestStart: Date,
         referenceDate: Date,
         calendar: Calendar,
         peakProfile: StarterPeakProfile?
@@ -93,14 +93,21 @@ extension ScheduleBuilder {
             return nil
         }
 
-        let earliestBreadReady = wakeUp.addingTimeInterval(postColdRetardMinutes * 60)
+        let preColdRetardStart = max(
+            sleepTime.addingTimeInterval(-preColdRetardMinutes * 60),
+            earliestStart
+        )
+        let coldRetardStart = preColdRetardStart.addingTimeInterval(preColdRetardMinutes * 60)
+        let minColdRetardEnd = coldRetardStart.addingTimeInterval(flexRange.lowerBound * 60)
+        let effectiveWakeUp = max(wakeUp, minColdRetardEnd)
+
+        let earliestBreadReady = effectiveWakeUp.addingTimeInterval(postColdRetardMinutes * 60)
 
         let latestColdRetardStart = sleepTime
         let latestColdRetardEnd = latestColdRetardStart.addingTimeInterval(flexRange.upperBound * 60)
         let latestBreadReady = latestColdRetardEnd.addingTimeInterval(postColdRetardMinutes * 60)
 
-        let earliestPreColdRetardStart = sleepTime.addingTimeInterval(-preColdRetardMinutes * 60)
-        guard earliestPreColdRetardStart >= wakeUp.addingTimeInterval(-24 * 60 * 60) else {
+        guard preColdRetardStart >= wakeUp.addingTimeInterval(-24 * 60 * 60) else {
             return nil
         }
 
@@ -123,6 +130,7 @@ extension ScheduleBuilder {
         method: [MethodStep],
         kitchenTemperatureCelsius: Double,
         availability: AvailabilityInput,
+        earliestStart: Date,
         referenceDate: Date,
         calendar: Calendar,
         peakProfile: StarterPeakProfile?
@@ -166,10 +174,11 @@ extension ScheduleBuilder {
             return nil
         }
 
-        let earliestReady = wakeUp.addingTimeInterval(totalMinMinutes * 60)
+        let effectiveStart = max(wakeUp, earliestStart)
+        let earliestReady = effectiveStart.addingTimeInterval(totalMinMinutes * 60)
         let latestReady = min(
             sleepTime,
-            wakeUp.addingTimeInterval(totalMaxMinutes * 60)
+            effectiveStart.addingTimeInterval(totalMaxMinutes * 60)
         )
 
         guard earliestReady <= latestReady else { return nil }

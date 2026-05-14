@@ -318,6 +318,20 @@ enum StepTypeRegistry {
             notificationText: "Your starter should be close to peaking — check if it has doubled.",
             successSignal: "Starter has peaked — doubled in size with a domed, bubbly surface."
         ),
+
+        .refeedAndRefrigerate: StepType(
+            id: .refeedAndRefrigerate,
+            label: "Feed & Refrigerate Starter",
+            classification: .handsOn,
+            baseDurationMinutes: 10,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Feed your leftover starter at 1:1:1 and return it to the fridge. It will rest until your next bake.",
+            notificationText: "Don't forget to feed your starter and put it back in the fridge!",
+            successSignal: "Starter is fed and back in the fridge."
+        ),
     ]
 
     static func type(for id: StepTypeID) -> StepType {
