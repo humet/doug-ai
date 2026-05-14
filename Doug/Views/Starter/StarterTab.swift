@@ -185,16 +185,6 @@ struct StarterTab: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            if lifecycleState == .activating, risingFeed != nil {
-                Button {
-                    if let feed = risingFeed {
-                        viewModel.markPeak(for: feed, profile: profile, allLogs: Array(feedLogs))
-                    }
-                } label: {
-                    Label("Mark Peak", systemImage: "chart.line.uptrend.xyaxis")
-                }
-                .tint(.green)
-            }
         } else {
             lifecycleActionsContent
         }
