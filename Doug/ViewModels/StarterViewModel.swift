@@ -130,6 +130,8 @@ final class StarterViewModel {
         updateProfileAverages(profile: profile, feedLogs: remaining)
     }
 
+    static let peakMarkedNotification = Notification.Name("StarterPeakMarked")
+
     func markPeak(for log: StarterFeedLog, profile: StarterProfile?, allLogs: [StarterFeedLog]) {
         log.markPeak(at: Date())
         updateProfileAverages(profile: profile, feedLogs: allLogs)
@@ -137,6 +139,8 @@ final class StarterViewModel {
         if log.starterFeedIntent == .activation, let profile {
             evaluateLifecycle(profile: profile, feedLogs: allLogs)
         }
+
+        NotificationCenter.default.post(name: Self.peakMarkedNotification, object: nil)
     }
 
     func updateProfileAverages(profile: StarterProfile?, feedLogs: [StarterFeedLog]) {

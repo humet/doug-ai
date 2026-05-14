@@ -61,6 +61,15 @@ final class ScheduleViewModel {
 
     init() {
         NotificationRouter.shared.registerScheduleViewModel(self)
+        NotificationCenter.default.addObserver(
+            forName: StarterViewModel.peakMarkedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.advancePeakStepIfActive()
+            }
+        }
     }
 
     var selectedRecipe: Recipe {
@@ -1142,6 +1151,27 @@ final class ScheduleViewModel {
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
         promoteNextUpcoming(in: schedule)
         syncLiveActivity()
+    }
+
+    // MARK: - Peak Sync from Starter Tab
+
+    private func advancePeakStepIfActive() {
+        guard let schedule = activeSchedule else { return }
+        let steps = orderedTopLevelSteps(in: schedule)
+        guard let active = steps.first(where: { $0.stepStatus == .active }) else { return }
+
+        let stepID = StepTypeID(rawValue: active.stepTypeID)
+        guard stepID == .buildLevain || stepID == .waitForPeak else { return }
+
+        guard let context = schedule.modelContext else { return }
+        let profiles = (try? context.fetch(FetchDescriptor<StarterProfile>())) ?? []
+
+        markStepDone(
+            active,
+            feedDetails: nil,
+            starterProfile: profiles.first,
+            modelContext: context
+        )
     }
 
     // MARK: - Bake Coordinator Side Effects
