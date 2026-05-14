@@ -171,9 +171,25 @@ struct StarterTab: View {
         }
     }
 
+    private var bakeOnlyNeedsRefeed: Bool {
+        guard let bake = activeBake else { return false }
+        let remaining = bake.steps
+            .filter { $0.parentStep == nil }
+            .filter { $0.stepStatus == .upcoming || $0.stepStatus == .active }
+        return remaining.allSatisfy {
+            StepTypeID(rawValue: $0.stepTypeID) == .refeedAndRefrigerate
+        }
+    }
+
     @ViewBuilder
     private var lifecycleActions: some View {
-        if let bake = activeBake {
+        if activeBake != nil, bakeOnlyNeedsRefeed {
+            Button {
+                viewModel.showPostBake = true
+            } label: {
+                Label("Feed & Refrigerate", systemImage: "snowflake")
+            }
+        } else if let bake = activeBake {
             HStack(spacing: 8) {
                 Image(systemName: "oven")
                     .foregroundStyle(.orange)
