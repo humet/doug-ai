@@ -1561,7 +1561,7 @@ final class ScheduleViewModel {
 
     private func syncLiveActivity() {
         guard let schedule = activeSchedule, schedule.scheduleStatus == .active else {
-            LiveActivityService.shared.endBakeActivityImmediately()
+            LiveActivityService.shared.endBakeActivity()
             return
         }
 

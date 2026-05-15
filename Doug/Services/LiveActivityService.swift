@@ -35,16 +35,12 @@ final class LiveActivityService {
         }
     }
 
-    func endBakeActivity(policy: ActivityUIDismissalPolicy = .default) {
+    func endBakeActivity(policy: ActivityUIDismissalPolicy = .immediate) {
         guard let activity = currentBakeActivity else { return }
         currentBakeActivity = nil
         Task {
             await activity.end(nil, dismissalPolicy: policy)
         }
-    }
-
-    func endBakeActivityImmediately() {
-        endBakeActivity(policy: .immediate)
     }
 
     // MARK: - Revival Activities
@@ -74,7 +70,7 @@ final class LiveActivityService {
         }
     }
 
-    func endRevivalActivity(policy: ActivityUIDismissalPolicy = .default) {
+    func endRevivalActivity(policy: ActivityUIDismissalPolicy = .immediate) {
         guard let activity = currentRevivalActivity else { return }
         currentRevivalActivity = nil
         Task {
