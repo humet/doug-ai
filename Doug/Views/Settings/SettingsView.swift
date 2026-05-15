@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var showAddWindow = false
+    @State private var editingWindow: UnavailableWindow?
 
     private var availability: UserAvailability {
         if let existing = availabilities.first { return existing }
@@ -54,30 +55,46 @@ struct SettingsView: View {
 
                 Section {
                     ForEach(windows) { window in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(window.name)
-                                    .font(.subheadline.bold())
-                                Spacer()
-                                if !window.isActive {
-                                    Text("Disabled")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            HStack {
-                                Text(timeString(hour: window.startHour, minute: window.startMinute))
-                                Text("–")
-                                Text(timeString(hour: window.endHour, minute: window.endMinute))
-                                if window.isRecurring {
+                        Button {
+                            editingWindow = window
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(window.name)
+                                        .font(.subheadline.bold())
                                     Spacer()
-                                    Text(daysString(window.daysOfWeek))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    if !window.isActive {
+                                        Text("Disabled")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
+                                HStack {
+                                    Text(timeString(hour: window.startHour, minute: window.startMinute))
+                                    Text("–")
+                                    Text(timeString(hour: window.endHour, minute: window.endMinute))
+                                    if window.isRecurring {
+                                        Spacer()
+                                        Text(daysString(window.daysOfWeek))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        }
+                        .tint(.primary)
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                window.isActive.toggle()
+                            } label: {
+                                Label(
+                                    window.isActive ? "Disable" : "Enable",
+                                    systemImage: window.isActive ? "eye.slash" : "eye"
+                                )
+                            }
+                            .tint(window.isActive ? .orange : .green)
                         }
                     }
                     .onDelete { indexSet in
@@ -129,6 +146,9 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .sheet(isPresented: $showAddWindow) {
                 AddUnavailableWindowSheet(modelContext: modelContext)
+            }
+            .sheet(item: $editingWindow) { window in
+                EditUnavailableWindowSheet(window: window)
             }
         }
     }
@@ -291,6 +311,97 @@ struct AddUnavailableWindowSheet: View {
             specificDate: isRecurring ? nil : specificDate
         )
         modelContext.insert(window)
+        dismiss()
+    }
+}
+
+struct EditUnavailableWindowSheet: View {
+    let window: UnavailableWindow
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var isRecurring: Bool
+    @State private var selectedDays: Set<Int>
+    @State private var startTime: Date
+    @State private var endTime: Date
+    @State private var specificDate: Date
+    @State private var isActive: Bool
+
+    private let weekdays = Array(1 ... 7)
+
+    init(window: UnavailableWindow) {
+        self.window = window
+        let cal = Calendar.current
+        _name = State(initialValue: window.name)
+        _isRecurring = State(initialValue: window.isRecurring)
+        _selectedDays = State(initialValue: Set(window.daysOfWeek))
+        _startTime = State(initialValue: cal.date(bySettingHour: window.startHour, minute: window.startMinute, second: 0, of: Date()) ?? Date())
+        _endTime = State(initialValue: cal.date(bySettingHour: window.endHour, minute: window.endMinute, second: 0, of: Date()) ?? Date())
+        _specificDate = State(initialValue: window.specificDate ?? Date())
+        _isActive = State(initialValue: window.isActive)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Details") {
+                    TextField("Name", text: $name)
+                    Toggle("Recurring", isOn: $isRecurring)
+                    Toggle("Enabled", isOn: $isActive)
+                }
+
+                if isRecurring {
+                    Section("Days") {
+                        ForEach(weekdays, id: \.self) { day in
+                            let symbol = Calendar.current.weekdaySymbols[day - 1]
+                            Toggle(symbol, isOn: Binding(
+                                get: { selectedDays.contains(day) },
+                                set: { isOn in
+                                    if isOn { selectedDays.insert(day) }
+                                    else { selectedDays.remove(day) }
+                                }
+                            ))
+                        }
+                    }
+                } else {
+                    Section("Date") {
+                        DatePicker("Date", selection: $specificDate, displayedComponents: .date)
+                    }
+                }
+
+                Section("Time") {
+                    DatePicker("Start", selection: $startTime, displayedComponents: .hourAndMinute)
+                    DatePicker("End", selection: $endTime, displayedComponents: .hourAndMinute)
+                }
+            }
+            .navigationTitle("Edit Window")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        save()
+                    }
+                    .disabled(name.isEmpty)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let startComps = Calendar.current.dateComponents([.hour, .minute], from: startTime)
+        let endComps = Calendar.current.dateComponents([.hour, .minute], from: endTime)
+
+        window.name = name
+        window.isRecurring = isRecurring
+        window.daysOfWeek = isRecurring ? Array(selectedDays) : []
+        window.startHour = startComps.hour ?? 9
+        window.startMinute = startComps.minute ?? 0
+        window.endHour = endComps.hour ?? 17
+        window.endMinute = endComps.minute ?? 0
+        window.specificDate = isRecurring ? nil : specificDate
+        window.isActive = isActive
         dismiss()
     }
 }

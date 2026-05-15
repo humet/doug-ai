@@ -233,7 +233,7 @@ final class NotificationService {
             repeats: false
         )
 
-        let identifier = "step-\(step.stepTypeID)-\(step.sequenceIndex)-complete"
+        let identifier = "step-\(step.stepTypeID)-\(step.sequenceIndex)-bake-phase"
         let request = UNNotificationRequest(
             identifier: identifier,
             content: content,

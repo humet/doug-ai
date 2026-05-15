@@ -961,6 +961,7 @@ final class ScheduleViewModel {
         modelContext: ModelContext
     ) {
         guard let schedule = activeSchedule else { return }
+        NotificationService.shared.cancelNotifications(for: [step])
         step.stepStatus = .done
         if step.actualEndTime == nil {
             step.actualEndTime = Date()
@@ -1031,6 +1032,7 @@ final class ScheduleViewModel {
             sub.stepStatus = .upcoming
             sub.actualEndTime = nil
         }
+        Task { await NotificationService.shared.rescheduleNotifications(for: pendingFolds) }
     }
 
     /// Auto-completes passive steps whose end time has passed and promotes the next
@@ -1070,6 +1072,7 @@ final class ScheduleViewModel {
                         advanceSubSteps(in: schedule, now: now)
                         return
                     }
+                    NotificationService.shared.cancelNotifications(for: [step])
                     step.stepStatus = .done
                     step.actualEndTime = step.subSteps.isEmpty ? step.computedEndTime : now
                     didChange = true
@@ -1239,6 +1242,7 @@ final class ScheduleViewModel {
             profile: starterProfile, modelContext: modelContext
         )
 
+        NotificationService.shared.cancelNotifications(for: [step])
         cascade(afterEnd: oldStart, delta: delta, in: schedule, excluding: step)
         syncLiveActivity()
     }
