@@ -158,7 +158,10 @@ struct ScheduleTab: View {
                     CoachChatView(
                         schedule: viewModel.activeSchedule,
                         scheduleViewModel: viewModel,
-                        initialMessage: coachPrefill
+                        initialMessage: coachPrefill,
+                        starterProfile: profiles.first,
+                        feedLogs: Array(feedLogs),
+                        unavailableWindows: Array(windows)
                     )
                     .onDisappear { coachPrefill = nil }
                 }

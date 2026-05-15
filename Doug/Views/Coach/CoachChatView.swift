@@ -13,39 +13,41 @@ struct CoachChatView: View {
     var starterProfile: StarterProfile?
     var feedLogs: [StarterFeedLog] = []
     var unavailableWindows: [UnavailableWindow] = []
+    var revivalPlan: RevivalPlan?
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                messageList
-                inputBar
-            }
-            .navigationTitle("Coach")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+            messageList
+                .safeAreaInset(edge: .bottom) {
+                    inputBar
                 }
-            }
-            .task {
-                viewModel.loadHistory(
-                    modelContext: modelContext,
-                    schedule: schedule
-                )
-                if let initialMessage, !initialMessage.isEmpty {
-                    viewModel.inputText = initialMessage
-                    viewModel.send(
+                .scrollDismissesKeyboard(.interactively)
+                .navigationTitle("Coach")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+                .task {
+                    viewModel.loadHistory(
                         modelContext: modelContext,
-                        schedule: schedule,
-                        bakeContext: buildBakeContext(),
-                        starterContext: buildStarterContext(),
-                        availabilityContext: buildAvailabilityContext()
+                        schedule: schedule
                     )
+                    if let initialMessage, !initialMessage.isEmpty {
+                        viewModel.inputText = initialMessage
+                        viewModel.send(
+                            modelContext: modelContext,
+                            schedule: schedule,
+                            bakeContext: buildBakeContext(),
+                            starterContext: buildStarterContext(),
+                            availabilityContext: buildAvailabilityContext()
+                        )
+                    }
                 }
-            }
-            .onDisappear {
-                viewModel.cancelStream()
-            }
+                .onDisappear {
+                    viewModel.cancelStream()
+                }
         }
     }
 
@@ -77,9 +79,21 @@ struct CoachChatView: View {
                         }
                     }
 
-                    if viewModel.isStreaming, !viewModel.streamingText.isEmpty {
-                        CoachMessageBubble(role: .assistant, content: viewModel.streamingText)
-                            .id("streaming")
+                    if viewModel.isStreaming {
+                        if viewModel.streamingText.isEmpty {
+                            HStack {
+                                ProgressView()
+                                    .padding(.trailing, 4)
+                                Text("Thinking...")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                        } else {
+                            CoachMessageBubble(role: .assistant, content: viewModel.streamingText)
+                        }
+                        Color.clear.frame(height: 1).id("bottom")
                     }
 
                     if !viewModel.isStreaming, !viewModel.pendingActions.isEmpty {
@@ -102,33 +116,21 @@ struct CoachChatView: View {
                         )
                         .id("pending-actions")
                     }
-
-                    if viewModel.isStreaming, viewModel.streamingText.isEmpty {
-                        HStack {
-                            ProgressView()
-                                .padding(.trailing, 4)
-                            Text("Thinking...")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        .id("loading")
-                    }
                 }
                 .padding()
             }
+            .defaultScrollAnchor(.bottom)
             .onChange(of: viewModel.messages.count) {
                 withAnimation {
-                    if let last = viewModel.messages.last {
+                    if viewModel.isStreaming {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    } else if let last = viewModel.messages.last {
                         proxy.scrollTo(last.persistentModelID, anchor: .bottom)
                     }
                 }
             }
             .onChange(of: viewModel.streamingText) {
-                withAnimation {
-                    proxy.scrollTo("streaming", anchor: .bottom)
-                }
+                proxy.scrollTo("bottom", anchor: .bottom)
             }
         }
     }
@@ -297,7 +299,16 @@ struct CoachChatView: View {
                     waterGrams: log.waterGrams
                 )
             },
-            revivalPlan: nil
+            revivalPlan: revivalPlan.map { plan in
+                let steps = plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+                let peakTrend = steps.compactMap(\.timeToPeakMinutes)
+                return StarterContextPayload.RevivalPayload(
+                    isActive: plan.revivalStatus == .active,
+                    currentStep: plan.currentStepIndex + 1,
+                    totalSteps: steps.count,
+                    peakTimeTrend: peakTrend
+                )
+            }
         )
     }
 
@@ -305,14 +316,14 @@ struct CoachChatView: View {
         let active = unavailableWindows.filter(\.isActive)
         guard !active.isEmpty else { return nil }
         let cal = Calendar.current
-        let today = Date()
+        let referenceDate = schedule?.targetBreadReadyTime ?? Date()
         return AvailabilityContextPayload(
             unavailableWindows: active.compactMap { w in
                 guard let start = cal.date(
-                    bySettingHour: w.startHour, minute: w.startMinute, second: 0, of: today
+                    bySettingHour: w.startHour, minute: w.startMinute, second: 0, of: referenceDate
                 ),
                     let end = cal.date(
-                        bySettingHour: w.endHour, minute: w.endMinute, second: 0, of: today
+                        bySettingHour: w.endHour, minute: w.endMinute, second: 0, of: referenceDate
                     )
                 else { return nil }
                 return AvailabilityContextPayload.WindowPayload(

@@ -48,7 +48,7 @@ export default async function handler(
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       tools: coachTools,
       stopWhen: stepCountIs(2),
-      maxOutputTokens: 2048,
+      maxOutputTokens: 4096,
     });
 
     for await (const part of result.fullStream) {

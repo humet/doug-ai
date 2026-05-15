@@ -34,19 +34,6 @@ export const coachTools = {
       `Proposed: skip ${stepTypeId}. ${reason}`,
   }),
 
-  addStep: tool({
-    description: "Propose inserting a new step after an existing one. Use sparingly — only when the bake genuinely needs a step not in the original recipe.",
-    inputSchema: z.object({
-      afterStepTypeId: z.string().describe("Insert after this step"),
-      newStepLabel: z.string().describe("Human-readable name"),
-      durationMinutes: z.number(),
-      classification: z.enum(["handsOn", "passiveFlexible", "passiveFixed"]),
-      reason: z.string().describe("Brief explanation for the baker"),
-    }),
-    execute: async ({ newStepLabel, durationMinutes, reason }) =>
-      `Proposed: add "${newStepLabel}" (${durationMinutes}min). ${reason}`,
-  }),
-
   resolveConflicts: tool({
     description: "Propose batch adjustments to flex steps to clear all scheduling conflicts at once. Use when multiple steps have moved into unavailable windows.",
     inputSchema: z.object({

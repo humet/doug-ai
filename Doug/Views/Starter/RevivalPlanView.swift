@@ -13,6 +13,9 @@ struct RevivalPlanView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var availabilities: [UserAvailability]
     @Query private var windows: [UnavailableWindow]
+    @Query private var profiles: [StarterProfile]
+    @Query(sort: \StarterFeedLog.timestamp, order: .reverse)
+    private var feedLogs: [StarterFeedLog]
 
     @Environment(\.dismiss) private var dismiss
 
@@ -69,7 +72,11 @@ struct RevivalPlanView: View {
             CoachChatView(
                 schedule: nil,
                 scheduleViewModel: nil,
-                initialMessage: revivalCoachPrefill
+                initialMessage: revivalCoachPrefill,
+                starterProfile: profiles.first,
+                feedLogs: Array(feedLogs),
+                unavailableWindows: Array(windows),
+                revivalPlan: plan
             )
         }
         .task(id: currentStep?.status) {

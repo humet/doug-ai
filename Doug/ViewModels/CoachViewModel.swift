@@ -105,10 +105,6 @@ final class CoachViewModel {
         let selected = pendingActions.filter { actionSelections.contains($0.id) }
 
         for action in selected {
-            if action.toolName == "suggestFeedChange" {
-                continue
-            }
-
             guard let schedule,
                   let stepTypeId = action.stepTypeId,
                   let stepTypeID = StepTypeID(rawValue: stepTypeId)

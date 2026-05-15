@@ -1,6 +1,12 @@
+import SwiftData
 import SwiftUI
 
 struct CalculatorTab: View {
+    @Query private var profiles: [StarterProfile]
+    @Query(sort: \StarterFeedLog.timestamp, order: .reverse)
+    private var feedLogs: [StarterFeedLog]
+
+    @State private var showCoachChat = false
     @State private var flourGrams: Double = 500
     @State private var waterGrams: Double = 350
     @State private var levainGrams: Double = 100
@@ -88,6 +94,24 @@ struct CalculatorTab: View {
             }
             .scrollContentBackground(.hidden)
             .navigationTitle("Calculator")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showCoachChat = true
+                    } label: {
+                        Image(systemName: "bubble.left.and.text.bubble.right")
+                    }
+                    .accessibilityLabel("Coach")
+                }
+            }
+            .sheet(isPresented: $showCoachChat) {
+                CoachChatView(
+                    schedule: nil,
+                    scheduleViewModel: nil,
+                    starterProfile: profiles.first,
+                    feedLogs: Array(feedLogs)
+                )
+            }
         }
     }
 
