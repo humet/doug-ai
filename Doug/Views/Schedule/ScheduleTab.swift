@@ -491,7 +491,8 @@ struct ScheduleTab: View {
             lastActivationFeed: lastActivation,
             activePeakAverage: profile?.activePeakAverageMinutes,
             kitchenTempC: viewModel.kitchenTemperature,
-            scheduleDurationMinutes: duration
+            scheduleDurationMinutes: duration,
+            storageType: profile?.starterStorageType ?? .fridge
         )
         let earliest = estimate.earliestBreadReady
         let calendar = Calendar.current

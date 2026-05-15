@@ -15,6 +15,7 @@ enum EarliestBakeEstimator {
         activePeakAverage: Double?,
         kitchenTempC: Double,
         scheduleDurationMinutes: Double,
+        storageType: StarterStorageType = .fridge,
         now: Date = Date()
     ) -> Estimate {
         let lead = activationLeadMinutes(
@@ -23,6 +24,7 @@ enum EarliestBakeEstimator {
             lastActivationFeed: lastActivationFeed,
             activePeakAverage: activePeakAverage,
             kitchenTempC: kitchenTempC,
+            storageType: storageType,
             now: now
         )
 
@@ -43,8 +45,13 @@ enum EarliestBakeEstimator {
         lastActivationFeed: FeedLogInput?,
         activePeakAverage: Double?,
         kitchenTempC: Double,
+        storageType: StarterStorageType = .fridge,
         now: Date = Date()
     ) -> Double {
+        let warmUp = storageType == .fridge
+            ? TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: kitchenTempC)
+            : 0.0
+
         switch lifecycleState {
         case .active:
             return 0
@@ -59,12 +66,14 @@ enum EarliestBakeEstimator {
             return 0
 
         case .dormant:
-            return activePeakAverage
+            let basePeak = activePeakAverage
                 ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTempC)
+            return basePeak + warmUp
 
         case .reviving:
-            return activePeakAverage
+            let basePeak = activePeakAverage
                 ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTempC)
+            return basePeak + warmUp
         }
     }
 

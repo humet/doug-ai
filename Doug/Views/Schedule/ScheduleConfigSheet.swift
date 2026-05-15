@@ -249,7 +249,8 @@ struct ScheduleConfigSheet: View {
                 lastActivationFeed: nil,
                 activePeakAverage: starterProfile?.activePeakAverageMinutes,
                 kitchenTempC: viewModel.kitchenTemperature,
-                scheduleDurationMinutes: duration
+                scheduleDurationMinutes: duration,
+                storageType: starterProfile?.starterStorageType ?? .fridge
             )
             let label = viewModel.selectedRecipe.completionLabel.lowercased()
             return "Feed it on the counter first. Earliest \(label): \(estimate.earliestBreadReady.formatted(date: .abbreviated, time: .shortened))"

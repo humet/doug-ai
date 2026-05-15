@@ -74,4 +74,21 @@ struct TemperatureCalculatorTests {
         #expect(hot < 240)
         #expect(cold > 240)
     }
+
+    // MARK: - Fridge Warm-Up
+
+    @Test func fridgeWarmUpWarmKitchen() {
+        let minutes = TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: 28)
+        #expect(minutes == 60)
+    }
+
+    @Test func fridgeWarmUpModerateKitchen() {
+        let minutes = TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: 23)
+        #expect(minutes == 90)
+    }
+
+    @Test func fridgeWarmUpCoolKitchen() {
+        let minutes = TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: 18)
+        #expect(minutes == 120)
+    }
 }

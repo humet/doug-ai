@@ -544,7 +544,10 @@ final class ScheduleViewModel {
                 profile.activePeakAverageMinutes
                     ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemperature)
             }
-            return now.addingTimeInterval((activateDuration + peakDuration) * 60)
+            let warmUp = profile.starterStorageType == .fridge
+                ? TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: kitchenTemperature)
+                : 0.0
+            return now.addingTimeInterval((activateDuration + peakDuration + warmUp) * 60)
         case .reviving:
             return now.addingTimeInterval(24 * 3600)
         }

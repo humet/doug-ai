@@ -154,6 +154,7 @@ struct PlanAheadEstimatorTests {
             unavailableWindows: [],
             peakProfile: nil,
             activePeakAverageMinutes: nil,
+            storageType: .counter,
             calendar: Self.calendar
         )
 
@@ -214,6 +215,7 @@ struct PlanAheadEstimatorTests {
             unavailableWindows: [],
             peakProfile: nil,
             activePeakAverageMinutes: 240,
+            storageType: .counter,
             calendar: Self.calendar
         )
 

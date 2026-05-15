@@ -244,6 +244,7 @@ final class StarterViewModel {
             upcomingBakeStart: upcomingBakeStart,
             activePeakAverage: profile.activePeakAverageMinutes,
             kitchenTempC: feedLogs.first?.kitchenTemperatureCelsius ?? 22,
+            storageType: profile.starterStorageType,
             availability: avail,
             windows: windows.map { WindowInput(from: $0) }
         )

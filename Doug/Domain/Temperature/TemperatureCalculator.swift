@@ -43,6 +43,14 @@ enum TemperatureCalculator {
         }
     }
 
+    static func fridgeWarmUpMinutes(kitchenTempCelsius: Double) -> Double {
+        switch kitchenTempCelsius {
+        case 26...: 60
+        case 22 ..< 26: 90
+        default: 120
+        }
+    }
+
     /// Standard levain-build ratio assumed for personalised peak-time lookups.
     static let levainBuildRatio: FeedRatioBucket = .oneToFive
 

@@ -29,7 +29,8 @@ struct EarliestBakeEstimatorTests {
             lastActivationFeed: nil,
             activePeakAverage: 360,
             kitchenTempC: 23,
-            scheduleDurationMinutes: Self.scheduleDuration
+            scheduleDurationMinutes: Self.scheduleDuration,
+            storageType: .counter
         )
 
         #expect(estimate.activationLeadMinutes == 360)
@@ -42,7 +43,8 @@ struct EarliestBakeEstimatorTests {
             lastActivationFeed: nil,
             activePeakAverage: nil,
             kitchenTempC: 23,
-            scheduleDurationMinutes: Self.scheduleDuration
+            scheduleDurationMinutes: Self.scheduleDuration,
+            storageType: .counter
         )
 
         // At 23°C, TemperatureCalculator returns 300 min (5h)
@@ -105,6 +107,7 @@ struct EarliestBakeEstimatorTests {
             activePeakAverage: 360,
             kitchenTempC: 23,
             scheduleDurationMinutes: Self.scheduleDuration,
+            storageType: .counter,
             now: now
         )
 
@@ -136,5 +139,66 @@ struct EarliestBakeEstimatorTests {
 
         #expect(estimate.breakdown.contains("activation"))
         #expect(estimate.breakdown.contains("bake"))
+    }
+
+    // MARK: - Fridge Warm-Up Offset
+
+    @Test func dormantFridgeStarterIncludesWarmUp() {
+        let lead = EarliestBakeEstimator.activationLeadMinutes(
+            lifecycleState: .dormant,
+            stateChangedAt: Date(),
+            lastActivationFeed: nil,
+            activePeakAverage: nil,
+            kitchenTempC: 22,
+            storageType: .fridge
+        )
+        let basePeak = TemperatureCalculator.levainBuildMinutes(kitchenTemp: 22)
+        let warmUp = TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: 22)
+        #expect(lead == basePeak + warmUp)
+    }
+
+    @Test func dormantCounterStarterNoWarmUp() {
+        let lead = EarliestBakeEstimator.activationLeadMinutes(
+            lifecycleState: .dormant,
+            stateChangedAt: Date(),
+            lastActivationFeed: nil,
+            activePeakAverage: nil,
+            kitchenTempC: 22,
+            storageType: .counter
+        )
+        let basePeak = TemperatureCalculator.levainBuildMinutes(kitchenTemp: 22)
+        #expect(lead == basePeak)
+    }
+
+    @Test func fridgeWarmUpVariesWithKitchenTemp() {
+        let coolLead = EarliestBakeEstimator.activationLeadMinutes(
+            lifecycleState: .dormant,
+            stateChangedAt: Date(),
+            lastActivationFeed: nil,
+            activePeakAverage: nil,
+            kitchenTempC: 18,
+            storageType: .fridge
+        )
+        let warmLead = EarliestBakeEstimator.activationLeadMinutes(
+            lifecycleState: .dormant,
+            stateChangedAt: Date(),
+            lastActivationFeed: nil,
+            activePeakAverage: nil,
+            kitchenTempC: 28,
+            storageType: .fridge
+        )
+        #expect(coolLead > warmLead)
+    }
+
+    @Test func activeStarterNoWarmUpRegardlessOfStorage() {
+        let lead = EarliestBakeEstimator.activationLeadMinutes(
+            lifecycleState: .active,
+            stateChangedAt: Date(),
+            lastActivationFeed: nil,
+            activePeakAverage: nil,
+            kitchenTempC: 22,
+            storageType: .fridge
+        )
+        #expect(lead == 0)
     }
 }

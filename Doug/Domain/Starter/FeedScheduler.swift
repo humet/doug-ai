@@ -28,6 +28,7 @@ enum FeedScheduler {
         upcomingBakeStart: Date?,
         activePeakAverage: Double?,
         kitchenTempC: Double,
+        storageType: StarterStorageType = .fridge,
         availability: AvailabilityInput,
         windows: [WindowInput],
         now: Date = Date(),
@@ -59,6 +60,7 @@ enum FeedScheduler {
                 upcomingBakeStart: upcomingBakeStart,
                 activePeakAverage: activePeakAverage,
                 kitchenTempC: kitchenTempC,
+                storageType: storageType,
                 availability: availability,
                 windows: windows,
                 now: now,
@@ -73,13 +75,17 @@ enum FeedScheduler {
         upcomingBakeStart: Date?,
         activePeakAverage: Double?,
         kitchenTempC: Double,
+        storageType: StarterStorageType = .fridge,
         availability: AvailabilityInput,
         windows: [WindowInput],
         now: Date,
         calendar: Calendar
     ) -> FeedSuggestion? {
         if let bakeStart = upcomingBakeStart {
-            let peakHours = (activePeakAverage ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTempC)) /
+            let warmUp = storageType == .fridge
+                ? TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: kitchenTempC)
+                : 0.0
+            let peakHours = (activePeakAverage ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTempC) + warmUp) /
                 60
             let activateBy = bakeStart.addingTimeInterval(-peakHours * 3600)
             let candidate = max(activateBy, now)

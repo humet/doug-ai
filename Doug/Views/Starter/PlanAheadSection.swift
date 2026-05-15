@@ -20,7 +20,8 @@ struct PlanAheadSection: View {
             kitchenTemp: feedLogs.first?.kitchenTemperatureCelsius ?? 22.0,
             hasAvailability: availabilities.first != nil,
             windowCount: windows.filter(\.isActive).count,
-            activePeakAverage: profile?.activePeakAverageMinutes
+            activePeakAverage: profile?.activePeakAverageMinutes,
+            storageType: profile?.starterStorageType ?? .fridge
         )
     }
 
@@ -72,7 +73,8 @@ struct PlanAheadSection: View {
                 availability: avail,
                 unavailableWindows: windowInputs,
                 peakProfile: peakProfile,
-                activePeakAverageMinutes: input.activePeakAverage
+                activePeakAverageMinutes: input.activePeakAverage,
+                storageType: input.storageType
             )
             planAheadReminderSet = false
         }
@@ -169,4 +171,5 @@ private struct PlanAheadInput: Hashable {
     let hasAvailability: Bool
     let windowCount: Int
     let activePeakAverage: Double?
+    let storageType: StarterStorageType
 }

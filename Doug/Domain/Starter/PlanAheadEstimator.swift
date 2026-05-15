@@ -22,10 +22,15 @@ enum PlanAheadEstimator {
         unavailableWindows: [WindowInput],
         peakProfile: StarterPeakProfile?,
         activePeakAverageMinutes: Double?,
+        storageType: StarterStorageType = .fridge,
         calendar: Calendar = .current
     ) -> Result {
-        let peakDuration = activePeakAverageMinutes
+        let basePeak = activePeakAverageMinutes
             ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemperatureCelsius)
+        let warmUp = storageType == .fridge
+            ? TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: kitchenTemperatureCelsius)
+            : 0.0
+        let peakDuration = basePeak + warmUp
 
         guard let avail = availability else {
             return noAvailabilityFallback(
