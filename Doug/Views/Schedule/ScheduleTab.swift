@@ -234,7 +234,7 @@ struct ScheduleTab: View {
                     NavigationLink(value: recipe.id) {
                         RecipeCard(recipe: recipe)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(RecipeCardButtonStyle())
                 }
             }
             .padding()
@@ -549,7 +549,16 @@ private struct RecipeCard: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemBackground), in: .rect(cornerRadius: 16))
+        .background(DougTheme.warmParchment, in: .rect(cornerRadius: 16))
+    }
+}
+
+private struct RecipeCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.smooth(duration: 0.15), value: configuration.isPressed)
     }
 }
 

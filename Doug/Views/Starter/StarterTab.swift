@@ -265,8 +265,10 @@ struct StarterTab: View {
             Button {
                 viewModel.showPostBake = true
             } label: {
-                Label("Feed & Refrigerate", systemImage: "snowflake")
+                Text("Feed & Refrigerate")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
         case .reviving:
             EmptyView()
         }
