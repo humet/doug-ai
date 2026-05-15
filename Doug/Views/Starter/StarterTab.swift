@@ -194,10 +194,36 @@ struct StarterTab: View {
                 subtitle: lifecycleSubtitle(now: now)
             )
 
+            starterDetailRow
+
             lifecycleActions
         } header: {
             Text("Starter")
         }
+    }
+
+    private var starterDetailRow: some View {
+        HStack(spacing: 16) {
+            Label(
+                profile?.starterStorageType == .counter ? "Counter" : "Fridge",
+                systemImage: profile?.starterStorageType == .counter ? "sun.max" : "refrigerator"
+            )
+            let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
+            Label(
+                status == .readyToBake ? "Healthy" : status == .needsFeed ? "Needs feed" : "Needs revival",
+                systemImage: healthIcon(status)
+            )
+            .foregroundStyle(healthColor(status))
+            if let lastFeed = feedLogs.first {
+                Label {
+                    RelativeTimeLabel(date: lastFeed.timestamp)
+                } icon: {
+                    Image(systemName: "clock")
+                }
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 
     @ViewBuilder
@@ -224,18 +250,20 @@ struct StarterTab: View {
         switch lifecycleState {
         case .dormant:
             Button {
-                viewModel.showLogFeed = true
-            } label: {
-                Label("Log Maintenance Feed", systemImage: "snowflake")
-            }
-            Button {
                 if let profile {
                     viewModel.activate(profile: profile)
                 }
             } label: {
-                Label("Activate for Bake", systemImage: "flame")
+                Text("Activate for Bake")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
             .tint(.orange)
+            Button {
+                viewModel.showLogFeed = true
+            } label: {
+                Label("Log Maintenance Feed", systemImage: "snowflake")
+            }
         case .activating:
             if risingFeed != nil {
                 Button {
@@ -243,15 +271,19 @@ struct StarterTab: View {
                         viewModel.markPeak(for: feed, profile: profile, allLogs: Array(feedLogs))
                     }
                 } label: {
-                    Label("Mark Peak", systemImage: "chart.line.uptrend.xyaxis")
+                    Text("Mark Peak")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
                 .tint(.green)
             } else {
                 Button {
                     viewModel.showLogFeed = true
                 } label: {
-                    Label("Log Activation Feed", systemImage: "flame")
+                    Text("Log Activation Feed")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
                 .tint(.orange)
             }
             Button {
@@ -342,6 +374,9 @@ struct StarterTab: View {
         if lifecycleState == .dormant, let bakeStart = upcomingBakeStart {
             bakeAwarenessContent(bakeStart: bakeStart)
         } else if lifecycleState == .dormant, upcomingBakeStart == nil {
+            if let suggestion = currentSuggestion {
+                maintenanceFeedContent(suggestion)
+            }
             PlanAheadSection(
                 profile: profile,
                 feedLogs: Array(feedLogs),
@@ -350,6 +385,36 @@ struct StarterTab: View {
             )
         } else if activeRevivalPlan == nil, let suggestion = currentSuggestion {
             suggestionContent(suggestion)
+        }
+    }
+
+    private func maintenanceFeedContent(_ suggestion: FeedSuggestion) -> some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "refrigerator")
+                    .foregroundStyle(suggestion.urgency == .urgent ? .orange : .secondary)
+                    .font(.title3)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Next maintenance feed")
+                        .font(.subheadline.bold())
+                    Text(suggestion.time, format: .dateTime.weekday(.wide).day().month(.abbreviated).hour().minute())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                RelativeTimeLabel(date: suggestion.time)
+                    .font(.caption)
+                    .foregroundStyle(suggestion.urgency == .urgent ? .orange : .secondary)
+            }
+            .accessibilityElement(children: .combine)
+        } header: {
+            Text("Starter Care")
+        } footer: {
+            if suggestion.urgency == .urgent {
+                Text("Your starter is overdue for a feed.")
+                    .foregroundStyle(.orange)
+            }
         }
     }
 
@@ -376,8 +441,10 @@ struct StarterTab: View {
                     viewModel.activate(profile: profile)
                 }
             } label: {
-                Label("Activate Now", systemImage: "flame")
+                Text("Activate Now")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
             .tint(.orange)
         } header: {
             Text("What's Next")

@@ -221,6 +221,9 @@ final class StarterViewModel {
             activePeakAverage: profile.activePeakAverageMinutes
         ) {
             profile.starterLifecycleState = result.newState
+            if result.newState == .activating || result.newState == .active {
+                profile.starterStorageType = .counter
+            }
         }
     }
 
@@ -434,6 +437,9 @@ final class StarterViewModel {
                let result = StarterStateMachine.completeRevival(currentState: profile.starterLifecycleState)
             {
                 profile.starterLifecycleState = result.newState
+                if result.newState == .activating || result.newState == .active {
+                    profile.starterStorageType = .counter
+                }
             }
             syncRevivalActivity(plan: plan)
             return true

@@ -85,8 +85,8 @@ struct TimeSlotCell: View {
                     .opacity(textOpacity)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 4)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 6)
             .background(backgroundColor, in: .rect(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
