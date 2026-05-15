@@ -84,8 +84,26 @@ enum ScheduleResult {
 struct ScheduleConflict {
     let conflictingStepLabel: String
     let conflictingWindowName: String
+    let conflictingWindowStart: Date?
+    let conflictingWindowEnd: Date?
     let message: String
     let suggestedAlternativeTime: Date?
+
+    init(
+        conflictingStepLabel: String,
+        conflictingWindowName: String,
+        conflictingWindowStart: Date? = nil,
+        conflictingWindowEnd: Date? = nil,
+        message: String,
+        suggestedAlternativeTime: Date? = nil
+    ) {
+        self.conflictingStepLabel = conflictingStepLabel
+        self.conflictingWindowName = conflictingWindowName
+        self.conflictingWindowStart = conflictingWindowStart
+        self.conflictingWindowEnd = conflictingWindowEnd
+        self.message = message
+        self.suggestedAlternativeTime = suggestedAlternativeTime
+    }
 }
 
 // MARK: - Schedule Builder
@@ -174,10 +192,15 @@ enum ScheduleBuilder {
                         }
 
                         if stillConflicting {
+                            let conflictBlock = shiftedMoments.lazy.compactMap { moment in
+                                AvailabilityResolver.momentOverlaps(moment, blocks: unavailableBlocks).first
+                            }.first
                             return .conflict(ScheduleConflict(
                                 conflictingStepLabel: stepType.label,
-                                conflictingWindowName: "unavailable window",
-                                message: "\(stepType.label) conflicts with an unavailable window and cannot be rescheduled. Try a different bread-ready time.",
+                                conflictingWindowName: conflictBlock?.sourceName ?? "your available hours",
+                                conflictingWindowStart: conflictBlock?.start,
+                                conflictingWindowEnd: conflictBlock?.end,
+                                message: "\(stepType.label) conflicts with \(conflictBlock?.sourceName ?? "your available hours") and cannot be rescheduled. Try a different bread-ready time.",
                                 suggestedAlternativeTime: nil
                             ))
                         }
@@ -501,10 +524,13 @@ enum ScheduleBuilder {
                             start: shifted.startTime, end: shifted.endTime, blocks: unavailableBlocks
                         )
                         if !conflicts.isEmpty {
+                            let block = conflicts.first!
                             return .conflict(ScheduleConflict(
                                 conflictingStepLabel: shifted.label,
-                                conflictingWindowName: "unavailable window",
-                                message: "\(shifted.label) would land at \(shifted.startTime.formatted(date: .omitted, time: .shortened)) during an unavailable window. Try a later bread-ready time.",
+                                conflictingWindowName: block.sourceName ?? "your available hours",
+                                conflictingWindowStart: block.start,
+                                conflictingWindowEnd: block.end,
+                                message: "\(shifted.label) would land at \(shifted.startTime.formatted(date: .omitted, time: .shortened)) during \(block.sourceName ?? "your available hours"). Try a later bread-ready time.",
                                 suggestedAlternativeTime: nil
                             ))
                         }
@@ -544,8 +570,10 @@ enum ScheduleBuilder {
                     if scheduled.startTime >= block.start, scheduled.startTime < block.end {
                         return .conflict(ScheduleConflict(
                             conflictingStepLabel: scheduled.label,
-                            conflictingWindowName: "unavailable window",
-                            message: "\(scheduled.label) would start at \(scheduled.startTime.formatted(date: .omitted, time: .shortened)) during an unavailable window. Try a later bread-ready time.",
+                            conflictingWindowName: block.sourceName ?? "your available hours",
+                            conflictingWindowStart: block.start,
+                            conflictingWindowEnd: block.end,
+                            message: "\(scheduled.label) would start at \(scheduled.startTime.formatted(date: .omitted, time: .shortened)) during \(block.sourceName ?? "your available hours"). Try a later bread-ready time.",
                             suggestedAlternativeTime: nil
                         ))
                     }
@@ -740,10 +768,13 @@ enum ScheduleBuilder {
         }
 
         // Could not resolve locally — return a conflict
+        let block = conflicts.first ?? conflict
         return .conflict(ScheduleConflict(
             conflictingStepLabel: step.stepType.label,
-            conflictingWindowName: "unavailable window",
-            message: "\(step.stepType.label) conflicts with an unavailable window. Try a different bread-ready time.",
+            conflictingWindowName: block.sourceName ?? "your available hours",
+            conflictingWindowStart: block.start,
+            conflictingWindowEnd: block.end,
+            message: "\(step.stepType.label) conflicts with \(block.sourceName ?? "your available hours"). Try a different bread-ready time.",
             suggestedAlternativeTime: shiftedEnd
         ))
     }
@@ -794,10 +825,13 @@ enum ScheduleBuilder {
                     start: newStart, end: newEnd, blocks: unavailableBlocks
                 )
                 if !conflicts.isEmpty {
+                    let block = conflicts.first!
                     return .conflict(ScheduleConflict(
                         conflictingStepLabel: old.label,
-                        conflictingWindowName: "unavailable window",
-                        message: "\(old.label) cannot be rescheduled to fit. Try a different bread-ready time.",
+                        conflictingWindowName: block.sourceName ?? "your available hours",
+                        conflictingWindowStart: block.start,
+                        conflictingWindowEnd: block.end,
+                        message: "\(old.label) cannot be rescheduled to fit — conflicts with \(block.sourceName ?? "your available hours"). Try a different bread-ready time.",
                         suggestedAlternativeTime: nil
                     ))
                 }
@@ -899,5 +933,32 @@ enum ScheduleBuilder {
 
         let unique = Array(Set(moments)).sorted()
         return (moments: unique, groupDuration: totalDuration)
+    }
+
+    // MARK: - Flex Compression Detection
+
+    struct FlexCompressionDetail {
+        let stepLabel: String
+        let defaultDurationMinutes: Double
+        let actualDurationMinutes: Double
+    }
+
+    static func flexCompressionDetails(
+        steps: [ScheduledStep],
+        recipe: Recipe
+    ) -> [FlexCompressionDetail] {
+        var details: [FlexCompressionDetail] = []
+        for methodStep in recipe.method where methodStep.stepType.classification == .passiveFlexible {
+            guard let scheduled = steps.first(where: { $0.methodStepID == methodStep.id }) else { continue }
+            let defaultDuration = methodStep.effectiveDuration
+            if scheduled.durationMinutes < defaultDuration {
+                details.append(FlexCompressionDetail(
+                    stepLabel: scheduled.label,
+                    defaultDurationMinutes: defaultDuration,
+                    actualDurationMinutes: scheduled.durationMinutes
+                ))
+            }
+        }
+        return details
     }
 }

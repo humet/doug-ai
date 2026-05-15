@@ -23,6 +23,20 @@ struct ScheduleAdjustment: Identifiable {
     let newBulkEndTime: Date
 }
 
+// MARK: - Time Slot Types
+
+enum SlotViability {
+    case available
+    case flexed([ScheduleBuilder.FlexCompressionDetail])
+    case conflict(ScheduleConflict)
+}
+
+struct TimeSlot: Identifiable {
+    let id: Date
+    let time: Date
+    let viability: SlotViability
+}
+
 @Observable
 @MainActor
 final class ScheduleViewModel {
@@ -59,6 +73,10 @@ final class ScheduleViewModel {
     var detectedLevain: LevainContext?
     var useActiveLevain = false
 
+    // Time slot scanning
+    var timeSlots: [TimeSlot] = []
+    var disabledWindowIDs: Set<PersistentIdentifier> = []
+
     init() {
         NotificationRouter.shared.registerScheduleViewModel(self)
         NotificationCenter.default.addObserver(
@@ -74,6 +92,11 @@ final class ScheduleViewModel {
 
     var selectedRecipe: Recipe {
         RecipeBook.recipe(for: selectedRecipeID)
+    }
+
+    var currentFlexCompressions: [String: ScheduleBuilder.FlexCompressionDetail] {
+        let details = ScheduleBuilder.flexCompressionDetails(steps: previewSteps, recipe: selectedRecipe)
+        return Dictionary(uniqueKeysWithValues: details.map { ($0.stepLabel, $0) })
     }
 
     // MARK: - Restoration
@@ -115,7 +138,9 @@ final class ScheduleViewModel {
         let avail = availability.map { AvailabilityInput(from: $0) }
             ?? AvailabilityInput(startHour: 6, startMinute: 30, endHour: 21, endMinute: 0)
 
-        let windowInputs = windows.map { WindowInput(from: $0) }
+        let windowInputs = windows
+            .filter { !disabledWindowIDs.contains($0.persistentModelID) }
+            .map { WindowInput(from: $0) }
         let peakProfile = feedLogs.isEmpty
             ? nil
             : StarterPeakProfile(feedLogs: feedLogs.map { FeedLogInput(from: $0) }, intentFilter: .activation)
@@ -263,6 +288,136 @@ final class ScheduleViewModel {
             previewSteps = []
             conflict = scheduleConflict
         }
+    }
+
+    // MARK: - Time Slot Scanning
+
+    func scanTimeSlots(
+        availability: UserAvailability?,
+        windows: [UnavailableWindow],
+        feedLogs: [StarterFeedLog] = [],
+        starterProfile: StarterProfile? = nil
+    ) {
+        let calendar = Calendar.current
+        let avail = availability.map { AvailabilityInput(from: $0) }
+            ?? AvailabilityInput(startHour: 6, startMinute: 30, endHour: 21, endMinute: 0)
+        let effectiveWindows = windows
+            .filter { !disabledWindowIDs.contains($0.persistentModelID) }
+            .map { WindowInput(from: $0) }
+        let peakProfile = feedLogs.isEmpty
+            ? nil
+            : StarterPeakProfile(feedLogs: feedLogs.map { FeedLogInput(from: $0) }, intentFilter: .activation)
+        let earliest = computeEarliestStartTime(
+            starterProfile: starterProfile,
+            feedLogs: feedLogs,
+            peakProfile: peakProfile
+        )
+        let starterState = starterProfile?.starterLifecycleState ?? .dormant
+        let levain = (useActiveLevain || starterState == .activating || starterState == .active) ? detectedLevain : nil
+
+        let selectedDay = calendar.startOfDay(for: targetDate)
+        let scanStart = calendar.date(
+            bySettingHour: avail.startHour,
+            minute: avail.startMinute,
+            second: 0,
+            of: selectedDay
+        ) ?? selectedDay
+        let scanEnd = calendar.date(
+            bySettingHour: avail.endHour,
+            minute: avail.endMinute,
+            second: 0,
+            of: selectedDay
+        ) ?? selectedDay
+
+        let effectiveScanStart: Date
+        if let range = viableBreadReadyRange, calendar.isDate(range.lowerBound, inSameDayAs: selectedDay) {
+            effectiveScanStart = range.lowerBound
+        } else {
+            effectiveScanStart = scanStart
+        }
+
+        guard effectiveScanStart < scanEnd else {
+            timeSlots = []
+            return
+        }
+
+        var slots: [TimeSlot] = []
+        let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: effectiveScanStart)
+        let snappedMinute = ((comps.minute ?? 0) / 30) * 30
+        var cursor = calendar.date(
+            bySettingHour: comps.hour ?? 0,
+            minute: snappedMinute,
+            second: 0,
+            of: effectiveScanStart
+        ) ?? effectiveScanStart
+        if cursor < effectiveScanStart {
+            cursor = cursor.addingTimeInterval(30 * 60)
+        }
+
+        while cursor <= scanEnd {
+            let input = ScheduleBuilderInput(
+                recipe: selectedRecipe,
+                targetBreadReadyTime: cursor,
+                kitchenTemperatureCelsius: kitchenTemperature,
+                availability: avail,
+                unavailableWindows: effectiveWindows,
+                peakProfile: peakProfile,
+                levainContext: levain,
+                earliestStartTime: earliest
+            )
+
+            let result = ScheduleBuilder.build(input)
+
+            let viability: SlotViability
+            switch result {
+            case let .success(steps):
+                let firstActionable = steps.first { $0.stepTypeID != .fridgeRest && $0.levainElapsedMinutes == nil }
+                if let firstStart = firstActionable?.startTime, firstStart < Date().addingTimeInterval(-60) {
+                    viability = .conflict(ScheduleConflict(
+                        conflictingStepLabel: firstActionable?.label ?? "Schedule",
+                        conflictingWindowName: "schedule constraint",
+                        message: "This time requires starting in the past."
+                    ))
+                } else {
+                    let details = ScheduleBuilder.flexCompressionDetails(steps: steps, recipe: selectedRecipe)
+                    viability = details.isEmpty ? .available : .flexed(details)
+                }
+            case let .conflict(c):
+                viability = .conflict(c)
+            }
+
+            slots.append(TimeSlot(id: cursor, time: cursor, viability: viability))
+            cursor = cursor.addingTimeInterval(30 * 60)
+        }
+
+        timeSlots = slots
+    }
+
+    func relevantWindows(
+        from windows: [UnavailableWindow],
+        availability: UserAvailability?
+    ) -> [UnavailableWindow] {
+        let calendar = Calendar.current
+        let selectedDay = calendar.startOfDay(for: targetDate)
+        let scheduleStart = calendar.date(byAdding: .day, value: -2, to: selectedDay) ?? selectedDay
+        let scheduleEnd = calendar.date(byAdding: .day, value: 1, to: selectedDay) ?? selectedDay
+        let avail = availability.map { AvailabilityInput(from: $0) }
+            ?? AvailabilityInput(startHour: 6, startMinute: 30, endHour: 21, endMinute: 0)
+
+        return windows.filter { window in
+            guard window.isActive else { return false }
+            let blocks = AvailabilityResolver.resolve(
+                from: scheduleStart,
+                to: scheduleEnd,
+                availability: avail,
+                windows: [WindowInput(from: window)]
+            )
+            return blocks.contains { $0.sourceName == window.name }
+        }
+    }
+
+    func resetOverrides() {
+        disabledWindowIDs = []
     }
 
     private func detectActiveLevain(

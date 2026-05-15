@@ -1,4 +1,8 @@
+#if canImport(DougDomain)
+@testable import DougDomain
+#else
 @testable import Doug
+#endif
 import Testing
 
 struct FeedInstructionsTests {

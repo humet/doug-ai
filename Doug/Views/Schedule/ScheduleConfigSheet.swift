@@ -12,8 +12,15 @@ struct ScheduleConfigSheet: View {
     private var feedLogs: [StarterFeedLog]
     @Query private var profiles: [StarterProfile]
 
+    @State private var selectedSlotForExplainer: TimeSlot?
+    @State private var lastScannedDay: Date?
+
     private var starterProfile: StarterProfile? {
         profiles.first
+    }
+
+    private var relevantWindows: [UnavailableWindow] {
+        viewModel.relevantWindows(from: Array(windows), availability: availabilities.first)
     }
 
     var body: some View {
@@ -32,14 +39,23 @@ struct ScheduleConfigSheet: View {
                 }
 
                 Section {
+                    if !viewModel.timeSlots.isEmpty {
+                        TimeSlotGridView(
+                            slots: viewModel.timeSlots,
+                            selectedTime: $viewModel.targetDate,
+                            onSlotInfo: { slot in selectedSlotForExplainer = slot }
+                        )
+                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                    }
+
                     DatePicker(
-                        "\(viewModel.selectedRecipe.completionLabel) by",
+                        "Fine-tune",
                         selection: $viewModel.targetDate,
-                        in: (viewModel.viableBreadReadyRange?.lowerBound ?? Date())...,
+                        in: Date()...,
                         displayedComponents: [.date, .hourAndMinute]
                     )
                 } header: {
-                    Text("Target Time")
+                    Text("\(viewModel.selectedRecipe.completionLabel) Time")
                 } footer: {
                     if let range = viewModel.viableBreadReadyRange {
                         Text("\(viewModel.selectedRecipe.completionLabel) between \(range.lowerBound, style: .time) and \(range.upperBound, style: .time)")
@@ -62,10 +78,18 @@ struct ScheduleConfigSheet: View {
                         Text("Temperature")
                     }
                     .onChange(of: viewModel.kitchenTemperature) {
-                        rebuildPreview()
+                        rebuildAll()
                     }
                 } header: {
                     Text("Temperature")
+                }
+
+                if !relevantWindows.isEmpty {
+                    BakeOverridesSection(
+                        windows: relevantWindows,
+                        disabledIDs: $viewModel.disabledWindowIDs,
+                        onChange: { rebuildAll() }
+                    )
                 }
 
                 starterSection
@@ -78,7 +102,10 @@ struct ScheduleConfigSheet: View {
                                 OvernightDivider(from: steps[index - 1].startTime, to: step.startTime)
                                     .listRowSeparator(.hidden)
                             }
-                            PreviewStepRow(step: step)
+                            PreviewStepRow(
+                                step: step,
+                                compression: viewModel.currentFlexCompressions[step.label]
+                            )
                         }
                     } header: {
                         Text("Schedule Preview")
@@ -112,10 +139,24 @@ struct ScheduleConfigSheet: View {
                 }
             }
             .onAppear {
-                rebuildPreview()
+                rebuildAll()
             }
             .onChange(of: viewModel.targetDate) {
                 rebuildPreview()
+                let calendar = Calendar.current
+                let selectedDay = calendar.startOfDay(for: viewModel.targetDate)
+                if lastScannedDay == nil || !calendar.isDate(selectedDay, inSameDayAs: lastScannedDay!) {
+                    lastScannedDay = selectedDay
+                    viewModel.scanTimeSlots(
+                        availability: availabilities.first,
+                        windows: Array(windows),
+                        feedLogs: Array(feedLogs),
+                        starterProfile: profiles.first
+                    )
+                }
+            }
+            .sheet(item: $selectedSlotForExplainer) { slot in
+                SlotExplainerSheet(slot: slot, recipeName: viewModel.selectedRecipe.name)
             }
         }
     }
@@ -226,6 +267,17 @@ struct ScheduleConfigSheet: View {
         )
     }
 
+    private func rebuildAll() {
+        rebuildPreview()
+        lastScannedDay = Calendar.current.startOfDay(for: viewModel.targetDate)
+        viewModel.scanTimeSlots(
+            availability: availabilities.first,
+            windows: Array(windows),
+            feedLogs: Array(feedLogs),
+            starterProfile: profiles.first
+        )
+    }
+
     private func levainSummary(_ ctx: LevainContext) -> String {
         let elapsed = Int(ctx.elapsedMinutes())
         let remaining = Int(ctx.remainingMinutes())
@@ -258,9 +310,14 @@ struct ScheduleConfigSheet: View {
 
 private struct PreviewStepRow: View {
     let step: ScheduledStep
+    var compression: ScheduleBuilder.FlexCompressionDetail?
 
     private var isLevainInProgress: Bool {
         step.levainElapsedMinutes != nil
+    }
+
+    private var isCompressed: Bool {
+        compression != nil
     }
 
     var body: some View {
@@ -277,22 +334,47 @@ private struct PreviewStepRow: View {
                             .padding(.vertical, 1)
                             .background(.green, in: .capsule)
                     }
+                    if isCompressed {
+                        Text("shortened")
+                            .font(.caption2)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(.orange, in: .capsule)
+                    }
                 }
-                DayTimeLabel(date: step.startTime)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                HStack(spacing: 4) {
+                    DayTimeLabel(date: step.startTime)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    if let c = compression {
+                        Text("(usually \(formatMinutes(c.defaultDurationMinutes)))")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                }
             }
 
             Spacer()
 
             Text(formattedDuration)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isCompressed ? .orange : .secondary)
                 .monospacedDigit()
 
             classificationBadge
         }
+    }
+
+    private func formatMinutes(_ minutes: Double) -> String {
+        let m = Int(minutes)
+        if m >= 60 {
+            let h = m / 60
+            let rem = m % 60
+            return rem > 0 ? "\(h)h \(rem)m" : "\(h)h"
+        }
+        return "\(m)m"
     }
 
     private var formattedDuration: String {

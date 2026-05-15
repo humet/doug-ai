@@ -15,7 +15,10 @@ When building the `doug-coach/` backend, use the `/ai-sdk` skill (installed at `
 xcodebuild -project Doug.xcodeproj -scheme Doug \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 
-# Run all tests (Swift Testing for unit, XCTest for UI)
+# Run domain tests FAST via SPM (~0.15s, no simulator needed)
+swift test
+
+# Run all tests including ViewModel/UI (requires simulator)
 xcodebuild -project Doug.xcodeproj -scheme Doug \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 
@@ -28,7 +31,7 @@ xcodebuild -project Doug.xcodeproj -scheme Doug \
 open Doug.xcodeproj
 ```
 
-No external package dependencies. Zero SPM, CocoaPods, or Carthage.
+**Prefer `swift test` for domain work.** Package.swift defines a `DougDomain` library target covering `Doug/Domain/` and `Doug/Models/Static/`. Domain tests run via SPM without booting a simulator. Use `xcodebuild test` only for ViewModel/UI tests that need SwiftData or SwiftUI.
 
 When the Xcode MCP server is connected, prefer it over `xcodebuild` CLI for building, previewing, and inspecting issues. Key tools: `BuildProject`, `RenderPreview`, `XcodeListNavigatorIssues`.
 

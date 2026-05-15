@@ -54,7 +54,7 @@ struct ScheduleTab: View {
                         }
                     }
                 }
-                .sheet(isPresented: $showConfig) {
+                .sheet(isPresented: $showConfig, onDismiss: { viewModel.resetOverrides() }) {
                     ScheduleConfigSheet(viewModel: viewModel) {
                         if viewModel.hasActivationPreamble || viewModel.detectedLevain != nil {
                             withAnimation(.smooth) {

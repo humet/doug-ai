@@ -1,6 +1,10 @@
 import Testing
 import Foundation
+#if canImport(DougDomain)
+@testable import DougDomain
+#else
 @testable import Doug
+#endif
 
 struct RevivalTimingTests {
     // Available 6:30am – 9pm local time.

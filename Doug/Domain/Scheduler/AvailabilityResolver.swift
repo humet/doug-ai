@@ -4,6 +4,13 @@ import Foundation
 struct UnavailableBlock {
     let start: Date
     let end: Date
+    let sourceName: String?
+
+    init(start: Date, end: Date, sourceName: String? = nil) {
+        self.start = start
+        self.end = end
+        self.sourceName = sourceName
+    }
 }
 
 /// Merges daily available hours and unavailable windows into concrete
@@ -94,7 +101,7 @@ enum AvailabilityResolver {
                     ) ?? currentDay
 
                     if windowStart < windowEnd {
-                        blocks.append(UnavailableBlock(start: windowStart, end: windowEnd))
+                        blocks.append(UnavailableBlock(start: windowStart, end: windowEnd, sourceName: window.name))
                     }
                 }
             }
@@ -135,7 +142,8 @@ enum AvailabilityResolver {
             if block.start <= current.end {
                 current = UnavailableBlock(
                     start: current.start,
-                    end: max(current.end, block.end)
+                    end: max(current.end, block.end),
+                    sourceName: current.sourceName ?? block.sourceName
                 )
             } else {
                 merged.append(current)
@@ -192,27 +200,3 @@ struct WindowInput {
     }
 }
 
-// MARK: - Convenience conversions from SwiftData models
-
-extension AvailabilityInput {
-    init(from model: UserAvailability) {
-        startHour = model.dailyStartHour
-        startMinute = model.dailyStartMinute
-        endHour = model.dailyEndHour
-        endMinute = model.dailyEndMinute
-    }
-}
-
-extension WindowInput {
-    init(from model: UnavailableWindow) {
-        name = model.name
-        isRecurring = model.isRecurring
-        daysOfWeek = model.daysOfWeek
-        startHour = model.startHour
-        startMinute = model.startMinute
-        endHour = model.endHour
-        endMinute = model.endMinute
-        specificDate = model.specificDate
-        isActive = model.isActive
-    }
-}
