@@ -138,7 +138,7 @@ final class StarterViewModel {
         if pendingLevainBuild != nil { return .levain }
         return switch profile?.starterLifecycleState {
         case .activating: .activation
-        case .active: .postBake
+        case .active: .maintenance
         default: .maintenance
         }
     }
@@ -203,7 +203,7 @@ final class StarterViewModel {
     }
 
     func feedAndRefrigerate(profile: StarterProfile, modelContext: ModelContext) {
-        logFeed(modelContext: modelContext, profile: profile, intent: .postBake)
+        logFeed(modelContext: modelContext, profile: profile, intent: .maintenance)
         if let result = StarterStateMachine.refrigerate(currentState: profile.starterLifecycleState) {
             profile.starterLifecycleState = result.newState
             profile.starterStorageType = .fridge
