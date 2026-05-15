@@ -37,10 +37,6 @@ struct StepCountdownLabel: View {
             return "\(Self.format(seconds: overdue)) overdue"
         case .done:
             let actualEnd = step.actualEndTime ?? step.computedEndTime
-            let elapsed = referenceDate.timeIntervalSince(actualEnd)
-            if elapsed < 60 * 60 {
-                return "finished \(Self.format(seconds: max(0, elapsed))) ago"
-            }
             return "finished at \(Self.timeFormatter.string(from: actualEnd))"
         case .skipped:
             return "skipped"
