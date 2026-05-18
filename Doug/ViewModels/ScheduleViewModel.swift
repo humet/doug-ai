@@ -948,6 +948,41 @@ final class ScheduleViewModel {
             .reduce(0.0) { $0 + $1.computedDurationMinutes }
     }
 
+    // MARK: - Fold Checklist
+
+    func markFoldDone(_ fold: ScheduleStep) {
+        guard fold.stepStatus != .done else { return }
+        NotificationService.shared.cancelNotifications(for: [fold])
+        fold.stepStatus = .done
+        fold.actualEndTime = Date()
+
+        if let parent = fold.parentStep {
+            rescheduleRemainingFolds(in: parent)
+        }
+    }
+
+    private func rescheduleRemainingFolds(in parent: ScheduleStep) {
+        let subs = parent.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
+        let pending = subs.filter { $0.stepStatus != .done }
+        guard !pending.isEmpty else { return }
+
+        let now = Date()
+        let bulkEnd = parent.computedEndTime
+        let remainingBulk = bulkEnd.timeIntervalSince(now)
+        guard remainingBulk > 0 else { return }
+
+        let spacingFraction = 0.67
+        let foldWindow = remainingBulk * spacingFraction
+        let spacing = foldWindow / Double(pending.count + 1)
+
+        for (index, sub) in pending.enumerated() {
+            let offset = spacing * Double(index + 1)
+            sub.computedStartTime = now.addingTimeInterval(offset)
+            sub.computedEndTime = sub.computedStartTime.addingTimeInterval(sub.computedDurationMinutes * 60)
+        }
+        Task { await NotificationService.shared.rescheduleNotifications(for: pending) }
+    }
+
     // MARK: - Per-step adjustment controls
 
     func markStepDone(_ step: ScheduleStep, modelContext: ModelContext) {
@@ -971,6 +1006,11 @@ final class ScheduleViewModel {
             if delta > 0 {
                 cascade(afterEnd: step.computedEndTime, delta: delta, in: schedule, excluding: step)
             }
+        }
+
+        for sub in step.subSteps where sub.stepStatus != .done {
+            sub.stepStatus = .skipped
+            NotificationService.shared.cancelNotifications(for: [sub])
         }
 
         if let parent = step.parentStep {
@@ -1011,28 +1051,6 @@ final class ScheduleViewModel {
         step.actualEndTime = nil
 
         syncLiveActivity()
-    }
-
-    private func rescheduleSubSteps(of step: ScheduleStep) {
-        let subs = step.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
-        guard !subs.isEmpty else { return }
-
-        let remaining = step.computedEndTime.timeIntervalSince(step.computedStartTime)
-        let pendingFolds = subs.filter { $0.stepStatus != .done }
-        guard !pendingFolds.isEmpty else { return }
-
-        let spacingFraction = 0.67
-        let foldWindow = remaining * spacingFraction
-        let spacing = foldWindow / Double(pendingFolds.count + 1)
-
-        for (index, sub) in pendingFolds.enumerated() {
-            let offset = spacing * Double(index + 1)
-            sub.computedStartTime = step.computedStartTime.addingTimeInterval(offset)
-            sub.computedEndTime = sub.computedStartTime.addingTimeInterval(sub.computedDurationMinutes * 60)
-            sub.stepStatus = .upcoming
-            sub.actualEndTime = nil
-        }
-        Task { await NotificationService.shared.rescheduleNotifications(for: pendingFolds) }
     }
 
     /// Auto-completes passive steps whose end time has passed and promotes the next
@@ -1114,43 +1132,13 @@ final class ScheduleViewModel {
             return
         }
 
-        let spacing: TimeInterval = subs.count >= 2
-            ? subs[1].computedStartTime.timeIntervalSince(subs[0].computedStartTime)
-            : 30 * 60
-        let minimumGap = max(spacing / 2, 15 * 60)
-
-        for (index, sub) in subs.enumerated() {
-            switch sub.stepStatus {
-            case .done, .skipped:
-                continue
-            case .active, .upcoming:
-                let tooLate: Bool = if index + 1 < subs.count {
-                    subs[index + 1].computedStartTime <= now
-                } else {
-                    now.timeIntervalSince(sub.computedStartTime) > spacing
-                }
-
-                if tooLate {
-                    sub.stepStatus = .skipped
-                    continue
-                }
-
-                if sub.stepStatus == .upcoming, sub.computedStartTime <= now {
-                    let isFold = sub.stepTypeID == StepTypeID.stretchAndFold.rawValue
-                    if isFold,
-                       let prevFold = subs[0 ..< index].last(where: {
-                           $0.stepStatus == .done && $0.stepTypeID == StepTypeID.stretchAndFold.rawValue
-                       }),
-                       let doneTime = prevFold.actualEndTime,
-                       now.timeIntervalSince(doneTime) < minimumGap
-                    {
-                        return
-                    }
-                    if !subs.contains(where: { $0.stepStatus == .active }) {
-                        sub.stepStatus = .active
-                    }
-                }
-                return
+        // Fold checklist: skip missed folds when the next fold's time has arrived.
+        let folds = subs.filter { $0.stepTypeID == StepTypeID.stretchAndFold.rawValue }
+        for (index, fold) in folds.enumerated() where fold.stepStatus != .done && fold.stepStatus != .skipped {
+            let nextDue = index + 1 < folds.count && folds[index + 1].computedStartTime <= now
+            if nextDue {
+                fold.stepStatus = .skipped
+                NotificationService.shared.cancelNotifications(for: [fold])
             }
         }
     }
@@ -1197,6 +1185,10 @@ final class ScheduleViewModel {
         step.stepStatus = .done
         step.actualEndTime = now
         step.computedEndTime = now
+
+        for sub in step.subSteps where sub.stepStatus != .done {
+            sub.stepStatus = .skipped
+        }
 
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
         promoteNextUpcoming(in: schedule)

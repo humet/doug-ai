@@ -22,13 +22,20 @@ struct StepAdjustmentControls: View {
                 tint: .indigo
             ) { tapPauseResume() }
 
-            if canFinishEarly {
+            if canMarkDone {
                 row(
                     title: "Done",
-                    subtitle: "This step is already done",
+                    subtitle: isOverdue ? "Mark this step complete" : "This step is already done",
                     systemImage: "checkmark.circle",
                     tint: .green
-                ) { viewModel.finishStepEarly(step, modelContext: modelContext); onAction() }
+                ) {
+                    if isOverdue {
+                        viewModel.markStepDone(step, modelContext: modelContext)
+                    } else {
+                        viewModel.finishStepEarly(step, modelContext: modelContext)
+                    }
+                    onAction()
+                }
             }
 
             row(
@@ -112,8 +119,12 @@ struct StepAdjustmentControls: View {
         return id == .bakeCovered || id == .bakeUncovered
     }
 
-    private var canFinishEarly: Bool {
-        step.stepStatus == .active && Date() < step.computedEndTime
+    private var canMarkDone: Bool {
+        step.stepStatus == .active
+    }
+
+    private var isOverdue: Bool {
+        step.stepStatus == .active && Date() >= step.computedEndTime
     }
 
     private var canShorten: Bool {

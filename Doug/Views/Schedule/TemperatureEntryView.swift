@@ -9,6 +9,7 @@ struct TemperatureEntryView: View {
     let schedule: Schedule
     let foldStep: ScheduleStep?
     var onSave: (() -> Void)?
+    var onSkip: (() -> Void)?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -107,10 +108,17 @@ struct TemperatureEntryView: View {
                     Text("Fermentation Progress")
                 }
             }
-            .navigationTitle("Log Temperature")
+            .navigationTitle(onSkip != nil ? "Log Temperature?" : "Log Temperature")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    if onSkip != nil {
+                        Button("Skip") {
+                            onSkip?()
+                            dismiss()
+                        }
+                    } else {
+                        Button("Cancel") { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
@@ -141,12 +149,6 @@ struct TemperatureEntryView: View {
         )
         reading.schedule = schedule
         modelContext.insert(reading)
-
-        // Mark the step complete — the temperature reading is implicit confirmation.
-        if let fold = foldStep, fold.stepStatus != .done {
-            fold.stepStatus = .done
-            fold.actualEndTime = Date()
-        }
 
         onSave?()
     }

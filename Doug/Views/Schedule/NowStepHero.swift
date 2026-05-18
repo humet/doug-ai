@@ -14,6 +14,7 @@ struct NowStepHero: View {
     @State private var showTemperatureEntry = false
     @State private var showAbandonConfirm = false
     @State private var showAlreadyStarted = false
+    @State private var foldToComplete: ScheduleStep?
     @State private var feedRatioStarter: Int = 1
     @State private var feedRatioFlour: Int = 5
     @State private var feedRatioWater: Int = 5
@@ -60,17 +61,26 @@ struct NowStepHero: View {
             RoundedRectangle(cornerRadius: 18)
                 .strokeBorder(accentTint.opacity(0.35), lineWidth: 1.5)
         )
-        .sheet(isPresented: $showTemperatureEntry) {
+        .sheet(isPresented: $showTemperatureEntry, onDismiss: { foldToComplete = nil }) {
             if let schedule = step.schedule {
                 TemperatureEntryView(
                     schedule: schedule,
-                    foldStep: stepRequiringTemp,
+                    foldStep: foldToComplete ?? stepRequiringTemp,
                     onSave: {
-                        if let tempStep = stepRequiringTemp, tempStep.parentStep == nil {
+                        if let fold = foldToComplete {
+                            viewModel.markFoldDone(fold)
+                        } else if let tempStep = stepRequiringTemp, tempStep.parentStep == nil {
                             viewModel.finishStepEarly(tempStep, modelContext: modelContext)
                         }
                         viewModel.handleNewTemperatureReading(schedule: schedule)
-                    }
+                        foldToComplete = nil
+                    },
+                    onSkip: foldToComplete != nil ? {
+                        if let fold = foldToComplete {
+                            viewModel.markFoldDone(fold)
+                        }
+                        foldToComplete = nil
+                    } : nil
                 )
             }
         }
@@ -201,7 +211,7 @@ struct NowStepHero: View {
                         .padding(.vertical, 10)
                 }
                 .adaptiveGlassButtonStyle()
-            } else if step.stepType.requiresTempReading, step.stepStatus == .active {
+            } else if step.stepType.requiresTempReading, step.stepStatus == .active, !isBulkFermentActive {
                 Button {
                     showTemperatureEntry = true
                 } label: {
@@ -211,41 +221,28 @@ struct NowStepHero: View {
                         .padding(.vertical, 10)
                 }
                 .adaptiveGlassButtonStyle(prominent: true)
-            } else if activeFoldWithTempReading != nil {
-                Button {
-                    showTemperatureEntry = true
-                } label: {
-                    Label("Log Temp", systemImage: "thermometer.medium")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                }
-                .adaptiveGlassButtonStyle(prominent: true)
             } else if isBulkFermentActive {
-                if viewModel.bulkFermentTargetReached {
-                    Label("Fermentation target reached", systemImage: "checkmark.circle.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.green)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if viewModel.bulkFermentTargetReached || bulkIsOverdue {
+                    Button {
+                        completeCurrent()
+                    } label: {
+                        Label("Bulk Done", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .adaptiveGlassButtonStyle(prominent: true)
+                } else if allFoldsDone {
+                    Button {
+                        completeCurrent()
+                    } label: {
+                        Label("Finish Bulk Early", systemImage: "forward.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .adaptiveGlassButtonStyle()
                 }
-                Button {
-                    showTemperatureEntry = true
-                } label: {
-                    Label("Log Temp", systemImage: "thermometer.medium")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                }
-                .adaptiveGlassButtonStyle(prominent: true)
-                Button {
-                    completeCurrent()
-                } label: {
-                    Label("Finish Early", systemImage: "forward.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                }
-                .adaptiveGlassButtonStyle()
             } else if step.stepStatus == .active {
                 let isOverdueFlexible = step.stepType.classification == .passiveFlexible
                     && step.computedEndTime <= referenceDate
@@ -454,18 +451,42 @@ struct NowStepHero: View {
 
     @ViewBuilder
     private var activeFoldCallout: some View {
-        if let fold = activeFoldWithTempReading {
-            VStack(alignment: .leading, spacing: 6) {
-                Label(fold.stepType.label, systemImage: "hand.raised.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.orange)
-                Text("Once you've folded, log your dough temperature.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        if isBulkFermentActive {
+            if let nextFold = nextPendingFold {
+                let isDue = nextFold.computedStartTime <= referenceDate
+                if isDue {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(nextFold.stepType.label, systemImage: "hand.raised.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.orange)
+                        Text("Time for a stretch and fold.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.orange.opacity(0.1), in: .rect(cornerRadius: 12))
+                }
+            } else if allFoldsDone, !bulkIsOverdue {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("All folds done", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.green)
+                    Text("Let the dough rest until bulk ferment finishes.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.green.opacity(0.1), in: .rect(cornerRadius: 12))
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.orange.opacity(0.1), in: .rect(cornerRadius: 12))
+
+            if viewModel.bulkFermentTargetReached {
+                Label("Fermentation target reached", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -505,13 +526,26 @@ struct NowStepHero: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            ForEach(subs) { sub in
-                CompactStepRow(
-                    step: sub,
-                    referenceDate: referenceDate,
-                    isSubStep: true,
-                    onTap: { onOpenDetail(sub) }
-                )
+            if isBulkFermentActive {
+                ForEach(subs) { sub in
+                    FoldChecklistRow(
+                        fold: sub,
+                        referenceDate: referenceDate,
+                        onFoldDone: {
+                            foldToComplete = sub
+                            showTemperatureEntry = true
+                        }
+                    )
+                }
+            } else {
+                ForEach(subs) { sub in
+                    CompactStepRow(
+                        step: sub,
+                        referenceDate: referenceDate,
+                        isSubStep: true,
+                        onTap: { onOpenDetail(sub) }
+                    )
+                }
             }
         }
     }
@@ -573,11 +607,24 @@ struct NowStepHero: View {
         stepTypeIDEnum == .bulkFerment && step.stepStatus == .active
     }
 
-    private var activeFoldWithTempReading: ScheduleStep? {
+    private var bulkIsOverdue: Bool {
+        isBulkFermentActive && step.computedEndTime <= referenceDate
+    }
+
+    private var allFoldsDone: Bool {
+        guard isBulkFermentActive else { return false }
+        let folds = step.subSteps.filter { $0.stepTypeID == StepTypeID.stretchAndFold.rawValue }
+        return !folds.isEmpty && folds.allSatisfy { $0.stepStatus == .done || $0.stepStatus == .skipped }
+    }
+
+    private var nextPendingFold: ScheduleStep? {
         guard isBulkFermentActive else { return nil }
         return step.subSteps
             .sorted { $0.sequenceIndex < $1.sequenceIndex }
-            .first { $0.stepStatus == .active && $0.stepType.requiresTempReading }
+            .first {
+                $0.stepTypeID == StepTypeID.stretchAndFold.rawValue
+                    && $0.stepStatus != .done && $0.stepStatus != .skipped
+            }
     }
 
     private var activeBakeSubStep: ScheduleStep? {
@@ -588,8 +635,7 @@ struct NowStepHero: View {
     }
 
     private var stepRequiringTemp: ScheduleStep? {
-        activeFoldWithTempReading
-            ?? (step.stepType.requiresTempReading && step.stepStatus == .active ? step : nil)
+        step.stepType.requiresTempReading && step.stepStatus == .active ? step : nil
     }
 
     private var isPaused: Bool {
@@ -686,10 +732,85 @@ struct NowStepHero: View {
             )
         } else if step.stepType.classification == .handsOn {
             viewModel.markStepDone(step, modelContext: modelContext)
+        } else if step.computedEndTime <= referenceDate {
+            viewModel.markStepDone(step, modelContext: modelContext)
         } else {
             viewModel.finishStepEarly(step, modelContext: modelContext)
         }
     }
+}
+
+// MARK: - Fold Checklist Row
+
+private struct FoldChecklistRow: View {
+    let fold: ScheduleStep
+    let referenceDate: Date
+    let onFoldDone: () -> Void
+
+    private var isDone: Bool { fold.stepStatus == .done }
+    private var isMissed: Bool { fold.stepStatus == .skipped }
+    private var isSettled: Bool { isDone || isMissed }
+
+    private var isDue: Bool { fold.computedStartTime <= referenceDate }
+
+    private var timeLabel: String {
+        if isDone, let actual = fold.actualEndTime {
+            return "done at \(Self.timeFormatter.string(from: actual))"
+        }
+        if isMissed {
+            return "missed"
+        }
+        let remaining = fold.computedStartTime.timeIntervalSince(referenceDate)
+        if remaining > 0 {
+            return "in \(StepCountdownLabel.format(seconds: remaining))"
+        }
+        return "ready now"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: isDone ? "checkmark.circle.fill" : (isMissed ? "minus.circle.fill" : "circle"))
+                .font(.title3)
+                .foregroundStyle(isDone ? DougTheme.stepDone : (isMissed ? DougTheme.stepSkipped : (isDue ? .orange : .secondary)))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(fold.stepType.label)
+                    .font(.caption.weight(.medium))
+                    .strikethrough(isSettled)
+                    .foregroundStyle(isMissed ? .secondary : .primary)
+                Text(timeLabel)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if !isSettled {
+                Button {
+                    onFoldDone()
+                } label: {
+                    Text("Fold Done")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                }
+                .adaptiveGlassButtonStyle(prominent: isDue)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            isDue && !isSettled ? Color.orange.opacity(0.08) : DougTheme.cardBackground,
+            in: .rect(cornerRadius: 12)
+        )
+        .padding(.leading, 24)
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
 }
 
 // MARK: - Already Started Sheet

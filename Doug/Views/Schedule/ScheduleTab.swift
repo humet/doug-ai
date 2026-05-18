@@ -113,19 +113,31 @@ struct ScheduleTab: View {
                         TemperatureEntryView(
                             schedule: schedule,
                             foldStep: viewModel.selectedFoldStep,
-                            onSave: { viewModel.handleNewTemperatureReading(schedule: schedule) }
+                            onSave: {
+                                if let fold = viewModel.selectedFoldStep {
+                                    viewModel.markFoldDone(fold)
+                                }
+                                viewModel.handleNewTemperatureReading(schedule: schedule)
+                            }
                         )
                     }
                 }
                 .sheet(item: $viewModel.pendingFoldEntry) { entry in
                     if let schedule = viewModel.activeSchedule {
+                        let fold = schedule.steps.first {
+                            $0.stepTypeID == entry.stepTypeID
+                                && $0.sequenceIndex == entry.sequenceIndex
+                        }
                         TemperatureEntryView(
                             schedule: schedule,
-                            foldStep: schedule.steps.first {
-                                $0.stepTypeID == entry.stepTypeID
-                                    && $0.sequenceIndex == entry.sequenceIndex
+                            foldStep: fold,
+                            onSave: {
+                                if let fold { viewModel.markFoldDone(fold) }
+                                viewModel.handleNewTemperatureReading(schedule: schedule)
                             },
-                            onSave: { viewModel.handleNewTemperatureReading(schedule: schedule) }
+                            onSkip: fold != nil ? {
+                                if let fold { viewModel.markFoldDone(fold) }
+                            } : nil
                         )
                     }
                 }
