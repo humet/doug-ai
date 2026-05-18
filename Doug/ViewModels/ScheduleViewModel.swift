@@ -826,11 +826,15 @@ final class ScheduleViewModel {
         promoteNextUpcoming(in: schedule)
 
         if let firstActive = orderedTopLevelSteps(in: schedule).first(where: { $0.stepStatus == .active }) {
-            let profiles = (try? modelContext.fetch(FetchDescriptor<StarterProfile>())) ?? []
-            applyStepSideEffects(
-                firstActive, event: .started, feedDetails: nil,
-                profile: profiles.first, modelContext: modelContext
-            )
+            let firstTypeID = StepTypeID(rawValue: firstActive.stepTypeID)
+            let skipAutoStart = firstTypeID == .buildLevain || firstTypeID == .activateStarter
+            if !skipAutoStart {
+                let profiles = (try? modelContext.fetch(FetchDescriptor<StarterProfile>())) ?? []
+                applyStepSideEffects(
+                    firstActive, event: .started, feedDetails: nil,
+                    profile: profiles.first, modelContext: modelContext
+                )
+            }
         }
 
         Task {
@@ -1031,10 +1035,14 @@ final class ScheduleViewModel {
         promoteNextUpcoming(in: schedule)
 
         if let next = nextStep(after: step, in: schedule) {
-            applyStepSideEffects(
-                next, event: .started, feedDetails: nil,
-                profile: starterProfile, modelContext: modelContext
-            )
+            let nextTypeID = StepTypeID(rawValue: next.stepTypeID)
+            let skipAutoStart = nextTypeID == .buildLevain || nextTypeID == .activateStarter
+            if !skipAutoStart {
+                applyStepSideEffects(
+                    next, event: .started, feedDetails: nil,
+                    profile: starterProfile, modelContext: modelContext
+                )
+            }
         }
 
         syncLiveActivity()
@@ -1234,10 +1242,14 @@ final class ScheduleViewModel {
             candidate.stepStatus = .upcoming
         }
 
-        applyStepSideEffects(
-            step, event: .started, feedDetails: nil,
-            profile: starterProfile, modelContext: modelContext
-        )
+        let stepTypeID = StepTypeID(rawValue: step.stepTypeID)
+        let skipAutoStart = stepTypeID == .buildLevain || stepTypeID == .activateStarter
+        if !skipAutoStart {
+            applyStepSideEffects(
+                step, event: .started, feedDetails: nil,
+                profile: starterProfile, modelContext: modelContext
+            )
+        }
 
         NotificationService.shared.cancelNotifications(for: [step])
         cascade(afterEnd: oldStart, delta: delta, in: schedule, excluding: step)
