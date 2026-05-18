@@ -279,8 +279,10 @@ struct NowStepHero: View {
                     }
                     .adaptiveGlassButtonStyle(prominent: isSubOverdue)
                 } else {
-                    let buttonLabel = if isWaitForPeakStep || isLevainAwaitingPeak {
+                    let buttonLabel = if isWaitForPeakStep {
                         "Mark Peak"
+                    } else if isLevainAwaitingPeak {
+                        "Levain Ready"
                     } else if isOverdueFlexible {
                         "Move On"
                     } else if let label = manualCompletionLabel {
@@ -292,7 +294,7 @@ struct NowStepHero: View {
                     }
                     let isManualReady = manualCompletionLabel != nil
                     let buttonIcon = if isWaitForPeakStep || isLevainAwaitingPeak {
-                        "arrow.up.to.line"
+                        "checkmark.circle.fill"
                     } else if isOverdueFlexible || isManualReady {
                         "checkmark.circle.fill"
                     } else if isPassive {
@@ -672,7 +674,7 @@ struct NowStepHero: View {
     }
 
     private var isLevainAwaitingPeak: Bool {
-        stepTypeIDEnum == .buildLevain && step.computedEndTime <= Date()
+        stepTypeIDEnum == .buildLevain && step.stepStatus == .active
     }
 
     private var manualCompletionLabel: String? {
