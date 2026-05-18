@@ -1077,6 +1077,7 @@ final class ScheduleViewModel {
                        !step.subSteps.allSatisfy({ $0.stepStatus == .done || $0.stepStatus == .skipped })
                     {
                         advanceSubSteps(in: schedule, now: now)
+                        syncLiveActivity()
                         return
                     }
                     let manualSteps: Set<String> = [
@@ -1088,6 +1089,7 @@ final class ScheduleViewModel {
                     ]
                     if manualSteps.contains(step.stepTypeID) {
                         advanceSubSteps(in: schedule, now: now)
+                        syncLiveActivity()
                         return
                     }
                     NotificationService.shared.cancelNotifications(for: [step])
@@ -1556,6 +1558,26 @@ final class ScheduleViewModel {
 
     // MARK: - Live Activity
 
+    private static let liveActivitySteps: Set<String> = [
+        StepTypeID.autolyse.rawValue,
+        StepTypeID.bulkFerment.rawValue,
+        StepTypeID.coldRetard.rawValue,
+        StepTypeID.finalProof.rawValue,
+        StepTypeID.preheat.rawValue,
+        StepTypeID.bake.rawValue,
+        StepTypeID.bakeSheet.rawValue,
+        StepTypeID.buildLevain.rawValue,
+        StepTypeID.waitForPeak.rawValue,
+    ]
+
+    private static let liveActivityLongWaitSteps: Set<String> = [
+        StepTypeID.buildLevain.rawValue,
+        StepTypeID.waitForPeak.rawValue,
+        StepTypeID.coldRetard.rawValue,
+    ]
+
+    private static let liveActivityResumeThreshold: TimeInterval = 60 * 60
+
     private func syncLiveActivity() {
         guard let schedule = activeSchedule, schedule.scheduleStatus == .active else {
             LiveActivityService.shared.endBakeActivity()
@@ -1564,11 +1586,20 @@ final class ScheduleViewModel {
 
         let steps = orderedTopLevelSteps(in: schedule)
         let activeStep = steps.first { $0.stepStatus == .active }
-        let isColdRetard = activeStep.flatMap { StepTypeID(rawValue: $0.stepTypeID) } == .coldRetard
 
-        if isColdRetard {
-            LiveActivityService.shared.endBakeActivity()
-            return
+        if let active = activeStep {
+            if !Self.liveActivitySteps.contains(active.stepTypeID) {
+                LiveActivityService.shared.endBakeActivity()
+                return
+            }
+
+            if Self.liveActivityLongWaitSteps.contains(active.stepTypeID) {
+                let remaining = active.computedEndTime.timeIntervalSince(Date())
+                if remaining > Self.liveActivityResumeThreshold {
+                    LiveActivityService.shared.endBakeActivity()
+                    return
+                }
+            }
         }
 
         let state = LiveActivityService.buildBakeState(from: schedule)
