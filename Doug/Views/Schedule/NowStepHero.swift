@@ -114,8 +114,18 @@ struct NowStepHero: View {
                     .foregroundStyle(accentTint)
                 Text(step.stepType.label)
                     .font(.title2.bold())
-                StepCountdownLabel(step: step, referenceDate: referenceDate)
+                if isBulkFermentActive, let elapsed = bulkElapsedLabel {
+                    HStack(spacing: 0) {
+                        Text(elapsed)
+                        Text(" · ")
+                            .foregroundStyle(.tertiary)
+                        StepCountdownLabel(step: step, referenceDate: referenceDate)
+                    }
                     .font(.subheadline.monospacedDigit())
+                } else {
+                    StepCountdownLabel(step: step, referenceDate: referenceDate)
+                        .font(.subheadline.monospacedDigit())
+                }
             }
             Spacer()
             Button {
@@ -612,6 +622,13 @@ struct NowStepHero: View {
 
     private var bulkIsOverdue: Bool {
         isBulkFermentActive && step.computedEndTime <= referenceDate
+    }
+
+    private var bulkElapsedLabel: String? {
+        guard isBulkFermentActive else { return nil }
+        let elapsed = referenceDate.timeIntervalSince(step.computedStartTime)
+        guard elapsed > 0 else { return nil }
+        return StepCountdownLabel.format(seconds: elapsed)
     }
 
     private var allFoldsDone: Bool {
