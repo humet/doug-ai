@@ -5,15 +5,29 @@ enum StepTypeRegistry {
         .buildLevain: StepType(
             id: .buildLevain,
             label: "Build Levain",
+            classification: .handsOn,
+            baseDurationMinutes: 5,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Mix starter with flour and water at the specified ratio. Cover and set aside to rise.",
+            notificationText: "Time to build your levain — mix starter, flour, and water.",
+            successSignal: "Levain is mixed — no dry flour remains."
+        ),
+
+        .waitForLevainPeak: StepType(
+            id: .waitForLevainPeak,
+            label: "Wait for Levain Peak",
             classification: .passiveFixed,
             baseDurationMinutes: 300,
             isTemperatureAdjusted: true,
             referenceTemperatureCelsius: 24.0,
             flexRange: nil,
             requiresTempReading: false,
-            instructionText: "Mix starter with flour and water at the specified ratio. Cover and leave at room temperature until doubled and domed.",
-            notificationText: "Time to build your levain — mix starter, flour, and water. It'll need a few hours to peak.",
-            successSignal: "Levain has at least doubled, with a domed top and bubbly surface. A spoonful dropped in water should float."
+            instructionText: "Your levain is rising. Wait for it to at least double in size with a domed top.",
+            notificationText: "Your levain should be close to peaking — check if it has doubled.",
+            successSignal: "Levain has peaked — doubled in size with a domed, bubbly surface. A spoonful dropped in water should float."
         ),
 
         .autolyse: StepType(

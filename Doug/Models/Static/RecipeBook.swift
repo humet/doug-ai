@@ -30,6 +30,7 @@ enum RecipeBook {
         ),
         method: [
             MethodStep(stepTypeID: .buildLevain, levainBuildRatio: (1, 5, 5)),
+            MethodStep(stepTypeID: .waitForLevainPeak),
             MethodStep(stepTypeID: .autolyse),
             MethodStep(stepTypeID: .mix),
             MethodStep(
@@ -117,6 +118,7 @@ enum RecipeBook {
         ),
         method: [
             MethodStep(stepTypeID: .buildLevain, levainBuildRatio: (1, 5, 5)),
+            MethodStep(stepTypeID: .waitForLevainPeak),
             MethodStep(stepTypeID: .autolyse),
             MethodStep(stepTypeID: .mix),
             MethodStep(
@@ -163,6 +165,7 @@ enum RecipeBook {
         ),
         method: [
             MethodStep(stepTypeID: .buildLevain, levainBuildRatio: (1, 5, 5)),
+            MethodStep(stepTypeID: .waitForLevainPeak),
             MethodStep(stepTypeID: .autolyse),
             MethodStep(stepTypeID: .mix),
             MethodStep(
@@ -206,7 +209,8 @@ enum RecipeBook {
             levainGrams: 100
         ),
         method: [
-            MethodStep(stepTypeID: .buildLevain, durationOverrideMinutes: 180, levainBuildRatio: (1, 2, 2)),
+            MethodStep(stepTypeID: .buildLevain, levainBuildRatio: (1, 2, 2)),
+            MethodStep(stepTypeID: .waitForLevainPeak, durationOverrideMinutes: 180),
             MethodStep(stepTypeID: .autolyse),
             MethodStep(stepTypeID: .mix),
             MethodStep(
@@ -252,7 +256,8 @@ enum RecipeBook {
             ]
         ),
         method: [
-            MethodStep(stepTypeID: .buildLevain, durationOverrideMinutes: 180, levainBuildRatio: (1, 2, 2)),
+            MethodStep(stepTypeID: .buildLevain, levainBuildRatio: (1, 2, 2)),
+            MethodStep(stepTypeID: .waitForLevainPeak, durationOverrideMinutes: 180),
             MethodStep(stepTypeID: .autolyse),
             MethodStep(stepTypeID: .mix),
             MethodStep(
@@ -294,7 +299,8 @@ enum RecipeBook {
             ]
         ),
         method: [
-            MethodStep(stepTypeID: .buildLevain, durationOverrideMinutes: 180, levainBuildRatio: (1, 2, 2)),
+            MethodStep(stepTypeID: .buildLevain, levainBuildRatio: (1, 2, 2)),
+            MethodStep(stepTypeID: .waitForLevainPeak, durationOverrideMinutes: 180),
             MethodStep(stepTypeID: .autolyse),
             MethodStep(stepTypeID: .mix),
             MethodStep(
@@ -336,6 +342,7 @@ enum RecipeBook {
         ),
         method: [
             MethodStep(stepTypeID: .buildLevain, levainBuildRatio: (1, 5, 5)),
+            MethodStep(stepTypeID: .waitForLevainPeak),
             MethodStep(stepTypeID: .autolyse),
             MethodStep(stepTypeID: .mix),
             MethodStep(

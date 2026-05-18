@@ -105,9 +105,21 @@ struct BakeCoordinatorTests {
         #expect(effects.count == 1)
     }
 
-    @Test func buildLevainCompletedMarksPeak() {
+    @Test func buildLevainCompletedHasNoSideEffects() {
         let effects = BakeCoordinator.sideEffects(
             forStep: .buildLevain,
+            event: .completed,
+            starterState: .active,
+            feedDetails: nil,
+            kitchenTempCelsius: 24
+        )
+
+        #expect(effects.isEmpty)
+    }
+
+    @Test func waitForLevainPeakCompletedMarksPeak() {
+        let effects = BakeCoordinator.sideEffects(
+            forStep: .waitForLevainPeak,
             event: .completed,
             starterState: .active,
             feedDetails: nil,

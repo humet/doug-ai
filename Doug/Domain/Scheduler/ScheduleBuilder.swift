@@ -145,7 +145,7 @@ enum ScheduleBuilder {
             )
 
             var levainElapsed: Double?
-            if methodStep.stepTypeID == .buildLevain, let ctx = input.levainContext {
+            if methodStep.stepTypeID == .waitForLevainPeak, let ctx = input.levainContext {
                 let remaining = ctx.remainingMinutes()
                 levainElapsed = ctx.elapsedMinutes()
                 duration = remaining > 0 ? remaining : 10
@@ -378,15 +378,31 @@ enum ScheduleBuilder {
             result.append(step)
         }
 
-        // Anchor in-progress levain to its real fed time and close the gap
+        // Anchor in-progress levain to its real fed time and close the gap.
+        // Only anchor when the peak hasn't passed yet — otherwise the levain
+        // hasn't been built and the schedule should use normal backward scheduling.
         if let ctx = input.levainContext,
-           let levainIdx = result.firstIndex(where: { $0.levainElapsedMinutes != nil })
+           let levainIdx = result.firstIndex(where: { $0.levainElapsedMinutes != nil }),
+           ctx.remainingMinutes() > 0
         {
             let old = result[levainIdx]
-            let levainEnd = max(
-                ctx.fedAt.addingTimeInterval(ctx.expectedPeakMinutes * 60),
-                Date()
-            )
+            let levainEnd = ctx.fedAt.addingTimeInterval(ctx.expectedPeakMinutes * 60)
+
+            // Snap the preceding buildLevain (mix) step to just before the feed time
+            if levainIdx > 0, result[levainIdx - 1].stepTypeID == .buildLevain {
+                let mix = result[levainIdx - 1]
+                let mixStart = ctx.fedAt.addingTimeInterval(-mix.durationMinutes * 60)
+                result[levainIdx - 1] = ScheduledStep(
+                    methodStepID: mix.methodStepID,
+                    stepTypeID: mix.stepTypeID,
+                    label: mix.label,
+                    classification: mix.classification,
+                    startTime: mixStart,
+                    endTime: ctx.fedAt,
+                    durationMinutes: mix.durationMinutes,
+                    requiresTempReading: mix.requiresTempReading
+                )
+            }
 
             result[levainIdx] = ScheduledStep(
                 methodStepID: old.methodStepID,

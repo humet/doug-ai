@@ -21,6 +21,7 @@ enum StepTypeID: String, CaseIterable, Codable {
     case fridgeRest
     case activateStarter
     case waitForPeak
+    case waitForLevainPeak
     case refeedAndRefrigerate
 }
 

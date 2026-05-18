@@ -674,7 +674,7 @@ struct NowStepHero: View {
     }
 
     private var isLevainAwaitingPeak: Bool {
-        stepTypeIDEnum == .buildLevain && step.stepStatus == .active
+        stepTypeIDEnum == .waitForLevainPeak && step.stepStatus == .active
     }
 
     private var manualCompletionLabel: String? {

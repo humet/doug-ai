@@ -56,8 +56,9 @@ struct StepTypeTests {
     }
 
     @Test func temperatureAdjustedSteps() {
-        #expect(StepTypeRegistry.type(for: .buildLevain).isTemperatureAdjusted)
+        #expect(StepTypeRegistry.type(for: .waitForLevainPeak).isTemperatureAdjusted)
         #expect(StepTypeRegistry.type(for: .bulkFerment).isTemperatureAdjusted)
+        #expect(!StepTypeRegistry.type(for: .buildLevain).isTemperatureAdjusted)
         #expect(!StepTypeRegistry.type(for: .mix).isTemperatureAdjusted)
         #expect(!StepTypeRegistry.type(for: .coldRetard).isTemperatureAdjusted)
     }

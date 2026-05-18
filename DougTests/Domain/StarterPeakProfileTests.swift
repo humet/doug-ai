@@ -159,9 +159,9 @@ struct ScheduleBuilderPeakProfileTests {
             Issue.record("Expected success"); return
         }
 
-        let levain = steps.first { $0.stepTypeID == .buildLevain }
-        #expect(levain != nil)
-        #expect(abs((levain?.durationMinutes ?? 0) - 210) < 1)
+        let levainWait = steps.first { $0.stepTypeID == .waitForLevainPeak }
+        #expect(levainWait != nil)
+        #expect(abs((levainWait?.durationMinutes ?? 0) - 210) < 1)
     }
 
     @Test func missingProfileFallsBackToGenericEstimate() {
@@ -177,10 +177,9 @@ struct ScheduleBuilderPeakProfileTests {
             Issue.record("Expected success"); return
         }
 
-        let levain = steps.first { $0.stepTypeID == .buildLevain }
-        #expect(levain != nil)
-        // Moderate kitchen → generic 300-minute estimate.
-        #expect(abs((levain?.durationMinutes ?? 0) - 300) < 1)
+        let levainWait = steps.first { $0.stepTypeID == .waitForLevainPeak }
+        #expect(levainWait != nil)
+        #expect(abs((levainWait?.durationMinutes ?? 0) - 300) < 1)
     }
 
     @Test func belowThresholdBucketFallsBackToGenericEstimate() {
@@ -207,7 +206,7 @@ struct ScheduleBuilderPeakProfileTests {
             Issue.record("Expected success"); return
         }
 
-        let levain = steps.first { $0.stepTypeID == .buildLevain }
-        #expect(abs((levain?.durationMinutes ?? 0) - 300) < 1)
+        let levainWait = steps.first { $0.stepTypeID == .waitForLevainPeak }
+        #expect(abs((levainWait?.durationMinutes ?? 0) - 300) < 1)
     }
 }

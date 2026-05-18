@@ -113,7 +113,7 @@ enum TemperatureCalculator {
 
         // Levain: prefer user's observed peak time, then recipe override
         // (adjusted via exponential model), then the generic stepped estimate.
-        if step.stepTypeID == .buildLevain {
+        if step.stepTypeID == .waitForLevainPeak {
             if let profile = peakProfile,
                let observed = profile.averageMinutes(
                    ratio: levainBuildRatio,

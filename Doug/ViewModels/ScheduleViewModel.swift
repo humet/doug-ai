@@ -1092,8 +1092,8 @@ final class ScheduleViewModel {
                         return
                     }
                     let manualSteps: Set<String> = [
-                        StepTypeID.buildLevain.rawValue,
                         StepTypeID.waitForPeak.rawValue,
+                        StepTypeID.waitForLevainPeak.rawValue,
                         StepTypeID.bulkFerment.rawValue,
                         StepTypeID.preheat.rawValue,
                         StepTypeID.bakeSheet.rawValue,
@@ -1326,7 +1326,7 @@ final class ScheduleViewModel {
         guard let active = steps.first(where: { $0.stepStatus == .active }) else { return }
 
         let stepID = StepTypeID(rawValue: active.stepTypeID)
-        guard stepID == .buildLevain || stepID == .waitForPeak else { return }
+        guard stepID == .waitForPeak || stepID == .waitForLevainPeak else { return }
 
         guard let context = schedule.modelContext else { return }
         let profiles = (try? context.fetch(FetchDescriptor<StarterProfile>())) ?? []
@@ -1581,13 +1581,13 @@ final class ScheduleViewModel {
         StepTypeID.preheat.rawValue,
         StepTypeID.bake.rawValue,
         StepTypeID.bakeSheet.rawValue,
-        StepTypeID.buildLevain.rawValue,
         StepTypeID.waitForPeak.rawValue,
+        StepTypeID.waitForLevainPeak.rawValue,
     ]
 
     private static let liveActivityLongWaitSteps: Set<String> = [
-        StepTypeID.buildLevain.rawValue,
         StepTypeID.waitForPeak.rawValue,
+        StepTypeID.waitForLevainPeak.rawValue,
         StepTypeID.coldRetard.rawValue,
     ]
 

@@ -21,7 +21,7 @@ enum StepTypeIcon {
         case .bakeUncovered: "oven.fill"
         case .fridgeRest: "snowflake"
         case .activateStarter: "bubbles.and.sparkles"
-        case .waitForPeak: "chart.line.uptrend.xyaxis"
+        case .waitForPeak, .waitForLevainPeak: "chart.line.uptrend.xyaxis"
         case .refeedAndRefrigerate: "arrow.uturn.backward"
         }
     }
@@ -40,7 +40,7 @@ enum StepTypeIcon {
             DougTheme.sourdoughBrown
         case .preheat, .bake, .bakeCovered, .bakeUncovered, .bakeSheet:
             .orange
-        case .activateStarter, .waitForPeak:
+        case .activateStarter, .waitForPeak, .waitForLevainPeak:
             .green
         case .refeedAndRefrigerate:
             .blue
