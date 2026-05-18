@@ -682,6 +682,10 @@ struct FeedLogRow: View {
                     .font(.caption)
                 Label("\(Int(log.kitchenTemperatureCelsius))°C", systemImage: "thermometer.medium")
                     .font(.caption)
+                if let grams = log.starterGrams {
+                    Label("\(Int(grams))g", systemImage: "scalemass")
+                        .font(.caption)
+                }
                 Spacer()
 
                 if let peak = log.timeToPeakMinutes {
