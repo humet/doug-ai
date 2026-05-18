@@ -998,13 +998,16 @@ final class ScheduleViewModel {
         guard let schedule = activeSchedule else { return }
         NotificationService.shared.cancelNotifications(for: [step])
         step.stepStatus = .done
+        let now = Date()
         if step.actualEndTime == nil {
-            step.actualEndTime = Date()
+            step.actualEndTime = now
         }
+        let oldEnd = step.computedEndTime
         if let actual = step.actualEndTime {
-            let delta = actual.timeIntervalSince(step.computedEndTime)
-            if delta > 0 {
-                cascade(afterEnd: step.computedEndTime, delta: delta, in: schedule, excluding: step)
+            let delta = actual.timeIntervalSince(oldEnd)
+            if delta != 0 {
+                if delta < 0 { step.computedEndTime = actual }
+                cascade(afterEnd: oldEnd, delta: delta, in: schedule, excluding: step)
             }
         }
 

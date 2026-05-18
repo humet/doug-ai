@@ -374,6 +374,214 @@ struct ScheduleAdjustmentsTests {
         #expect(steps[0].computedStartTime == originalAutolyseStart)
         #expect(steps[0].computedEndTime == originalAutolyseEnd)
     }
+
+    // MARK: - Early Completion Cascade
+
+    private func makeLevainSchedule(anchor: Date, context: ModelContext) -> (Schedule, [ScheduleStep]) {
+        let schedule = Schedule(
+            recipeID: .countryLoaf,
+            targetBreadReadyTime: anchor.addingTimeInterval(10 * 60 * 60),
+            kitchenTemperatureCelsius: 22
+        )
+        schedule.scheduleStatus = .active
+        context.insert(schedule)
+
+        let levain = ScheduleStep(
+            stepTypeID: .buildLevain,
+            sequenceIndex: 0,
+            computedStartTime: anchor,
+            computedEndTime: anchor.addingTimeInterval(300 * 60),
+            computedDurationMinutes: 300
+        )
+        levain.schedule = schedule
+        levain.stepStatus = .active
+        context.insert(levain)
+
+        let autolyse = ScheduleStep(
+            stepTypeID: .autolyse,
+            sequenceIndex: 1,
+            computedStartTime: anchor.addingTimeInterval(300 * 60),
+            computedEndTime: anchor.addingTimeInterval(345 * 60),
+            computedDurationMinutes: 45
+        )
+        autolyse.schedule = schedule
+        context.insert(autolyse)
+
+        let mix = ScheduleStep(
+            stepTypeID: .mix,
+            sequenceIndex: 2,
+            computedStartTime: anchor.addingTimeInterval(345 * 60),
+            computedEndTime: anchor.addingTimeInterval(350 * 60),
+            computedDurationMinutes: 5
+        )
+        mix.schedule = schedule
+        context.insert(mix)
+
+        let bulk = ScheduleStep(
+            stepTypeID: .bulkFerment,
+            sequenceIndex: 3,
+            computedStartTime: anchor.addingTimeInterval(350 * 60),
+            computedEndTime: anchor.addingTimeInterval(590 * 60),
+            computedDurationMinutes: 240
+        )
+        bulk.schedule = schedule
+        context.insert(bulk)
+
+        return (schedule, [levain, autolyse, mix, bulk])
+    }
+
+    @Test func markStepDoneEarlyCascadesForward() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-120 * 60)
+        let (schedule, steps) = makeLevainSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: schedule)
+
+        let originalAutolyseStart = steps[1].computedStartTime
+        let originalMixStart = steps[2].computedStartTime
+        let originalBulkStart = steps[3].computedStartTime
+        let originalTarget = schedule.targetBreadReadyTime
+
+        vm.markStepDone(steps[0], modelContext: context)
+
+        let saved = originalAutolyseStart.timeIntervalSince(steps[0].actualEndTime!)
+
+        #expect(steps[0].stepStatus == .done)
+        #expect(saved > 0, "Should have finished before original end")
+        #expect(steps[1].computedStartTime < originalAutolyseStart, "Autolyse should shift earlier")
+        #expect(steps[2].computedStartTime < originalMixStart, "Mix should shift earlier")
+        #expect(steps[3].computedStartTime < originalBulkStart, "Bulk should shift earlier")
+        #expect(schedule.targetBreadReadyTime < originalTarget, "Bread ready time should shift earlier")
+    }
+
+    @Test func markStepDoneEarlySnapsEndTime() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-120 * 60)
+        let (_, steps) = makeLevainSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: Schedule(
+            recipeID: .countryLoaf,
+            targetBreadReadyTime: Date(),
+            kitchenTemperatureCelsius: 22
+        ))
+        vm.activeSchedule = steps[0].schedule
+
+        let originalEnd = steps[0].computedEndTime
+
+        vm.markStepDone(steps[0], modelContext: context)
+
+        #expect(steps[0].computedEndTime < originalEnd, "computedEndTime should snap to actual finish")
+        #expect(steps[0].computedEndTime == steps[0].actualEndTime)
+    }
+
+    @Test func markStepDoneEarlyPromotesNextStep() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-120 * 60)
+        let (_, steps) = makeLevainSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: steps[0].schedule!)
+
+        vm.markStepDone(steps[0], modelContext: context)
+
+        #expect(steps[1].stepStatus == .active, "Autolyse should be promoted to active")
+    }
+
+    // MARK: - Fold Checklist
+
+    private func makeBulkWithFolds(anchor: Date, context: ModelContext) -> (Schedule, ScheduleStep, [ScheduleStep]) {
+        let schedule = Schedule(
+            recipeID: .countryLoaf,
+            targetBreadReadyTime: anchor.addingTimeInterval(8 * 60 * 60),
+            kitchenTemperatureCelsius: 22
+        )
+        schedule.scheduleStatus = .active
+        context.insert(schedule)
+
+        let bulk = ScheduleStep(
+            stepTypeID: .bulkFerment,
+            sequenceIndex: 0,
+            computedStartTime: anchor,
+            computedEndTime: anchor.addingTimeInterval(240 * 60),
+            computedDurationMinutes: 240
+        )
+        bulk.schedule = schedule
+        bulk.stepStatus = .active
+        context.insert(bulk)
+
+        var folds: [ScheduleStep] = []
+        for i in 0 ..< 4 {
+            let foldStart = anchor.addingTimeInterval(Double(i + 1) * 32 * 60)
+            let fold = ScheduleStep(
+                stepTypeID: .stretchAndFold,
+                sequenceIndex: i,
+                computedStartTime: foldStart,
+                computedEndTime: foldStart.addingTimeInterval(3 * 60),
+                computedDurationMinutes: 3
+            )
+            fold.parentStep = bulk
+            fold.schedule = schedule
+            context.insert(fold)
+            folds.append(fold)
+        }
+
+        return (schedule, bulk, folds)
+    }
+
+    @Test func markFoldDoneMarksComplete() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-35 * 60)
+        let (_, _, folds) = makeBulkWithFolds(anchor: anchor, context: context)
+        let vm = makeViewModel(with: folds[0].schedule!)
+
+        vm.markFoldDone(folds[0])
+
+        #expect(folds[0].stepStatus == .done)
+        #expect(folds[0].actualEndTime != nil)
+    }
+
+    @Test func markFoldDoneReschedulesRemaining() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-35 * 60)
+        let (_, _, folds) = makeBulkWithFolds(anchor: anchor, context: context)
+        let vm = makeViewModel(with: folds[0].schedule!)
+
+        let originalFold2Start = folds[1].computedStartTime
+
+        vm.markFoldDone(folds[0])
+
+        #expect(folds[1].computedStartTime != originalFold2Start, "Remaining folds should be rescheduled")
+        #expect(folds[1].stepStatus != .done, "Fold 2 should still be pending")
+    }
+
+    @Test func finishBulkEarlySkipsRemainingFolds() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-60 * 60)
+        let (_, bulk, folds) = makeBulkWithFolds(anchor: anchor, context: context)
+        let vm = makeViewModel(with: bulk.schedule!)
+
+        vm.markFoldDone(folds[0])
+        vm.finishStepEarly(bulk, modelContext: context)
+
+        #expect(bulk.stepStatus == .done)
+        #expect(folds[1].stepStatus == .skipped)
+        #expect(folds[2].stepStatus == .skipped)
+        #expect(folds[3].stepStatus == .skipped)
+    }
+
+    @Test func missedFoldsAutoSkipWhenNextDue() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-70 * 60)
+        let (schedule, _, folds) = makeBulkWithFolds(anchor: anchor, context: context)
+        let vm = makeViewModel(with: schedule)
+
+        vm.advanceIfReady(now: Date(), modelContext: context)
+
+        #expect(folds[0].stepStatus == .skipped, "Fold 1 should be auto-skipped when fold 2 is due")
+    }
 }
 
 // MARK: - Step type copy coverage
