@@ -232,14 +232,17 @@ struct NowStepHero: View {
                             .padding(.vertical, 10)
                     }
                     .adaptiveGlassButtonStyle(prominent: true)
-                } else if allFoldsDone {
+                } else {
                     Button {
                         completeCurrent()
                     } label: {
-                        Label("Finish Bulk Early", systemImage: "forward.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+                        Label(
+                            allFoldsDone ? "Finish Bulk Early" : "Shape Early",
+                            systemImage: "forward.fill"
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
                     }
                     .adaptiveGlassButtonStyle()
                 }
