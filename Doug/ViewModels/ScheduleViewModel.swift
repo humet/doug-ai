@@ -69,6 +69,67 @@ final class ScheduleViewModel {
     var bulkFermentTargetReached = false
     var lastScheduleAdjustment: ScheduleAdjustment?
 
+    // Feed entry state (shared between hero card and detail sheet)
+    var feedRatioStarter: Int = 1
+    var feedRatioFlour: Int = 5
+    var feedRatioWater: Int = 5
+    var feedStarterGrams: String = ""
+    var feedKitchenTemp: Double = 22
+    var feedInitialized = false
+
+    var feedDetails: FeedDetails {
+        FeedDetails(
+            ratioStarter: feedRatioStarter,
+            ratioFlour: feedRatioFlour,
+            ratioWater: feedRatioWater,
+            flourType: "white",
+            kitchenTemperatureCelsius: feedKitchenTemp,
+            starterGrams: Double(feedStarterGrams)
+        )
+    }
+
+    func initializeFeedDefaults(for step: ScheduleStep) {
+        guard !feedInitialized else { return }
+        feedInitialized = true
+        let temp = step.schedule?.kitchenTemperatureCelsius ?? 22
+        feedKitchenTemp = temp
+        let stepTypeID = StepTypeID(rawValue: step.stepTypeID)
+        switch stepTypeID {
+        case .activateStarter:
+            feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
+        case .buildLevain:
+            if let recipe = step.schedule?.recipe {
+                let kitchenTemp = step.schedule?.kitchenTemperatureCelsius ?? temp
+                let build = LevainBuildCalculator.calculate(.init(
+                    levainGramsNeeded: recipe.ingredients.levainGrams,
+                    baseRatio: recipe.levainBuildRatio,
+                    referenceTemp: recipe.referenceTemperatureCelsius,
+                    kitchenTemp: kitchenTemp
+                ))
+                feedRatioStarter = build.ratio.starter
+                feedRatioFlour = build.ratio.flour
+                feedRatioWater = build.ratio.water
+                feedStarterGrams = String(Int(build.starterGrams))
+            } else {
+                feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
+            }
+        case .refeedAndRefrigerate:
+            feedRatioStarter = 1; feedRatioFlour = 1; feedRatioWater = 1
+            feedStarterGrams = "10"
+        default:
+            break
+        }
+    }
+
+    func resetFeedState() {
+        feedInitialized = false
+        feedRatioStarter = 1
+        feedRatioFlour = 5
+        feedRatioWater = 5
+        feedStarterGrams = ""
+        feedKitchenTemp = 22
+    }
+
     // Levain-in-progress detection
     var detectedLevain: LevainContext?
     var useActiveLevain = false
@@ -1558,6 +1619,7 @@ final class ScheduleViewModel {
         if let next = steps.first(where: { $0.stepStatus == .upcoming }) {
             next.stepStatus = .active
             lastPromotedStepTypeID = next.stepTypeID
+            resetFeedState()
         }
     }
 

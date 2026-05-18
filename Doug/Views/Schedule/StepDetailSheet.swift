@@ -7,7 +7,7 @@ import SwiftUI
 /// - Done / Skipped: summary + Go Back (if it's the most-recent)
 struct StepDetailSheet: View {
     let step: ScheduleStep
-    let viewModel: ScheduleViewModel
+    @Bindable var viewModel: ScheduleViewModel
     let isMostRecentlyCompleted: Bool
 
     @Environment(\.dismiss) private var dismiss
@@ -21,6 +21,9 @@ struct StepDetailSheet: View {
                     VStack(alignment: .leading, spacing: 20) {
                         header(now: context.date)
                         instructions
+                        if isStarterRelatedStep, step.stepStatus == .active {
+                            feedSettingsSection
+                        }
                         if step.stepStatus == .active, step.stepType.requiresTempReading {
                             temperatureEntryButton
                         }
@@ -143,7 +146,7 @@ struct StepDetailSheet: View {
     private var contextualIngredients: some View {
         if let ing = step.schedule?.recipe.ingredients {
             let items: [(String, Double)] = switch stepTypeIDEnum {
-            case .buildLevain: [("Levain", ing.levainGrams)]
+            case .buildLevain: levainBuildWeights(ingredients: ing)
             case .autolyse: [("Flour", ing.flourGrams), ("Water", ing.waterGrams)]
             case .mix: [
                 ("Flour", ing.flourGrams),
@@ -318,10 +321,92 @@ struct StepDetailSheet: View {
         StepTypeID(rawValue: step.stepTypeID) ?? .mix
     }
 
+    private var isStarterRelatedStep: Bool {
+        let id = stepTypeIDEnum
+        return id == .activateStarter || id == .buildLevain || id == .refeedAndRefrigerate
+    }
+
+    private var feedSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Feed Settings")
+                .font(.subheadline.bold())
+
+            HStack {
+                Text("Ratio")
+                    .font(.subheadline)
+                Spacer()
+                Stepper(
+                    "\(viewModel.feedRatioStarter):\(viewModel.feedRatioFlour):\(viewModel.feedRatioWater)",
+                    value: $viewModel.feedRatioFlour,
+                    in: 1 ... 20
+                )
+                .font(.subheadline)
+            }
+
+            HStack {
+                Text("Starter")
+                    .font(.subheadline)
+                Spacer()
+                TextField("10", text: $viewModel.feedStarterGrams)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 60)
+                    .font(.subheadline)
+                Text("g")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let grams = Double(viewModel.feedStarterGrams), grams > 0 {
+                let flourGrams = grams * Double(viewModel.feedRatioFlour) / Double(max(viewModel.feedRatioStarter, 1))
+                let waterGrams = grams * Double(viewModel.feedRatioWater) / Double(max(viewModel.feedRatioStarter, 1))
+                HStack {
+                    HStack(spacing: 4) {
+                        Text("Flour").font(.subheadline)
+                        Text("\(Int(flourGrams))g").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Text("Water").font(.subheadline)
+                        Text("\(Int(waterGrams))g").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Text("Total").font(.subheadline.weight(.medium))
+                        Text("\(Int(grams + flourGrams + waterGrams))g").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            HStack {
+                Text("Kitchen")
+                    .font(.subheadline)
+                Spacer()
+                Text("\(Int(viewModel.feedKitchenTemp))°C")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Stepper("", value: $viewModel.feedKitchenTemp, in: 15 ... 35, step: 1)
+                    .labelsHidden()
+            }
+        }
+        .padding()
+        .background(DougTheme.cardBackground, in: .rect(cornerRadius: 14))
+        .onAppear { viewModel.initializeFeedDefaults(for: step) }
+    }
+
+    private func levainBuildWeights(ingredients: Ingredients) -> [(String, Double)] {
+        if let grams = Double(viewModel.feedStarterGrams), grams > 0 {
+            let flour = grams * Double(viewModel.feedRatioFlour) / Double(max(viewModel.feedRatioStarter, 1))
+            let water = grams * Double(viewModel.feedRatioWater) / Double(max(viewModel.feedRatioStarter, 1))
+            return [("Starter", grams), ("Flour", flour), ("Water", water)]
+        }
+        return [("Levain", ingredients.levainGrams)]
+    }
+
     private var showsMarkDoneButton: Bool {
         guard step.stepStatus == .active else { return false }
         guard step.stepType.classification == .handsOn else { return false }
-        if step.stepType.requiresTempReading { return false } // Temp entry handles the completion.
+        if step.stepType.requiresTempReading { return false }
         return true
     }
 }

@@ -15,12 +15,6 @@ struct NowStepHero: View {
     @State private var showAbandonConfirm = false
     @State private var showAlreadyStarted = false
     @State private var foldToComplete: ScheduleStep?
-    @State private var feedRatioStarter: Int = 1
-    @State private var feedRatioFlour: Int = 5
-    @State private var feedRatioWater: Int = 5
-    @State private var feedStarterGrams: String = ""
-    @State private var feedKitchenTemp: Double = 22
-    @State private var feedInitialized = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -412,7 +406,17 @@ struct NowStepHero: View {
         if let ing = recipeIngredients {
             switch stepTypeIDEnum {
             case .buildLevain:
-                measurementChips([("Levain", ing.levainGrams)])
+                if let grams = Double(viewModel.feedStarterGrams), grams > 0 {
+                    let flourGrams = grams * Double(viewModel.feedRatioFlour) / Double(max(viewModel.feedRatioStarter, 1))
+                    let waterGrams = grams * Double(viewModel.feedRatioWater) / Double(max(viewModel.feedRatioStarter, 1))
+                    measurementChips([
+                        ("Starter", grams),
+                        ("Flour", flourGrams),
+                        ("Water", waterGrams),
+                    ])
+                } else {
+                    measurementChips([("Levain", ing.levainGrams)])
+                }
             case .autolyse:
                 VStack(alignment: .leading, spacing: 6) {
                     measurementChips([("Flour", ing.flourGrams), ("Water", ing.waterGrams)])
@@ -690,65 +694,16 @@ struct NowStepHero: View {
     @ViewBuilder
     private var inlineFeedEntry: some View {
         if isStarterRelatedStep, step.stepStatus == .active {
-            InlineFeedEntryView(
-                ratioStarter: $feedRatioStarter,
-                ratioFlour: $feedRatioFlour,
-                ratioWater: $feedRatioWater,
-                starterGrams: $feedStarterGrams,
-                kitchenTemp: $feedKitchenTemp
-            )
-            .onAppear { initializeFeedDefaults() }
+            EmptyView()
+                .onAppear { viewModel.initializeFeedDefaults(for: step) }
         }
-    }
-
-    private func initializeFeedDefaults() {
-        guard !feedInitialized else { return }
-        feedInitialized = true
-        let temp = step.schedule?.kitchenTemperatureCelsius ?? 22
-        feedKitchenTemp = temp
-        switch stepTypeIDEnum {
-        case .activateStarter:
-            feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
-        case .buildLevain:
-            if let recipe = step.schedule?.recipe {
-                let kitchenTemp = step.schedule?.kitchenTemperatureCelsius ?? temp
-                let build = LevainBuildCalculator.calculate(.init(
-                    levainGramsNeeded: recipe.ingredients.levainGrams,
-                    baseRatio: recipe.levainBuildRatio,
-                    referenceTemp: recipe.referenceTemperatureCelsius,
-                    kitchenTemp: kitchenTemp
-                ))
-                feedRatioStarter = build.ratio.starter
-                feedRatioFlour = build.ratio.flour
-                feedRatioWater = build.ratio.water
-                feedStarterGrams = String(Int(build.starterGrams))
-            } else {
-                feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
-            }
-        case .refeedAndRefrigerate:
-            feedRatioStarter = 1; feedRatioFlour = 1; feedRatioWater = 1
-            feedStarterGrams = "10"
-        default:
-            break
-        }
-    }
-
-    private var currentFeedDetails: FeedDetails {
-        FeedDetails(
-            ratioStarter: feedRatioStarter,
-            ratioFlour: feedRatioFlour,
-            ratioWater: feedRatioWater,
-            flourType: "white",
-            kitchenTemperatureCelsius: feedKitchenTemp,
-            starterGrams: Double(feedStarterGrams)
-        )
     }
 
     private func completeCurrent() {
         if isStarterRelatedStep || isWaitForPeakStep || isLevainAwaitingPeak {
             viewModel.markStepDone(
                 step,
-                feedDetails: isStarterRelatedStep ? currentFeedDetails : nil,
+                feedDetails: isStarterRelatedStep ? viewModel.feedDetails : nil,
                 starterProfile: starterProfile,
                 modelContext: modelContext
             )
