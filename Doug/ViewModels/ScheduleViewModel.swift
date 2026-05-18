@@ -1355,6 +1355,7 @@ final class ScheduleViewModel {
                     ratioWater: input.ratioWater,
                     flourType: input.flourType,
                     kitchenTemperatureCelsius: input.kitchenTemperatureCelsius,
+                    starterGrams: input.starterGrams,
                     feedIntent: input.feedIntent
                 )
                 modelContext.insert(log)

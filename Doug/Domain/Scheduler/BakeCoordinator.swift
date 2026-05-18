@@ -107,6 +107,7 @@ enum BakeCoordinator {
             flourType: details.flourType,
             kitchenTemperatureCelsius: details.kitchenTemperatureCelsius,
             timeToPeakMinutes: nil,
+            starterGrams: details.starterGrams,
             feedIntent: .activation
         )))
 
@@ -147,6 +148,7 @@ enum BakeCoordinator {
             flourType: details.flourType,
             kitchenTemperatureCelsius: details.kitchenTemperatureCelsius,
             timeToPeakMinutes: nil,
+            starterGrams: details.starterGrams,
             feedIntent: .levain
         ))]
     }
@@ -179,6 +181,7 @@ enum BakeCoordinator {
             flourType: details.flourType,
             kitchenTemperatureCelsius: details.kitchenTemperatureCelsius,
             timeToPeakMinutes: nil,
+            starterGrams: details.starterGrams,
             feedIntent: .postBake
         )))
 

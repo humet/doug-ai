@@ -44,6 +44,7 @@ extension FeedLogInput {
         flourType = model.flourType
         kitchenTemperatureCelsius = model.kitchenTemperatureCelsius
         timeToPeakMinutes = model.timeToPeakMinutes
+        starterGrams = model.starterGrams
         feedIntent = model.starterFeedIntent
     }
 }

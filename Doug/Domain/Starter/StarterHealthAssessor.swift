@@ -108,6 +108,7 @@ struct FeedLogInput {
     let flourType: String
     let kitchenTemperatureCelsius: Double
     let timeToPeakMinutes: Double?
+    var starterGrams: Double? = nil
     var feedIntent: FeedIntent = .maintenance
 }
 

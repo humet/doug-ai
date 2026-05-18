@@ -226,16 +226,27 @@ struct StarterTab: View {
         .foregroundStyle(.secondary)
     }
 
+    private var levainUsedInActiveBake: Bool {
+        guard let bake = activeBake else { return false }
+        let steps = bake.steps
+            .filter { $0.parentStep == nil }
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+        guard let mixStep = steps.first(where: { $0.stepTypeID == StepTypeID.mix.rawValue }) else {
+            return false
+        }
+        return mixStep.stepStatus == .done
+    }
+
     @ViewBuilder
     private var lifecycleActions: some View {
-        if let bake = activeBake {
+        if activeBake != nil, !levainUsedInActiveBake {
             HStack(spacing: 8) {
                 Image(systemName: "oven")
                     .foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Bake in progress")
                         .font(.subheadline.weight(.medium))
-                    Text(bake.recipe.name)
+                    Text("Feed after the levain is mixed in")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
