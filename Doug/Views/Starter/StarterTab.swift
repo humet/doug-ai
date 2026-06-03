@@ -19,6 +19,7 @@ struct StarterTab: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showCoachChat = false
     @State private var feedLogToDelete: StarterFeedLog?
+    @State private var showRefrigerateConfirm = false
     @State private var now = Date()
 
     private var profile: StarterProfile? {
@@ -154,6 +155,22 @@ struct StarterTab: View {
             } message: {
                 Text("This feed entry will be permanently removed.")
             }
+            .confirmationDialog(
+                "Put starter back in the fridge?",
+                isPresented: $showRefrigerateConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Put Back in Fridge", role: .destructive) {
+                    if let profile {
+                        viewModel.refrigerate(profile: profile)
+                    }
+                }
+                Button("Keep Activating", role: .cancel) {}
+            } message: {
+                Text(risingFeed != nil
+                    ? "Your starter is mid-rise. This pauses waking it up. You can take it out again anytime."
+                    : "This cancels activation. You can take it out and activate again anytime.")
+            }
             .sheet(isPresented: $viewModel.showStartRevival) {
                 StartRevivalSheet(
                     viewModel: viewModel,
@@ -237,9 +254,21 @@ struct StarterTab: View {
         return mixStep.stepStatus == .done
     }
 
+    /// A bake is running and its levain hasn't been mixed into the dough yet.
+    /// In this window the active starter is the levain doing its job — it should
+    /// wait to be used, not be rebuilt or fed & refrigerated.
+    private var bakeAwaitingLevainMix: Bool {
+        activeBake != nil && !levainUsedInActiveBake
+    }
+
     @ViewBuilder
     private var lifecycleActions: some View {
-        if activeBake != nil, !levainUsedInActiveBake {
+        // While a bake is mid-flight and the levain isn't mixed in yet, the only
+        // .active action ("Feed & Refrigerate") would put the culture away before
+        // it's used — so for .active we show a wait note instead of that button.
+        // Other states keep their controls so the starter is never trapped with no
+        // way to re-activate or feed (the original dead-end this section had).
+        if bakeAwaitingLevainMix, lifecycleState == .active {
             HStack(spacing: 8) {
                 Image(systemName: "oven")
                     .foregroundStyle(.orange)
@@ -298,9 +327,7 @@ struct StarterTab: View {
                 .tint(.orange)
             }
             Button {
-                if let profile {
-                    viewModel.refrigerate(profile: profile)
-                }
+                showRefrigerateConfirm = true
             } label: {
                 Label("Put Back in Fridge", systemImage: "snowflake")
             }
@@ -587,7 +614,7 @@ struct StarterTab: View {
         switch lifecycleState {
         case .dormant: "In the Fridge"
         case .activating: risingFeed != nil ? "Waking Up" : "Activating"
-        case .active: "Ready to Bake!"
+        case .active: bakeAwaitingLevainMix ? "Powering Your Bake" : "Ready to Bake!"
         case .reviving: "In Revival"
         }
     }
@@ -608,6 +635,9 @@ struct StarterTab: View {
             return "Feed your starter on the counter to wake it up"
         case .active:
             let hours = Int(now.timeIntervalSince(profile?.stateChangedAt ?? now) / 3600)
+            if bakeAwaitingLevainMix {
+                return "Active for \(hours)h — feed & refrigerate once it's mixed into your dough"
+            }
             return "Active for \(hours)h — build your levain or feed & refrigerate"
         case .reviving:
             return "Your starter is rebuilding strength. Follow the revival plan below."

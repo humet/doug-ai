@@ -37,6 +37,25 @@ struct LogFeedSheet: View {
                     }
                 }
 
+                if !isLevainBuild {
+                    Section {
+                        Picker("Feeding", selection: $viewModel.feedIntent) {
+                            Text("To activate").tag(FeedIntent.activation)
+                            Text("For the fridge").tag(FeedIntent.maintenance)
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: viewModel.feedIntent) { _, newValue in
+                            applyRatioDefaults(for: newValue)
+                        }
+                    } header: {
+                        Text("Feed Type")
+                    } footer: {
+                        Text(isActivationFeed
+                            ? "A counter feed to wake your starter up for baking."
+                            : "A maintenance feed before storing in the fridge.")
+                    }
+                }
+
                 Section("Date & Time") {
                     DatePicker("Fed at", selection: $viewModel.feedTimestamp, in: ...Date())
                 }
@@ -149,19 +168,20 @@ struct LogFeedSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        viewModel.logFeed(modelContext: modelContext, profile: profile)
+                        viewModel.logFeed(
+                            modelContext: modelContext,
+                            profile: profile,
+                            intent: isLevainBuild ? .levain : viewModel.feedIntent
+                        )
                     }
                 }
             }
             .onAppear {
                 if isLevainBuild {
                     // prepareLevainBuild already set ratio and grams
-                } else if isActivationFeed {
-                    viewModel.feedRatioFlour = 5
-                    viewModel.feedRatioWater = 5
                 } else {
-                    viewModel.feedRatioFlour = 1
-                    viewModel.feedRatioWater = 1
+                    viewModel.feedIntent = defaultIntent
+                    applyRatioDefaults(for: viewModel.feedIntent)
                 }
                 if viewModel.logFeedStarterGrams.isEmpty {
                     viewModel.logFeedStarterGrams = "10"
@@ -170,8 +190,28 @@ struct LogFeedSheet: View {
         }
     }
 
+    /// The feed type pre-selected when the sheet opens, based on where the
+    /// starter is in its lifecycle. The user can override it with the picker.
+    private var defaultIntent: FeedIntent {
+        switch profile?.starterLifecycleState {
+        case .activating, .active: .activation
+        default: .maintenance
+        }
+    }
+
+    private func applyRatioDefaults(for intent: FeedIntent) {
+        switch intent {
+        case .activation:
+            viewModel.feedRatioFlour = 5
+            viewModel.feedRatioWater = 5
+        default:
+            viewModel.feedRatioFlour = 1
+            viewModel.feedRatioWater = 1
+        }
+    }
+
     private var isActivationFeed: Bool {
-        profile?.starterLifecycleState == .activating
+        isLevainBuild ? false : viewModel.feedIntent == .activation
     }
 
     private var ratioGuidance: String {

@@ -18,6 +18,10 @@ final class StarterViewModel {
     var feedKitchenTemp = 22.0
     var feedTimestamp = Date()
     var logFeedStarterGrams = ""
+    /// User-selectable feed type in the Log Feed sheet. Drives the suggested
+    /// ratios and guidance independently of lifecycle state, so a starter can be
+    /// fed for the counter or the fridge from any state.
+    var feedIntent: FeedIntent = .maintenance
 
     // Levain build state
     var pendingLevainBuild: LevainBuildCalculator.Result?
@@ -122,12 +126,28 @@ final class StarterViewModel {
         )
         modelContext.insert(log)
 
+        // Keep storage + lifecycle honest with the feed the user just logged, so
+        // the hero card can't claim "Counter / Active" right after a fridge feed
+        // (or vice versa):
+        //  • a counter/activation feed while dormant → take it out onto the counter
+        //    so the activation flow (Mark Peak → ready) becomes reachable
+        //  • a fridge/maintenance feed while it's out → put it back in the fridge
+        if let profile {
+            let state = profile.starterLifecycleState
+            if resolvedIntent == .activation, state == .dormant {
+                activate(profile: profile)
+            } else if resolvedIntent == .maintenance, state == .active || state == .activating {
+                refrigerate(profile: profile)
+            }
+        }
+
         feedRatioStarter = 1
         feedRatioFlour = 2
         feedRatioWater = 2
         feedFlourType = "white"
         feedTimestamp = Date()
         logFeedStarterGrams = ""
+        feedIntent = .maintenance
         pendingLevainBuild = nil
         pendingLevainRecipeName = nil
 
