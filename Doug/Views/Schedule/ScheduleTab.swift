@@ -145,7 +145,8 @@ struct ScheduleTab: View {
                     StepDetailSheet(
                         step: step,
                         viewModel: viewModel,
-                        isMostRecentlyCompleted: isMostRecentlyCompleted(step)
+                        isMostRecentlyCompleted: isMostRecentlyCompleted(step),
+                        starterProfile: profiles.first
                     )
                 }
                 .sheet(isPresented: $viewModel.showRecipeDetailSheet) {

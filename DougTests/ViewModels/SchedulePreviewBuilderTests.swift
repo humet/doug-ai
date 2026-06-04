@@ -41,10 +41,12 @@ struct SchedulePreviewBuilderTests {
     private func setupStarterProfile(
         context: ModelContext,
         state: StarterLifecycleState = .dormant,
+        storage: StarterStorageType = .fridge,
         peakAverage: Double? = nil
     ) -> StarterProfile {
         let profile = StarterProfile()
         profile.starterLifecycleState = state
+        profile.starterStorageType = storage
         if let avg = peakAverage {
             profile.activePeakAverageMinutes = avg
         }
@@ -408,6 +410,134 @@ struct SchedulePreviewBuilderTests {
         }
     }
 
+
+    // MARK: - Chill Starter (ready counter starter, far-off levain build)
+
+    @Test func activeCounterStarterWithLargeFrontGapInsertsChillStep() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let avail = setupAvailability(context: ctx)
+        let profile = setupStarterProfile(context: ctx, state: .active, storage: .counter)
+
+        let vm = ScheduleViewModel()
+        vm.selectedRecipeID = .countryLoaf
+        vm.kitchenTemperature = 22
+        vm.targetDate = targetDayAfterTomorrow(hour: 9)
+
+        vm.buildPreview(availability: avail, windows: [], feedLogs: [], starterProfile: profile)
+
+        #expect(vm.conflict == nil)
+        #expect(vm.hasActivationPreamble)
+
+        let stepTypes = vm.previewSteps.map { $0.stepTypeID }
+        #expect(stepTypes.first == .holdStarter, "Chill Starter should lead the schedule")
+        #expect(stepTypes.contains(.buildLevain))
+        let chill = vm.previewSteps.first { $0.stepTypeID == .holdStarter }
+        #expect(chill?.startTime.timeIntervalSinceNow ?? -999 > -5, "Chill should start ~now")
+
+        // Chronological invariant holds with the chill step prepended.
+        for i in 1 ..< vm.previewSteps.count {
+            #expect(vm.previewSteps[i].startTime >= vm.previewSteps[i - 1].startTime)
+        }
+    }
+
+    @Test func activeCounterStarterWithSmallFrontGapNoChill() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        // 24h availability so a tightly-targeted same-day schedule isn't rejected for night hours.
+        let avail = setupAvailability(context: ctx, startHour: 0, startMinute: 0, endHour: 23, endMinute: 59)
+        let profile = setupStarterProfile(context: ctx, state: .active, storage: .counter)
+
+        let vm = ScheduleViewModel()
+        vm.selectedRecipeID = .focaccia
+        vm.kitchenTemperature = 22
+        // Target just past the recipe's own duration → Build Levain lands ~45m out (< 2h threshold).
+        let duration = EarliestBakeEstimator.recipeDurationMinutes(
+            recipe: vm.selectedRecipe, kitchenTempC: vm.kitchenTemperature
+        )
+        vm.targetDate = Date().addingTimeInterval((duration + 45) * 60)
+
+        vm.buildPreview(availability: avail, windows: [], feedLogs: [], starterProfile: profile)
+
+        let stepTypes = vm.previewSteps.map { $0.stepTypeID }
+        #expect(!stepTypes.contains(.holdStarter), "Small front gap should not trigger a chill step")
+    }
+
+    @Test func activeFridgeStarterNeverChills() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let avail = setupAvailability(context: ctx)
+        let profile = setupStarterProfile(context: ctx, state: .active, storage: .fridge)
+
+        let vm = ScheduleViewModel()
+        vm.selectedRecipeID = .countryLoaf
+        vm.kitchenTemperature = 22
+        vm.targetDate = targetDayAfterTomorrow(hour: 9)
+
+        vm.buildPreview(availability: avail, windows: [], feedLogs: [], starterProfile: profile)
+
+        let stepTypes = vm.previewSteps.map { $0.stepTypeID }
+        #expect(!stepTypes.contains(.holdStarter), "Fridge starter is already cold — no chill")
+        #expect(!vm.hasActivationPreamble)
+        #expect(stepTypes.first == .buildLevain)
+    }
+
+    @Test func activatingPeakedCounterStarterChills() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let avail = setupAvailability(context: ctx)
+        let profile = setupStarterProfile(context: ctx, state: .activating, storage: .counter)
+        let feed = setupActivationFeed(context: ctx, hoursAgo: 5, peaked: true)
+
+        let vm = ScheduleViewModel()
+        vm.selectedRecipeID = .countryLoaf
+        vm.kitchenTemperature = 22
+        vm.targetDate = targetDayAfterTomorrow(hour: 9)
+
+        vm.buildPreview(availability: avail, windows: [], feedLogs: [feed], starterProfile: profile)
+
+        let stepTypes = vm.previewSteps.map { $0.stepTypeID }
+        #expect(stepTypes.contains(.holdStarter), "Already-peaked counter starter should be chilled")
+        #expect(!stepTypes.contains(.waitForPeak), "Already peaked — no wait")
+    }
+
+    @Test func activatingStillPeakingCounterStarterDoesNotChill() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let avail = setupAvailability(context: ctx)
+        let profile = setupStarterProfile(context: ctx, state: .activating, storage: .counter, peakAverage: 360)
+        let feed = setupActivationFeed(context: ctx, hoursAgo: 2)
+
+        let vm = ScheduleViewModel()
+        vm.selectedRecipeID = .countryLoaf
+        vm.kitchenTemperature = 22
+        vm.targetDate = targetDayAfterTomorrow(hour: 9)
+
+        vm.buildPreview(availability: avail, windows: [], feedLogs: [feed], starterProfile: profile)
+
+        let stepTypes = vm.previewSteps.map { $0.stepTypeID }
+        #expect(stepTypes.contains(.waitForPeak), "Still peaking — keep the wait")
+        #expect(!stepTypes.contains(.holdStarter), "Don't chill a starter that hasn't peaked yet")
+    }
+
+    @Test func chillStepIsNonActionableForPastRejection() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let avail = setupAvailability(context: ctx)
+        let profile = setupStarterProfile(context: ctx, state: .active, storage: .counter)
+
+        let vm = ScheduleViewModel()
+        vm.selectedRecipeID = .countryLoaf
+        vm.kitchenTemperature = 22
+        vm.targetDate = targetDayAfterTomorrow(hour: 9)
+
+        vm.buildPreview(availability: avail, windows: [], feedLogs: [], starterProfile: profile)
+
+        // The chill step legitimately starts "now"; the real first actionable step
+        // (Build Levain) is in the future, so the schedule must not be rejected.
+        #expect(vm.conflict == nil)
+        #expect(vm.previewSteps.first?.stepTypeID == .holdStarter)
+    }
 
     // MARK: - Levain Detection
 

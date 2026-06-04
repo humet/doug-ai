@@ -582,6 +582,89 @@ struct ScheduleAdjustmentsTests {
 
         #expect(folds[0].stepStatus == .skipped, "Fold 1 should be auto-skipped when fold 2 is due")
     }
+
+    // MARK: - Future First-Step Promotion
+
+    /// Builds a two-step schedule (build levain → wait for levain peak) with both
+    /// steps `.upcoming`, anchored relative to `anchor`. Mirrors a freshly started
+    /// bake whose first action isn't due yet.
+    private func makeFutureLevainSchedule(
+        anchor: Date,
+        context: ModelContext
+    ) -> (Schedule, [ScheduleStep]) {
+        let schedule = Schedule(
+            recipeID: .countryLoaf,
+            targetBreadReadyTime: anchor.addingTimeInterval(24 * 60 * 60),
+            kitchenTemperatureCelsius: 22
+        )
+        schedule.scheduleStatus = .active
+        context.insert(schedule)
+
+        let build = ScheduleStep(
+            stepTypeID: .buildLevain,
+            sequenceIndex: 0,
+            computedStartTime: anchor,
+            computedEndTime: anchor.addingTimeInterval(5 * 60),
+            computedDurationMinutes: 5
+        )
+        build.schedule = schedule
+        context.insert(build)
+
+        let wait = ScheduleStep(
+            stepTypeID: .waitForLevainPeak,
+            sequenceIndex: 1,
+            computedStartTime: anchor.addingTimeInterval(5 * 60),
+            computedEndTime: anchor.addingTimeInterval(305 * 60),
+            computedDurationMinutes: 300
+        )
+        wait.schedule = schedule
+        context.insert(wait)
+
+        return (schedule, [build, wait])
+    }
+
+    @Test func futureFirstStepStaysUpcoming() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // Build Levain isn't scheduled until ~11.75h from now.
+        let anchor = Date().addingTimeInterval(11.75 * 60 * 60)
+        let (schedule, steps) = makeFutureLevainSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: schedule)
+
+        vm.advanceIfReady(now: Date(), modelContext: context)
+
+        #expect(steps[0].stepStatus == .upcoming, "Build Levain should not go active before its start time")
+        #expect(steps[1].stepStatus == .upcoming)
+    }
+
+    @Test func firstStepPromotesOnceItsTimeArrives() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(11.75 * 60 * 60)
+        let (schedule, steps) = makeFutureLevainSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: schedule)
+
+        // Before its start time: stays upcoming.
+        vm.advanceIfReady(now: anchor.addingTimeInterval(-60), modelContext: context)
+        #expect(steps[0].stepStatus == .upcoming)
+
+        // At its start time: promotes to active.
+        vm.advanceIfReady(now: anchor, modelContext: context)
+        #expect(steps[0].stepStatus == .active)
+    }
+
+    @Test func pastDueFirstStepPromotesImmediately() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // Build Levain was scheduled to start an hour ago (user is running behind).
+        let anchor = Date().addingTimeInterval(-60 * 60)
+        let (schedule, steps) = makeFutureLevainSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: schedule)
+
+        vm.advanceIfReady(now: Date(), modelContext: context)
+
+        #expect(steps[0].stepStatus == .active, "A step whose start has passed should promote right away")
+    }
 }
 
 // MARK: - Step type copy coverage
@@ -594,5 +677,27 @@ struct StepTypeCopyTests {
             #expect(!type.notificationText.isEmpty, "Missing notificationText for \(id.rawValue)")
             #expect(!type.successSignal.isEmpty, "Missing successSignal for \(id.rawValue)")
         }
+    }
+
+    @Test func counterStarterRestCopyMentionsCounterNotFridge() {
+        let copy = StepTypeRegistry.instructionText(for: .fridgeRest, storage: .counter)
+        #expect(!copy.lowercased().contains("fridge"), "Counter starter copy should not say fridge")
+        #expect(copy.lowercased().contains("counter"))
+    }
+
+    @Test func fridgeStarterRestCopyDefaultsToRegistry() {
+        let copy = StepTypeRegistry.instructionText(for: .fridgeRest, storage: .fridge)
+        #expect(copy == StepTypeRegistry.type(for: .fridgeRest).instructionText)
+        #expect(copy.lowercased().contains("fridge"))
+    }
+
+    @Test func counterActivateStarterCopyDoesNotSayTakeOutOfFridge() {
+        let copy = StepTypeRegistry.instructionText(for: .activateStarter, storage: .counter)
+        #expect(!copy.lowercased().contains("fridge"))
+    }
+
+    @Test func nilStorageFallsBackToRegistryCopy() {
+        let copy = StepTypeRegistry.instructionText(for: .fridgeRest, storage: nil)
+        #expect(copy == StepTypeRegistry.type(for: .fridgeRest).instructionText)
     }
 }

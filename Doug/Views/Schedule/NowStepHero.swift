@@ -24,8 +24,10 @@ struct NowStepHero: View {
             if let info = stalenessInfo {
                 stalenessWarning(info)
             } else {
-                Text(step.stepType.instructionText)
-                    .font(.subheadline)
+                Text(StepTypeRegistry.instructionText(
+                    for: stepTypeIDEnum, storage: starterProfile?.starterStorageType
+                ))
+                .font(.subheadline)
 
                 ovenTemperatureCallout
 

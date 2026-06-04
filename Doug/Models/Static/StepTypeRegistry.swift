@@ -305,6 +305,20 @@ enum StepTypeRegistry {
             successSignal: "Time to activate your starter."
         ),
 
+        .holdStarter: StepType(
+            id: .holdStarter,
+            label: "Chill Starter",
+            classification: .passiveFixed,
+            baseDurationMinutes: 0,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Your starter is ready early. Pop it in the fridge to hold it — the cold pauses fermentation so it stays at its peak. We'll remind you when it's time to build your levain.",
+            notificationText: "Your starter peaked early — chill it to hold. We'll remind you when it's time to build the levain.",
+            successSignal: "Starter is chilling in the fridge, holding at its peak until levain time."
+        ),
+
         .activateStarter: StepType(
             id: .activateStarter,
             label: "Activate Starter",
@@ -315,7 +329,7 @@ enum StepTypeRegistry {
             flexRange: nil,
             requiresTempReading: false,
             instructionText: "Take your starter out of the fridge and feed it at your usual activation ratio. Place it somewhere warm and covered.",
-            notificationText: "Time to activate your starter — take it out of the fridge and feed it.",
+            notificationText: "Time to feed your starter for this bake.",
             successSignal: "Starter is fed and on the counter. Now wait for it to peak."
         ),
 
@@ -353,5 +367,19 @@ enum StepTypeRegistry {
             fatalError("Missing StepType definition for \(id.rawValue)")
         }
         return stepType
+    }
+
+    /// Instruction copy for a step, overriding the fridge-centric default for
+    /// starter steps when the starter is kept on the counter. Falls back to the
+    /// registry's instruction text for every other case.
+    static func instructionText(for id: StepTypeID, storage: StarterStorageType?) -> String {
+        switch (id, storage) {
+        case (.fridgeRest, .counter):
+            "Your starter is resting on the counter. We'll let you know when it's time to feed it."
+        case (.activateStarter, .counter):
+            "Feed your starter at your usual activation ratio and leave it somewhere warm and covered."
+        default:
+            type(for: id).instructionText
+        }
     }
 }

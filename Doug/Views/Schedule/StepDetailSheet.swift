@@ -9,6 +9,7 @@ struct StepDetailSheet: View {
     let step: ScheduleStep
     @Bindable var viewModel: ScheduleViewModel
     let isMostRecentlyCompleted: Bool
+    var starterProfile: StarterProfile?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -116,8 +117,10 @@ struct StepDetailSheet: View {
             Text("What to do")
                 .font(.subheadline.bold())
             contextualIngredients
-            Text(step.stepType.instructionText)
-                .font(.subheadline)
+            Text(StepTypeRegistry.instructionText(
+                for: stepTypeIDEnum, storage: starterProfile?.starterStorageType
+            ))
+            .font(.subheadline)
             if let temp = ovenTemperature {
                 HStack(spacing: 8) {
                     Image(systemName: "flame.fill")

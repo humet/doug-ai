@@ -20,6 +20,7 @@ enum StepTypeIcon {
         case .bakeCovered: "oven"
         case .bakeUncovered: "oven.fill"
         case .fridgeRest: "snowflake"
+        case .holdStarter: "refrigerator"
         case .activateStarter: "bubbles.and.sparkles"
         case .waitForPeak, .waitForLevainPeak: "chart.line.uptrend.xyaxis"
         case .refeedAndRefrigerate: "arrow.uturn.backward"
@@ -32,7 +33,7 @@ enum StepTypeIcon {
             DougTheme.sourdoughBrown
         case .autolyse, .bulkFerment:
             DougTheme.crustGold
-        case .coldRetard, .fridgeRest:
+        case .coldRetard, .fridgeRest, .holdStarter:
             .blue
         case .finalProof:
             DougTheme.crustGold

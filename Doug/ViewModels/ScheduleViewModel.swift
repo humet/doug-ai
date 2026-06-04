@@ -325,7 +325,7 @@ final class ScheduleViewModel {
             let allSteps = preamble + shiftedSteps
 
             let firstActionable = allSteps.first(where: {
-                $0.stepTypeID != .fridgeRest && $0.levainElapsedMinutes == nil
+                !Self.nonActionableFillerStepTypes.contains($0.stepTypeID) && $0.levainElapsedMinutes == nil
             })
             let pastThreshold = Date().addingTimeInterval(-60)
             if let firstStart = firstActionable?.startTime, firstStart < pastThreshold {
@@ -432,7 +432,7 @@ final class ScheduleViewModel {
             let viability: SlotViability
             switch result {
             case let .success(steps):
-                let firstActionable = steps.first { $0.stepTypeID != .fridgeRest && $0.levainElapsedMinutes == nil }
+                let firstActionable = steps.first { !Self.nonActionableFillerStepTypes.contains($0.stepTypeID) && $0.levainElapsedMinutes == nil }
                 if let firstStart = firstActionable?.startTime, firstStart < Date().addingTimeInterval(-60) {
                     viability = .conflict(ScheduleConflict(
                         conflictingStepLabel: firstActionable?.label ?? "Schedule",
@@ -616,6 +616,33 @@ final class ScheduleViewModel {
 
     // MARK: - Activation Preamble
 
+    /// Minimum gap between now and the first Build Levain step before we suggest
+    /// chilling a ready counter starter rather than leaving it out to degrade.
+    private static let chillStarterFrontGapThreshold: TimeInterval = 2 * 60 * 60
+
+    /// Step types that fill a lead-in gap but aren't themselves an action the
+    /// baker must perform now — skipped when checking the first actionable step.
+    private static let nonActionableFillerStepTypes: Set<StepTypeID> = [.fridgeRest, .holdStarter]
+
+    /// Builds a single passive "Chill Starter" step covering the front gap before
+    /// the first recipe step, or nil if there's no meaningful gap (or the levain is
+    /// already in progress). Mirrors the dormant `.fridgeRest` filler.
+    private func buildChillStarterPreamble(recipeSteps: [ScheduledStep]) -> [ScheduledStep]? {
+        guard let first = recipeSteps.first, first.levainElapsedMinutes == nil else { return nil }
+        let now = Date()
+        let gap = first.startTime.timeIntervalSince(now)
+        guard gap > Self.chillStarterFrontGapThreshold else { return nil }
+        return [ScheduledStep(
+            methodStepID: UUID(),
+            stepTypeID: .holdStarter,
+            label: "Chill Starter",
+            classification: .passiveFixed,
+            startTime: now,
+            endTime: first.startTime,
+            durationMinutes: gap / 60.0
+        )]
+    }
+
     private func buildActivationPreamble(
         state: StarterLifecycleState,
         recipeSteps: [ScheduledStep],
@@ -626,19 +653,26 @@ final class ScheduleViewModel {
         availability: AvailabilityInput,
         unavailableBlocks: [UnavailableBlock]
     ) -> [ScheduledStep] {
+        let onCounter = starterProfile?.starterStorageType == .counter
         switch state {
         case .active:
-            return []
+            // A ready starter left on the counter degrades while it waits. If the
+            // levain build is far off, recommend chilling it to hold at peak.
+            return onCounter ? (buildChillStarterPreamble(recipeSteps: recipeSteps) ?? []) : []
         case .reviving:
             return []
         case .activating:
-            return buildActivatingPreamble(
+            let activating = buildActivatingPreamble(
                 feedLogs: feedLogs,
                 peakProfile: peakProfile,
                 starterProfile: starterProfile,
                 kitchenTemp: kitchenTemp,
                 recipeSteps: recipeSteps
             )
+            // Still peaking → keep the wait. Already peaked (empty) and on the
+            // counter → treat like an active starter and recommend chilling.
+            if !activating.isEmpty { return activating }
+            return onCounter ? (buildChillStarterPreamble(recipeSteps: recipeSteps) ?? []) : []
         case .dormant:
             return buildDormantPreamble(
                 recipeSteps: recipeSteps,
@@ -1095,7 +1129,7 @@ final class ScheduleViewModel {
 
         promoteNextUpcoming(in: schedule)
 
-        if let next = nextStep(after: step, in: schedule) {
+        if let next = nextStep(after: step, in: schedule), next.stepStatus == .active {
             let nextTypeID = StepTypeID(rawValue: next.stepTypeID)
             let skipAutoStart = nextTypeID == .buildLevain || nextTypeID == .activateStarter
             if !skipAutoStart {
@@ -1138,7 +1172,7 @@ final class ScheduleViewModel {
                 continue
             case .upcoming:
                 if didChange || !steps.contains(where: { $0.stepStatus == .active }) {
-                    promoteNextUpcoming(in: schedule)
+                    promoteNextUpcoming(in: schedule, now: now)
                     syncLiveActivity()
                 }
                 advanceSubSteps(in: schedule, now: now)
@@ -1171,7 +1205,7 @@ final class ScheduleViewModel {
                     continue
                 }
                 if didChange {
-                    promoteNextUpcoming(in: schedule)
+                    promoteNextUpcoming(in: schedule, now: now)
                     syncLiveActivity()
                 }
                 advanceSubSteps(in: schedule, now: now)
@@ -1179,7 +1213,7 @@ final class ScheduleViewModel {
             }
         }
         if didChange {
-            promoteNextUpcoming(in: schedule)
+            promoteNextUpcoming(in: schedule, now: now)
             syncLiveActivity()
         }
     }
@@ -1613,10 +1647,18 @@ final class ScheduleViewModel {
 
     private var lastPromotedStepTypeID: String?
 
-    private func promoteNextUpcoming(in schedule: Schedule) {
+    /// Promotes the earliest upcoming step to `.active`, but only once its
+    /// scheduled start time has arrived. A step whose `computedStartTime` is
+    /// still in the future stays `.upcoming` so the UI shows "starts in …"
+    /// rather than an active countdown to its (far-off) end time. The user can
+    /// override this with `startStepNow(_:)`, and the `advanceIfReady` ticker
+    /// promotes it automatically once its time comes.
+    private func promoteNextUpcoming(in schedule: Schedule, now: Date = Date()) {
         let steps = orderedTopLevelSteps(in: schedule)
         guard !steps.contains(where: { $0.stepStatus == .active }) else { return }
-        if let next = steps.first(where: { $0.stepStatus == .upcoming }) {
+        if let next = steps.first(where: { $0.stepStatus == .upcoming }),
+           next.computedStartTime <= now
+        {
             next.stepStatus = .active
             lastPromotedStepTypeID = next.stepTypeID
             resetFeedState()
