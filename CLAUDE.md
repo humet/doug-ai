@@ -8,6 +8,10 @@ See `AI_COACH_PLAN.md` for the AI baking coach feature — Vercel AI SDK 6 backe
 
 When building the `doug-coach/` backend, use the `/ai-sdk` skill (installed at `.claude/skills/ai-sdk`) for AI SDK 6 API reference — covers `ToolLoopAgent`, `generateText`, `streamText`, structured output, tool definitions, and provider configuration.
 
+## Running on the Simulator
+
+The `doug-simulator` skill (`.claude/skills/doug-simulator/`) builds, runs, inspects, and UI-drives Doug on the simulator with zero external dependencies (first-party `simctl`/`xcodebuild` + XCUITest). Use it to verify a change in the running app: screenshots (`scripts/shot.sh`), live SwiftData/UserDefaults inspection (`scripts/state.sh`), device state (`scripts/device.sh`), and accessibility-driven UI flows (`scripts/drive.sh`, backed by `DougUITests/DougDriverUITests.swift`). See its SKILL.md for the command reference.
+
 ## Build & Run
 
 ```bash
