@@ -41,7 +41,11 @@ final class StarterFeedLog {
 
     func markPeak(at peakTime: Date) {
         peakTimestamp = peakTime
-        timeToPeakMinutes = peakTime.timeIntervalSince(timestamp) / 60.0
+        // Record the elapsed time only when it's plausible. An implausible value
+        // (peak marked days late, or before the feed) is left nil so it never
+        // pollutes the scheduler's time-to-peak averages.
+        let minutes = peakTime.timeIntervalSince(timestamp) / 60.0
+        timeToPeakMinutes = StarterPeakProfile.isPlausibleTimeToPeak(minutes) ? minutes : nil
     }
 
     var ratioDescription: String {

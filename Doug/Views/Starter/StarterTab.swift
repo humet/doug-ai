@@ -49,7 +49,7 @@ struct StarterTab: View {
     private var upcomingRecipe: Recipe? {
         schedules
             .first { $0.scheduleStatus == .planning || $0.scheduleStatus == .active }
-            .map { $0.recipe }
+            .map(\.recipe)
     }
 
     private var levainBuild: LevainBuildCalculator.Result? {
@@ -213,6 +213,8 @@ struct StarterTab: View {
 
             starterDetailRow
 
+            typicalRiseRow
+
             lifecycleActions
         } header: {
             Text("Starter")
@@ -241,6 +243,59 @@ struct StarterTab: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+
+    /// Surfaces the personalised time-to-peak the scheduler plans with, so the user
+    /// can sanity-check it (and spot bad feed data) at a glance. Same input the
+    /// builder uses: activation feeds at the standard 1:5:5 levain ratio.
+    @ViewBuilder
+    private var typicalRiseRow: some View {
+        let peakProfile = StarterPeakProfile(
+            feedLogs: feedLogs.map { FeedLogInput(from: $0) },
+            intentFilter: .activation
+        )
+        let latestActivationTemp = feedLogs
+            .first(where: { $0.starterFeedIntent == .activation })?
+            .kitchenTemperatureCelsius
+
+        switch peakProfile.typicalRise(ratio: .oneToFive, nearTemperatureCelsius: latestActivationTemp) {
+        case let .known(minutes, bracket, matchesCurrentTemp):
+            let hours = Int((minutes / 60).rounded())
+            if minutes > StarterPeakProfile.unusuallyLongRiseMinutes {
+                Label(
+                    "Typically ~\(hours)h to peak — unusually long, check your feed history",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            } else {
+                let context: String = if matchesCurrentTemp, let temp = latestActivationTemp {
+                    "at \(Int(temp.rounded()))°C"
+                } else {
+                    Self.bracketPhrase(bracket)
+                }
+                Label("Typically ~\(hours)h to peak \(context)", systemImage: "hourglass")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+            }
+        case .insufficientData:
+            if feedLogs.contains(where: { $0.starterFeedIntent == .activation }) {
+                Label(
+                    "Log a couple more activations to learn your starter's rhythm",
+                    systemImage: "hourglass"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private static func bracketPhrase(_ bracket: TemperatureBracket) -> String {
+        switch bracket {
+        case .cool: "in a cool kitchen"
+        case .moderate: "at room temp"
+        case .warm: "in a warm kitchen"
+        }
     }
 
     private var levainUsedInActiveBake: Bool {
@@ -350,7 +405,7 @@ struct StarterTab: View {
     private var levainGuidanceSection: some View {
         if let recipe = upcomingRecipe,
            let build = levainBuild,
-           (lifecycleState == .active || lifecycleState == .activating),
+           lifecycleState == .active || lifecycleState == .activating,
            !hasRecentLevainFeed,
            activeBake == nil
         {
@@ -364,9 +419,11 @@ struct StarterTab: View {
                             Text("Build Levain for \(recipe.name)")
                                 .font(.subheadline.bold())
                             let ratio = build.ratio
-                            Text("\(ratio.starter):\(ratio.flour):\(ratio.water) adjusted for \(Int(feedLogs.first?.kitchenTemperatureCelsius ?? 22))°C")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Text(
+                                "\(ratio.starter):\(ratio.flour):\(ratio.water) adjusted for \(Int(feedLogs.first?.kitchenTemperatureCelsius ?? 22))°C"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         }
                     }
 
@@ -400,7 +457,9 @@ struct StarterTab: View {
             } header: {
                 Text("Levain Build")
             } footer: {
-                Text("Recipe needs \(Int(recipe.ingredients.levainGrams))g levain — extra goes to the fridge as maintenance.")
+                Text(
+                    "Recipe needs \(Int(recipe.ingredients.levainGrams))g levain — extra goes to the fridge as maintenance."
+                )
             }
         }
     }
@@ -489,7 +548,6 @@ struct StarterTab: View {
         }
     }
 
-
     private func suggestionContent(_ suggestion: FeedSuggestion) -> some View {
         Section {
             HStack {
@@ -518,7 +576,6 @@ struct StarterTab: View {
             }
         }
     }
-
 
     // MARK: - Revival
 

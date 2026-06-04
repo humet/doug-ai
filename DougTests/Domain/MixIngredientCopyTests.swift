@@ -1,5 +1,9 @@
+#if canImport(DougDomain)
+    @testable import DougDomain
+#else
+    @testable import Doug
+#endif
 import Testing
-@testable import DougDomain
 
 /// Verifies that recipe extras worked in at the Mix step surface in the Mix
 /// step's instruction and notification copy, while fold/topping extras don't.
@@ -7,7 +11,8 @@ struct MixIngredientCopyTests {
     @Test func mixInstructionNamesHoneyForWholeWheatHoney() {
         let recipe = RecipeBook.wholeWheatHoney
         let text = StepTypeRegistry.instructionText(for: .mix, storage: nil, recipe: recipe)
-        #expect(text == "Add the levain, salt, and honey to the autolysed dough. Pinch and fold until fully incorporated. Take a dough temperature reading.")
+        #expect(text ==
+            "Add the levain, salt, and honey to the autolysed dough. Pinch and fold until fully incorporated. Take a dough temperature reading.")
     }
 
     @Test func mixNotificationNamesHoney() {

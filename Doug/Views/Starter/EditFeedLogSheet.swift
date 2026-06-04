@@ -114,7 +114,9 @@ struct EditFeedLogSheet: View {
         log.starterGrams = Double(starterGrams.trimmingCharacters(in: .whitespaces))
 
         if timestampChanged, let peak = log.peakTimestamp {
-            log.timeToPeakMinutes = peak.timeIntervalSince(timestamp) / 60.0
+            // Route through markPeak so the same plausibility guard applies here as
+            // at entry — editing must never store an implausible time-to-peak.
+            log.markPeak(at: peak)
         }
 
         viewModel.updateProfileAverages(profile: profile, feedLogs: allLogs)

@@ -97,4 +97,49 @@ struct StarterViewModelLogFeedTests {
         #expect(profile.starterLifecycleState == .dormant)
         #expect(profile.starterStorageType == .fridge)
     }
+
+    // MARK: - markPeak entry validation
+
+    @Test func markPeakStoresPlausibleElapsedTime() {
+        let fed = Date()
+        let log = StarterFeedLog(
+            timestamp: fed,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5,
+            kitchenTemperatureCelsius: 20
+        )
+
+        log.markPeak(at: fed.addingTimeInterval(8 * 3600)) // 8h
+
+        #expect(log.peakTimestamp != nil)
+        #expect(abs((log.timeToPeakMinutes ?? 0) - 480) < 0.01)
+    }
+
+    @Test func markPeakDropsImplausiblyLateReading() {
+        let fed = Date()
+        let log = StarterFeedLog(
+            timestamp: fed,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5,
+            kitchenTemperatureCelsius: 20
+        )
+
+        log.markPeak(at: fed.addingTimeInterval(20 * 86400)) // peak "marked" 20 days later
+
+        // Timestamp is still recorded, but the junk elapsed time is not — so it can
+        // never pollute the scheduler's averages.
+        #expect(log.peakTimestamp != nil)
+        #expect(log.timeToPeakMinutes == nil)
+    }
+
+    @Test func markPeakDropsNegativeReading() {
+        let fed = Date()
+        let log = StarterFeedLog(
+            timestamp: fed,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5,
+            kitchenTemperatureCelsius: 20
+        )
+
+        log.markPeak(at: fed.addingTimeInterval(-3600)) // peak before the feed
+
+        #expect(log.timeToPeakMinutes == nil)
+    }
 }

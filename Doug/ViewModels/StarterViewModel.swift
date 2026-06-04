@@ -190,7 +190,12 @@ final class StarterViewModel {
     func updateProfileAverages(profile: StarterProfile?, feedLogs: [StarterFeedLog]) {
         guard let profile else { return }
 
-        let allPeakTimes = feedLogs.compactMap(\.timeToPeakMinutes)
+        // Exclude implausible readings (e.g. a peak marked days late) so one bad
+        // entry can't corrupt the averages the scheduler relies on. See
+        // StarterPeakProfile.plausibleTimeToPeakRange.
+        let allPeakTimes = feedLogs
+            .compactMap(\.timeToPeakMinutes)
+            .filter(StarterPeakProfile.isPlausibleTimeToPeak)
         if !allPeakTimes.isEmpty {
             profile.averageTimeToPeakMinutes = allPeakTimes.reduce(0, +) / Double(allPeakTimes.count)
         }
@@ -198,6 +203,7 @@ final class StarterViewModel {
         let activationPeakTimes = feedLogs
             .filter { $0.starterFeedIntent == .activation }
             .compactMap(\.timeToPeakMinutes)
+            .filter(StarterPeakProfile.isPlausibleTimeToPeak)
         if !activationPeakTimes.isEmpty {
             profile.activePeakAverageMinutes = activationPeakTimes.reduce(0, +) / Double(activationPeakTimes.count)
         }
