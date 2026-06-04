@@ -169,4 +169,11 @@ struct Recipe: Identifiable {
     var levainBuildRatio: (starter: Int, flour: Int, water: Int) {
         method.first { $0.stepTypeID == .buildLevain }?.levainBuildRatio ?? (1, 5, 5)
     }
+
+    /// True when the recipe hydrates all its flour in an autolyse before the
+    /// Mix step. When true, the Mix step only introduces levain, salt, and any
+    /// mix-time extras — the flour and water are already in the dough.
+    var hydratesFlourBeforeMix: Bool {
+        method.contains { $0.stepTypeID == .autolyse }
+    }
 }

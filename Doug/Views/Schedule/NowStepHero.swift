@@ -430,11 +430,15 @@ struct NowStepHero: View {
                     waterTemperatureCallout
                 }
             case .mix:
-                measurementChips(ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [
-                    ("Water", ing.waterGrams),
-                    ("Levain", ing.levainGrams),
-                    ("Salt", ing.saltGrams),
-                ] + ing.extras.filter { $0.incorporation == .mix }.map { ($0.name, $0.grams) })
+                // Flour and water are already in the dough from autolyse; the
+                // Mix step only adds levain, salt, and any mix-time extras.
+                measurementChips(
+                    ((step.schedule?.recipe.hydratesFlourBeforeMix ?? false)
+                        ? []
+                        : ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [("Water", ing.waterGrams)])
+                        + [("Levain", ing.levainGrams), ("Salt", ing.saltGrams)]
+                        + ing.extras.filter { $0.incorporation == .mix }.map { ($0.name, $0.grams) }
+                )
             case .addInclusions where ing.extras.contains(where: { $0.incorporation == .fold }):
                 measurementChips(ing.extras.filter { $0.incorporation == .fold }.map { ($0.name, $0.grams) })
             default:

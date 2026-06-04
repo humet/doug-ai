@@ -28,6 +28,14 @@ struct FlourCompositionTests {
         #expect(rows[0].grams == RecipeBook.countryLoaf.ingredients.flourGrams)
     }
 
+    @Test func allRecipesHydrateFlourBeforeMix() {
+        // Every built-in recipe autolyses, so the Mix step never re-introduces
+        // flour or water.
+        for recipe in RecipeBook.all {
+            #expect(recipe.hydratesFlourBeforeMix, "\(recipe.name) should hydrate flour before mixing")
+        }
+    }
+
     @Test func blendPercentagesSumToTotalFlour() {
         for recipe in RecipeBook.all {
             let ing = recipe.ingredients
