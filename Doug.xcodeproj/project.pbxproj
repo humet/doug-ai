@@ -52,7 +52,7 @@
 
 /* Begin PBXFileReference section */
 		1022E2802FB62D4D0002579D /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
-		1022E3232FB62FAE0002579D /* Doug.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = file; path = Doug.xctestplan; sourceTree = "<group>"; };
+		1022E3232FB62FAE0002579D /* Doug.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = Doug.xctestplan; sourceTree = "<group>"; };
 		10798AD32FB0D8A2007695FA /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		1084BA652FB4FB74008BDE7D /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		1084BC932FB5CB89008BDE7D /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
@@ -66,6 +66,7 @@
 		10CF465E2FA9FCE600843F8F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10CF53F62FAA0DE900843F8F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10CF55A22FAA163F00843F8F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
+		10D0BD8F2FD15100008DE16F /* Doug.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Doug.xcodeproj; sourceTree = "<group>"; };
 		10DB37C52F912E00003679E8 /* Doug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Doug.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		10DB37D42F912E00003679E8 /* DougTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DougTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		10DB37DE2F912E00003679E8 /* DougUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DougUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -202,6 +203,11 @@
 			sourceTree = "<group>";
 		};
 		10CF55A42FAA163F00843F8F /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		10D0BD912FD15100008DE16F /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -388,6 +394,10 @@
 				{
 					ProductGroup = 10CF53F82FAA0DE900843F8F /* Products */;
 					ProjectRef = 10CF53F62FAA0DE900843F8F /* Doug.xcodeproj */;
+				},
+				{
+					ProductGroup = 10D0BD912FD15100008DE16F /* Products */;
+					ProjectRef = 10D0BD8F2FD15100008DE16F /* Doug.xcodeproj */;
 				},
 				{
 					ProductGroup = 10DB381B2F9130F7003679E8 /* Products */;

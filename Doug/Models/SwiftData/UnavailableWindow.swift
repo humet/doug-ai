@@ -34,6 +34,14 @@ final class UnavailableWindow {
         isActive = true
     }
 
+    /// A one-off window is expired once its date falls before the start of the
+    /// reference day. Recurring windows repeat by weekday and never expire.
+    /// Takes an explicit date so callers (and tests) control "now".
+    func hasExpired(asOf reference: Date) -> Bool {
+        guard !isRecurring, let specificDate else { return false }
+        return specificDate < Calendar.current.startOfDay(for: reference)
+    }
+
     var startComponents: DateComponents {
         DateComponents(hour: startHour, minute: startMinute)
     }

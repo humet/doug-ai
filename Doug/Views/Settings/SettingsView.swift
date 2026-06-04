@@ -7,15 +7,35 @@ struct SettingsView: View {
     @Query private var profiles: [StarterProfile]
     @Query private var feedLogs: [StarterFeedLog]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var showAddWindow = false
     @State private var editingWindow: UnavailableWindow?
+    /// Reference "today" for hiding expired one-off windows. Refreshed when the
+    /// app returns to the foreground and at each local midnight, so the list
+    /// stays correct even if Settings is left open across a day boundary.
+    @State private var today = Date()
 
     private var availability: UserAvailability {
         if let existing = availabilities.first { return existing }
         let new = UserAvailability()
         modelContext.insert(new)
         return new
+    }
+
+    /// Past one-off windows no longer affect scheduling, so we hide them from
+    /// the list. Recurring windows always show. Sorted so upcoming one-offs lead.
+    private var visibleWindows: [UnavailableWindow] {
+        windows
+            .filter { !$0.hasExpired(asOf: today) }
+            .sorted { lhs, rhs in
+                switch (lhs.specificDate, rhs.specificDate) {
+                case let (l?, r?): return l < r
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (nil, nil): return lhs.name < rhs.name
+                }
+            }
     }
 
     var body: some View {
@@ -54,7 +74,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    ForEach(windows) { window in
+                    ForEach(visibleWindows) { window in
                         Button {
                             editingWindow = window
                         } label: {
@@ -70,15 +90,10 @@ struct SettingsView: View {
                                     }
                                 }
                                 HStack {
-                                    Text(timeString(hour: window.startHour, minute: window.startMinute))
-                                    Text("–")
-                                    Text(timeString(hour: window.endHour, minute: window.endMinute))
-                                    if window.isRecurring {
-                                        Spacer()
-                                        Text(daysString(window.daysOfWeek))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                    Label(scheduleString(for: window), systemImage: window.isRecurring ? "repeat" : "calendar")
+                                        .labelStyle(.titleAndIcon)
+                                    Spacer()
+                                    Text("\(timeString(hour: window.startHour, minute: window.startMinute))–\(timeString(hour: window.endHour, minute: window.endMinute))")
                                 }
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -99,7 +114,7 @@ struct SettingsView: View {
                     }
                     .onDelete { indexSet in
                         for index in indexSet {
-                            modelContext.delete(windows[index])
+                            modelContext.delete(visibleWindows[index])
                         }
                     }
 
@@ -149,6 +164,24 @@ struct SettingsView: View {
             }
             .sheet(item: $editingWindow) { window in
                 EditUnavailableWindowSheet(window: window)
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active { today = Date() }
+            }
+            .task {
+                // Refresh exactly when a window can flip to expired: at each
+                // local midnight. Cancelled automatically when the view goes away.
+                while !Task.isCancelled {
+                    let now = Date()
+                    guard let nextMidnight = Calendar.current.nextDate(
+                        after: now,
+                        matching: DateComponents(hour: 0, minute: 0, second: 0),
+                        matchingPolicy: .nextTime
+                    ) else { break }
+                    try? await Task.sleep(for: .seconds(nextMidnight.timeIntervalSince(now)))
+                    if Task.isCancelled { break }
+                    today = Date()
+                }
             }
         }
     }
@@ -223,6 +256,17 @@ struct SettingsView: View {
 
     private func timeString(hour: Int, minute: Int) -> String {
         String(format: "%d:%02d", hour, minute)
+    }
+
+    /// Human-readable schedule for a window: the weekdays it recurs on, or the
+    /// specific date it's set for.
+    private func scheduleString(for window: UnavailableWindow) -> String {
+        if window.isRecurring {
+            let days = daysString(window.daysOfWeek)
+            return days.isEmpty ? "No days set" : days
+        }
+        guard let date = window.specificDate else { return "No date set" }
+        return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
     }
 
     private func daysString(_ days: [Int]) -> String {
