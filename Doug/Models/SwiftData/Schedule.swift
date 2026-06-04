@@ -9,6 +9,8 @@ final class Schedule {
     var status: String
     var createdAt: Date
     var pausedAt: Date?
+    /// Set when the bake is finished; drives History ordering. Nil while active.
+    var completedAt: Date?
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduleStep.schedule)
     var steps: [ScheduleStep] = []
@@ -16,6 +18,7 @@ final class Schedule {
     @Relationship(deleteRule: .cascade, inverse: \DoughTemperatureReading.schedule)
     var temperatureReadings: [DoughTemperatureReading] = []
 
+    @Relationship(deleteRule: .cascade)
     var fermentationProfile: BakeFermentationProfile?
 
     init(

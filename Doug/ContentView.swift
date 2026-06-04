@@ -26,8 +26,8 @@ struct ContentView: View {
                     StarterTab()
                 }
 
-                Tab("Calculator", systemImage: "function", value: NotificationRouter.Tab.calculator) {
-                    CalculatorTab()
+                Tab("History", systemImage: "book.closed", value: NotificationRouter.Tab.history) {
+                    HistoryTab()
                 }
 
                 Tab("Settings", systemImage: "gear", value: NotificationRouter.Tab.settings) {

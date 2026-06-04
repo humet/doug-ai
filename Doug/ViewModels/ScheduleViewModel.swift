@@ -1543,7 +1543,47 @@ final class ScheduleViewModel {
 
     // MARK: - Finish / Cancel bake
 
-    func finishBake(modelContext: ModelContext) {
+    /// Finishes the active bake, optionally saving a reflection (rating, structured
+    /// tags, notes, photos) as a `BakeFermentationProfile` for the History tab.
+    /// A `nil` reflection still completes the bake — it just appears in History
+    /// without a reflection.
+    func finishBake(reflection: BakeReflection?, modelContext: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+
+        if let reflection {
+            let readings = schedule.temperatureReadings.map {
+                (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
+            }
+            let summary = BakeRecordBuilder.summarize(
+                recipe: schedule.recipe,
+                kitchenTempCelsius: schedule.kitchenTemperatureCelsius,
+                readings: readings
+            )
+            let trimmedNote = reflection.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            let profile = BakeFermentationProfile(
+                recipeID: RecipeID(rawValue: schedule.recipeID)!,
+                recipeName: schedule.recipe.name,
+                initialMixTemp: summary.initialMixTemp,
+                finalDegreeHours: summary.finalDegreeHours,
+                targetDegreeHoursUsed: summary.targetDegreeHoursUsed,
+                kitchenTemperatureCelsius: summary.kitchenTemperatureCelsius,
+                outcomeNote: trimmedNote.isEmpty ? nil : trimmedNote,
+                rating: reflection.rating,
+                crumbOpenness: reflection.crumbOpenness,
+                crustColor: reflection.crustColor,
+                sourness: reflection.sourness,
+                ovenSpring: reflection.ovenSpring
+            )
+            modelContext.insert(profile)
+            for (index, data) in reflection.photoData.enumerated() {
+                let photo = BakePhoto(imageData: data, order: index)
+                modelContext.insert(photo)
+                profile.photos.append(photo)
+            }
+            schedule.fermentationProfile = profile
+        }
+
+        schedule.completedAt = Date()
         endBake(modelContext: modelContext)
     }
 

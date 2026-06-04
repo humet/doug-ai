@@ -3,9 +3,11 @@ import SwiftUI
 
 struct ScheduleTab: View {
     @State private var viewModel = ScheduleViewModel()
+    @State private var router = NotificationRouter.shared
     @State private var showConfig = false
     @State private var detailStep: ScheduleStep?
     @State private var showCancelConfirm = false
+    @State private var showFinishSheet = false
     @State private var showCoachChat = false
     @State private var coachPrefill: String?
 
@@ -73,6 +75,23 @@ struct ScheduleTab: View {
                             }
                             showConfig = false
                         }
+                    }
+                }
+                .sheet(isPresented: $showFinishSheet) {
+                    if let schedule = viewModel.activeSchedule {
+                        FinishBakeSheet(
+                            recipeName: schedule.recipe.name,
+                            onSave: { reflection in
+                                withAnimation(.smooth) {
+                                    viewModel.finishBake(reflection: reflection, modelContext: modelContext)
+                                }
+                            },
+                            onFinishWithoutSaving: {
+                                withAnimation(.smooth) {
+                                    viewModel.finishBake(reflection: nil, modelContext: modelContext)
+                                }
+                            }
+                        )
                     }
                 }
                 .sheet(isPresented: $viewModel.showConflictSheet) {
@@ -216,6 +235,14 @@ struct ScheduleTab: View {
                         viewModel.restoreActiveSchedule(modelContext: modelContext)
                         viewModel.advanceIfReady(now: Date(), modelContext: modelContext)
                     }
+                }
+                .onChange(of: router.pendingPlanRecipeID) { _, newValue in
+                    guard let recipeID = newValue else { return }
+                    router.pendingPlanRecipeID = nil
+                    // Can't plan a new bake while one is active; the user lands on
+                    // the active bake instead.
+                    guard viewModel.activeSchedule == nil else { return }
+                    planBake(for: recipeID)
                 }
                 .onChange(of: viewModel.pendingStepDetail) { _, newValue in
                     guard let detail = newValue,
@@ -427,9 +454,7 @@ struct ScheduleTab: View {
         Menu {
             if let schedule = viewModel.activeSchedule, canFinishBake(in: schedule) {
                 Button {
-                    withAnimation(.smooth) {
-                        viewModel.finishBake(modelContext: modelContext)
-                    }
+                    showFinishSheet = true
                 } label: {
                     Label("Finish bake", systemImage: "checkmark.seal")
                 }

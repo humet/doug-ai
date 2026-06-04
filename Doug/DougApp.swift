@@ -19,6 +19,7 @@ struct DougApp: App {
             ScheduleStep.self,
             DoughTemperatureReading.self,
             BakeFermentationProfile.self,
+            BakePhoto.self,
             StarterFeedLog.self,
             StarterProfile.self,
             RevivalPlan.self,

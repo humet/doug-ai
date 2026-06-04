@@ -18,10 +18,14 @@ final class NotificationRouter {
     static let shared = NotificationRouter()
 
     enum Tab: Hashable {
-        case schedule, starter, calculator, settings
+        case schedule, starter, history, settings
     }
 
     var selectedTab: Tab = .schedule
+
+    /// Set by "Bake again" in History to ask the Schedule tab to start planning a
+    /// recipe. The Schedule tab consumes and clears it.
+    var pendingPlanRecipeID: RecipeID?
 
     private weak var scheduleViewModel: ScheduleViewModel?
     private var bufferedFoldEntry: PendingFoldEntry?
@@ -104,6 +108,12 @@ final class NotificationRouter {
     }
 
     func focusScheduleTab() {
+        selectedTab = .schedule
+    }
+
+    /// Switches to the Schedule tab and requests the plan flow for `recipeID`.
+    func requestPlanBake(recipeID: RecipeID) {
+        pendingPlanRecipeID = recipeID
         selectedTab = .schedule
     }
 }

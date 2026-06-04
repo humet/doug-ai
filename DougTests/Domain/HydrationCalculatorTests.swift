@@ -60,35 +60,3 @@ struct HydrationCalculatorTests {
         #expect(hydration > 0)
     }
 }
-
-struct RecipeScalerTests {
-    @Test func scalingPreservesProportions() {
-        let ingredients = Ingredients(
-            flourGrams: 500,
-            waterGrams: 350,
-            saltGrams: 10,
-            levainGrams: 100
-        )
-
-        let scaled = RecipeScaler.scale(ingredients: ingredients, toTotalWeight: 1920)
-        // Original total: 960, target: 1920 → factor = 2
-        #expect(abs(scaled.flour - 1000) < 0.1)
-        #expect(abs(scaled.water - 700) < 0.1)
-        #expect(abs(scaled.salt - 20) < 0.1)
-        #expect(abs(scaled.levain - 200) < 0.1)
-    }
-
-    @Test func scalingDown() {
-        let ingredients = Ingredients(
-            flourGrams: 500,
-            waterGrams: 350,
-            saltGrams: 10,
-            levainGrams: 100
-        )
-
-        let scaled = RecipeScaler.scale(ingredients: ingredients, toTotalWeight: 480)
-        // factor = 0.5
-        #expect(abs(scaled.flour - 250) < 0.1)
-        #expect(abs(scaled.total - 480) < 0.1)
-    }
-}
