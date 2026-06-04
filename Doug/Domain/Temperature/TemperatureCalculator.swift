@@ -94,6 +94,38 @@ enum TemperatureCalculator {
         return min(max(raw, 2.0), 45.0)
     }
 
+    /// A levain is built slightly warmer than the final dough target so its small
+    /// mass stays in the active fermentation zone through its multi-hour rise.
+    static let levainTargetOffsetCelsius = 2.0
+
+    /// Recommended water temperature for building the levain.
+    ///
+    /// Targets `referenceDoughTemp + levainTargetOffsetCelsius` so the freshly
+    /// mixed levain starts a touch warmer than the final dough — keeping yeast
+    /// active through the rise without tipping toward sour, bacteria-dominant
+    /// fermentation.
+    ///
+    /// Uses the 3-factor method (starter + flour + water) and no thermal-drift
+    /// compensation: we want the levain at target temperature at mix time, not
+    /// after a rest. Assumes the starter and flour are at kitchen temperature; a
+    /// fridge-cold starter would need hotter water than recommended.
+    ///
+    /// - Parameters:
+    ///   - referenceDoughTemp: The recipe's reference/target dough temperature (°C).
+    ///   - kitchenTemp: Current kitchen temperature (°C), used for starter and flour.
+    /// - Returns: Recommended water temperature in °C, clamped to 2...45.
+    static func desiredLevainWaterTemperature(
+        referenceDoughTemp: Double,
+        kitchenTemp: Double
+    ) -> Double {
+        desiredWaterTemperature(
+            desiredDoughTemp: referenceDoughTemp + levainTargetOffsetCelsius,
+            kitchenTemp: kitchenTemp,
+            restMinutes: 0,
+            includeLevain: true // starter + flour + water = 3 components
+        )
+    }
+
     /// Computes the effective duration of a method step, applying temperature
     /// adjustment if the step type is temperature-adjusted.
     ///

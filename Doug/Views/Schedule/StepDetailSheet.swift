@@ -197,14 +197,23 @@ struct StepDetailSheet: View {
     }
 
     private var desiredWaterTemperature: Double? {
-        guard stepTypeIDEnum == .autolyse,
-              let schedule = step.schedule else { return nil }
-        return TemperatureCalculator.desiredWaterTemperature(
-            desiredDoughTemp: schedule.recipe.referenceTemperatureCelsius,
-            kitchenTemp: schedule.kitchenTemperatureCelsius,
-            restMinutes: step.computedDurationMinutes,
-            includeLevain: false
-        )
+        guard let schedule = step.schedule else { return nil }
+        switch stepTypeIDEnum {
+        case .autolyse:
+            return TemperatureCalculator.desiredWaterTemperature(
+                desiredDoughTemp: schedule.recipe.referenceTemperatureCelsius,
+                kitchenTemp: schedule.kitchenTemperatureCelsius,
+                restMinutes: step.computedDurationMinutes,
+                includeLevain: false
+            )
+        case .buildLevain:
+            return TemperatureCalculator.desiredLevainWaterTemperature(
+                referenceDoughTemp: schedule.recipe.referenceTemperatureCelsius,
+                kitchenTemp: schedule.kitchenTemperatureCelsius
+            )
+        default:
+            return nil
+        }
     }
 
     private var ovenTemperature: Int? {

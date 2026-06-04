@@ -408,16 +408,19 @@ struct NowStepHero: View {
         if let ing = recipeIngredients {
             switch stepTypeIDEnum {
             case .buildLevain:
-                if let grams = Double(viewModel.feedStarterGrams), grams > 0 {
-                    let flourGrams = grams * Double(viewModel.feedRatioFlour) / Double(max(viewModel.feedRatioStarter, 1))
-                    let waterGrams = grams * Double(viewModel.feedRatioWater) / Double(max(viewModel.feedRatioStarter, 1))
-                    measurementChips([
-                        ("Starter", grams),
-                        ("Flour", flourGrams),
-                        ("Water", waterGrams),
-                    ])
-                } else {
-                    measurementChips([("Levain", ing.levainGrams)])
+                VStack(alignment: .leading, spacing: 6) {
+                    if let grams = Double(viewModel.feedStarterGrams), grams > 0 {
+                        let flourGrams = grams * Double(viewModel.feedRatioFlour) / Double(max(viewModel.feedRatioStarter, 1))
+                        let waterGrams = grams * Double(viewModel.feedRatioWater) / Double(max(viewModel.feedRatioStarter, 1))
+                        measurementChips([
+                            ("Starter", grams),
+                            ("Flour", flourGrams),
+                            ("Water", waterGrams),
+                        ])
+                    } else {
+                        measurementChips([("Levain", ing.levainGrams)])
+                    }
+                    waterTemperatureCallout
                 }
             case .autolyse:
                 VStack(alignment: .leading, spacing: 6) {
@@ -600,14 +603,23 @@ struct NowStepHero: View {
     }
 
     private var desiredWaterTemperature: Double? {
-        guard stepTypeIDEnum == .autolyse,
-              let schedule = step.schedule else { return nil }
-        return TemperatureCalculator.desiredWaterTemperature(
-            desiredDoughTemp: schedule.recipe.referenceTemperatureCelsius,
-            kitchenTemp: schedule.kitchenTemperatureCelsius,
-            restMinutes: step.computedDurationMinutes,
-            includeLevain: false
-        )
+        guard let schedule = step.schedule else { return nil }
+        switch stepTypeIDEnum {
+        case .autolyse:
+            return TemperatureCalculator.desiredWaterTemperature(
+                desiredDoughTemp: schedule.recipe.referenceTemperatureCelsius,
+                kitchenTemp: schedule.kitchenTemperatureCelsius,
+                restMinutes: step.computedDurationMinutes,
+                includeLevain: false
+            )
+        case .buildLevain:
+            return TemperatureCalculator.desiredLevainWaterTemperature(
+                referenceDoughTemp: schedule.recipe.referenceTemperatureCelsius,
+                kitchenTemp: schedule.kitchenTemperatureCelsius
+            )
+        default:
+            return nil
+        }
     }
 
     private var stalenessInfo: StalenessInfo? {

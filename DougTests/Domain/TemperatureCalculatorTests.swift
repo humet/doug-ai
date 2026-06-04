@@ -91,4 +91,59 @@ struct TemperatureCalculatorTests {
         let minutes = TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: 18)
         #expect(minutes == 120)
     }
+
+    // MARK: - Levain Water Temperature
+
+    @Test func levainWaterWarmsCoolKitchen() {
+        // Cool kitchen, 24°C reference → 26°C levain target. Water must be hotter
+        // than the room to drag the cold starter + flour up to target.
+        let water = TemperatureCalculator.desiredLevainWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: 18
+        )
+        #expect(water > 18)
+    }
+
+    @Test func levainWaterCoolsWarmKitchen() {
+        // Warm kitchen above the 26°C target → water at or below kitchen temp.
+        let water = TemperatureCalculator.desiredLevainWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: 28
+        )
+        #expect(water < 28)
+    }
+
+    @Test func levainWaterRespectsClamp() {
+        let veryCold = TemperatureCalculator.desiredLevainWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: -5
+        )
+        let veryHot = TemperatureCalculator.desiredLevainWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: 50
+        )
+        #expect(veryCold >= 2 && veryCold <= 45)
+        #expect(veryHot >= 2 && veryHot <= 45)
+    }
+
+    @Test func levainOffsetRaisesRecommendation() {
+        // The +2°C levain offset should push the recommendation above an
+        // equivalent build with no offset.
+        let withOffset = TemperatureCalculator.desiredLevainWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: 20
+        )
+        let noOffset = TemperatureCalculator.desiredWaterTemperature(
+            desiredDoughTemp: 24, kitchenTemp: 20, restMinutes: 0, includeLevain: true
+        )
+        #expect(withOffset > noOffset)
+    }
+
+    @Test func levainWaterMatchesUnderlyingFormula() {
+        let helper = TemperatureCalculator.desiredLevainWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: 21
+        )
+        let direct = TemperatureCalculator.desiredWaterTemperature(
+            desiredDoughTemp: 24 + TemperatureCalculator.levainTargetOffsetCelsius,
+            kitchenTemp: 21,
+            restMinutes: 0,
+            includeLevain: true
+        )
+        #expect(helper == direct)
+    }
 }
