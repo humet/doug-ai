@@ -25,7 +25,9 @@ struct NowStepHero: View {
                 stalenessWarning(info)
             } else {
                 Text(StepTypeRegistry.instructionText(
-                    for: stepTypeIDEnum, storage: starterProfile?.starterStorageType
+                    for: stepTypeIDEnum,
+                    storage: starterProfile?.starterStorageType,
+                    recipe: step.schedule?.recipe
                 ))
                 .font(.subheadline)
 
@@ -433,9 +435,9 @@ struct NowStepHero: View {
                     ("Water", ing.waterGrams),
                     ("Levain", ing.levainGrams),
                     ("Salt", ing.saltGrams),
-                ])
-            case .addInclusions where !ing.extras.isEmpty:
-                measurementChips(ing.extras.map { ($0.name, $0.grams) })
+                ] + ing.extras.filter { $0.incorporation == .mix }.map { ($0.name, $0.grams) })
+            case .addInclusions where ing.extras.contains(where: { $0.incorporation == .fold }):
+                measurementChips(ing.extras.filter { $0.incorporation == .fold }.map { ($0.name, $0.grams) })
             default:
                 EmptyView()
             }

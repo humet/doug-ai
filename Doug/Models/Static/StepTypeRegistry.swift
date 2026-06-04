@@ -382,4 +382,44 @@ enum StepTypeRegistry {
             type(for: id).instructionText
         }
     }
+
+    /// Instruction copy aware of the recipe's extras: the Mix step names any
+    /// enrichments worked in at that point (honey, oil, butter). Falls back to
+    /// the storage-aware copy for every other step.
+    static func instructionText(for id: StepTypeID, storage: StarterStorageType?, recipe: Recipe?) -> String {
+        let extras = mixExtraNames(for: recipe)
+        if id == .mix, !extras.isEmpty {
+            let items = joinedList(["levain", "salt"] + extras)
+            return "Add the \(items) to the autolysed dough. Pinch and fold until fully incorporated. Take a dough temperature reading."
+        }
+        return instructionText(for: id, storage: storage)
+    }
+
+    /// Notification body for a step, naming the recipe's Mix-step extras so the
+    /// reminder matches the on-screen instructions.
+    static func notificationText(for id: StepTypeID, recipe: Recipe?) -> String {
+        let extras = mixExtraNames(for: recipe)
+        if id == .mix, !extras.isEmpty {
+            let items = joinedList(["levain", "salt"] + extras)
+            return "Time to mix — add the \(items), pinch and fold until incorporated. Take a dough temp reading."
+        }
+        return type(for: id).notificationText
+    }
+
+    /// Lower-cased names of the extras a recipe works in during the Mix step.
+    private static func mixExtraNames(for recipe: Recipe?) -> [String] {
+        (recipe?.ingredients.extras ?? [])
+            .filter { $0.incorporation == .mix }
+            .map { $0.name.lowercased() }
+    }
+
+    /// Joins items into prose with an Oxford comma: "a", "a and b", "a, b, and c".
+    private static func joinedList(_ items: [String]) -> String {
+        switch items.count {
+        case 0: ""
+        case 1: items[0]
+        case 2: "\(items[0]) and \(items[1])"
+        default: "\(items.dropLast().joined(separator: ", ")), and \(items.last!)"
+        }
+    }
 }

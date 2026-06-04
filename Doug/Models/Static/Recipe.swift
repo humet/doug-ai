@@ -48,15 +48,28 @@ struct Ingredients {
     }
 }
 
+/// When an extra ingredient gets incorporated into the dough. Drives which
+/// step's instructions mention it.
+enum IngredientIncorporation: String {
+    /// Worked in during the Mix step (enrichments like honey, oil, butter).
+    case mix
+    /// Folded in during bulk via the Add Inclusions step (olives, herbs, nuts).
+    case fold
+    /// Applied at/after shaping, before the bake (toppings like flaky salt).
+    case topping
+}
+
 struct ExtraIngredient {
     let name: String
     let grams: Double
     let note: String?
+    let incorporation: IngredientIncorporation
 
-    init(_ name: String, grams: Double, note: String? = nil) {
+    init(_ name: String, grams: Double, note: String? = nil, incorporation: IngredientIncorporation = .mix) {
         self.name = name
         self.grams = grams
         self.note = note
+        self.incorporation = incorporation
     }
 }
 

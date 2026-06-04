@@ -10,7 +10,7 @@ struct MethodStepCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
-            Text(step.stepType.instructionText)
+            Text(StepTypeRegistry.instructionText(for: step.stepTypeID, storage: nil, recipe: recipe))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             if let temp = ovenTemperature {

@@ -138,7 +138,7 @@ final class NotificationService {
 
         let content = UNMutableNotificationContent()
         content.title = stepType.label
-        content.body = stepType.notificationText
+        content.body = StepTypeRegistry.notificationText(for: stepType.id, recipe: step.schedule?.recipe)
         content.sound = .default
 
         if stepType.requiresTempReading {

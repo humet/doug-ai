@@ -118,7 +118,9 @@ struct StepDetailSheet: View {
                 .font(.subheadline.bold())
             contextualIngredients
             Text(StepTypeRegistry.instructionText(
-                for: stepTypeIDEnum, storage: starterProfile?.starterStorageType
+                for: stepTypeIDEnum,
+                storage: starterProfile?.starterStorageType,
+                recipe: step.schedule?.recipe
             ))
             .font(.subheadline)
             if let temp = ovenTemperature {
@@ -156,8 +158,8 @@ struct StepDetailSheet: View {
                 ("Water", ing.waterGrams),
                 ("Levain", ing.levainGrams),
                 ("Salt", ing.saltGrams),
-            ]
-            case .addInclusions: ing.extras.map { ($0.name, $0.grams) }
+            ] + ing.extras.filter { $0.incorporation == .mix }.map { ($0.name, $0.grams) }
+            case .addInclusions: ing.extras.filter { $0.incorporation == .fold }.map { ($0.name, $0.grams) }
             default: []
             }
             if !items.isEmpty {

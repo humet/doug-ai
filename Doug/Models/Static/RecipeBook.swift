@@ -159,8 +159,8 @@ enum RecipeBook {
             saltGrams: 10,
             levainGrams: 100,
             extras: [
-                ExtraIngredient("Olives", grams: 80, note: "halved"),
-                ExtraIngredient("Fresh rosemary", grams: 5, note: "roughly chopped"),
+                ExtraIngredient("Olives", grams: 80, note: "halved", incorporation: .fold),
+                ExtraIngredient("Fresh rosemary", grams: 5, note: "roughly chopped", incorporation: .fold),
             ]
         ),
         method: [
@@ -252,7 +252,7 @@ enum RecipeBook {
             levainGrams: 100,
             extras: [
                 ExtraIngredient("Olive oil", grams: 30, note: "plus more for the pan"),
-                ExtraIngredient("Flaky salt", grams: 5, note: "for topping"),
+                ExtraIngredient("Flaky salt", grams: 5, note: "for topping", incorporation: .topping),
             ]
         ),
         method: [
