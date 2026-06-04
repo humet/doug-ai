@@ -21,6 +21,36 @@ enum Difficulty: String, Codable {
     case advanced
 }
 
+// MARK: - Flour Composition
+
+/// A type of flour in a recipe's blend.
+enum FlourType: String {
+    case whiteBread
+    case wholeWheat
+    case rye
+    case spelt
+
+    var label: String {
+        switch self {
+        case .whiteBread: "White bread flour"
+        case .wholeWheat: "Whole wheat"
+        case .rye: "Rye"
+        case .spelt: "Spelt"
+        }
+    }
+}
+
+/// One flour in a recipe's blend, as a share of the total flour weight.
+struct FlourComponent {
+    let type: FlourType
+    let percent: Double
+
+    init(_ type: FlourType, percent: Double) {
+        self.type = type
+        self.percent = percent
+    }
+}
+
 // MARK: - Ingredients
 
 struct Ingredients {
@@ -30,6 +60,9 @@ struct Ingredients {
     let levainGrams: Double
     let levainHydrationPercent: Double
     let extras: [ExtraIngredient]
+    /// The flour blend as percentages of `flourGrams`. Defaults to 100% white
+    /// bread flour for recipes that don't specify a blend.
+    let flourComposition: [FlourComponent]
 
     init(
         flourGrams: Double,
@@ -37,7 +70,8 @@ struct Ingredients {
         saltGrams: Double,
         levainGrams: Double,
         levainHydrationPercent: Double = 100,
-        extras: [ExtraIngredient] = []
+        extras: [ExtraIngredient] = [],
+        flourComposition: [FlourComponent] = [FlourComponent(.whiteBread, percent: 100)]
     ) {
         self.flourGrams = flourGrams
         self.waterGrams = waterGrams
@@ -45,6 +79,17 @@ struct Ingredients {
         self.levainGrams = levainGrams
         self.levainHydrationPercent = levainHydrationPercent
         self.extras = extras
+        self.flourComposition = flourComposition
+    }
+
+    /// Labeled flour rows for ingredient breakdowns. Collapses to a single
+    /// "Flour" row when the recipe is a single flour, otherwise lists each
+    /// component by name with its weight in grams.
+    var flourBreakdownRows: [(name: String, grams: Double)] {
+        guard flourComposition.count > 1 else {
+            return [("Flour", flourGrams)]
+        }
+        return flourComposition.map { ($0.type.label, flourGrams * $0.percent / 100) }
     }
 }
 

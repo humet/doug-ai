@@ -114,6 +114,10 @@ enum RecipeBook {
             levainGrams: 125,
             extras: [
                 ExtraIngredient("Honey", grams: 30),
+            ],
+            flourComposition: [
+                FlourComponent(.wholeWheat, percent: 40),
+                FlourComponent(.whiteBread, percent: 60),
             ]
         ),
         method: [
@@ -161,6 +165,10 @@ enum RecipeBook {
             extras: [
                 ExtraIngredient("Olives", grams: 80, note: "halved", incorporation: .fold),
                 ExtraIngredient("Fresh rosemary", grams: 5, note: "roughly chopped", incorporation: .fold),
+            ],
+            flourComposition: [
+                FlourComponent(.wholeWheat, percent: 10),
+                FlourComponent(.whiteBread, percent: 90),
             ]
         ),
         method: [

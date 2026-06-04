@@ -152,9 +152,8 @@ struct StepDetailSheet: View {
         if let ing = step.schedule?.recipe.ingredients {
             let items: [(String, Double)] = switch stepTypeIDEnum {
             case .buildLevain: levainBuildWeights(ingredients: ing)
-            case .autolyse: [("Flour", ing.flourGrams), ("Water", ing.waterGrams)]
-            case .mix: [
-                ("Flour", ing.flourGrams),
+            case .autolyse: ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [("Water", ing.waterGrams)]
+            case .mix: ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [
                 ("Water", ing.waterGrams),
                 ("Levain", ing.levainGrams),
                 ("Salt", ing.saltGrams),

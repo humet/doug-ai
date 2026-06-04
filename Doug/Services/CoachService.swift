@@ -156,7 +156,12 @@ struct BakeContextPayload {
         let waterGrams: Double
         let saltGrams: Double
         let levainGrams: Double
-        let extras: [(name: String, grams: Double)]
+        /// Extras with their incorporation timing ("mix", "fold", or "topping")
+        /// so the coach knows when each goes into the dough.
+        let extras: [(name: String, grams: Double, incorporation: String)]
+        /// Flour blend by type (e.g. whole wheat vs white). A single entry means
+        /// the recipe doesn't specify a blend.
+        let flourBreakdown: [(name: String, grams: Double)]
     }
 
     struct StepPayload {
@@ -211,6 +216,13 @@ struct BakeContextPayload {
                 ]
                 if !recipeIngredients.extras.isEmpty {
                     dict["extras"] = recipeIngredients.extras.map {
+                        ["name": $0.name, "grams": $0.grams, "incorporation": $0.incorporation] as [String: Any]
+                    }
+                }
+                // Only send the breakdown for actual blends — a single flour
+                // adds nothing over flourGrams.
+                if recipeIngredients.flourBreakdown.count > 1 {
+                    dict["flourBreakdown"] = recipeIngredients.flourBreakdown.map {
                         ["name": $0.name, "grams": $0.grams] as [String: Any]
                     }
                 }

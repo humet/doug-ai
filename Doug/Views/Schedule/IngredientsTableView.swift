@@ -16,7 +16,13 @@ struct IngredientsTableView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            row(name: "Flour", grams: ingredients.flourGrams, percent: percentages.flour)
+            let flourRows = ingredients.flourBreakdownRows
+            ForEach(Array(flourRows.enumerated()), id: \.offset) { index, flour in
+                if index > 0 { Divider() }
+                // Baker's percentage uses total flour as the 100% base, so each
+                // flour's share of the total is also its baker's percentage.
+                row(name: flour.name, grams: flour.grams, percent: flour.grams / ingredients.flourGrams * 100)
+            }
             Divider()
             row(name: "Water", grams: ingredients.waterGrams, percent: percentages.water)
             Divider()

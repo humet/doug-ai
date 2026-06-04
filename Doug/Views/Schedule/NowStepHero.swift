@@ -426,12 +426,11 @@ struct NowStepHero: View {
                 }
             case .autolyse:
                 VStack(alignment: .leading, spacing: 6) {
-                    measurementChips([("Flour", ing.flourGrams), ("Water", ing.waterGrams)])
+                    measurementChips(ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [("Water", ing.waterGrams)])
                     waterTemperatureCallout
                 }
             case .mix:
-                measurementChips([
-                    ("Flour", ing.flourGrams),
+                measurementChips(ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [
                     ("Water", ing.waterGrams),
                     ("Levain", ing.levainGrams),
                     ("Salt", ing.saltGrams),

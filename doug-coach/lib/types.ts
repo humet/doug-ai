@@ -15,6 +15,18 @@ export const RecipeIngredientsSchema = z.object({
   saltGrams: z.number(),
   levainGrams: z.number(),
   extras: z
+    .array(
+      z.object({
+        name: z.string(),
+        grams: z.number(),
+        // When the extra goes into the dough.
+        incorporation: z.enum(["mix", "fold", "topping"]).optional(),
+      })
+    )
+    .optional(),
+  // Flour blend by type (e.g. whole wheat vs white). Present only when the
+  // recipe specifies more than one flour.
+  flourBreakdown: z
     .array(z.object({ name: z.string(), grams: z.number() }))
     .optional(),
 });

@@ -108,9 +108,34 @@ ${
   context.recipeIngredients
     ? `
 ### Ingredients
-Flour: ${context.recipeIngredients.flourGrams}g | Water: ${context.recipeIngredients.waterGrams}g | Salt: ${context.recipeIngredients.saltGrams}g | Levain: ${context.recipeIngredients.levainGrams}g${
+Flour: ${
+        context.recipeIngredients.flourBreakdown &&
+        context.recipeIngredients.flourBreakdown.length > 1
+          ? `${context.recipeIngredients.flourGrams}g (${context.recipeIngredients.flourBreakdown
+              .map(
+                (f) =>
+                  `${f.name} ${f.grams}g, ${Math.round((f.grams / context.recipeIngredients!.flourGrams) * 100)}%`
+              )
+              .join("; ")})`
+          : `${context.recipeIngredients.flourGrams}g`
+      } | Water: ${context.recipeIngredients.waterGrams}g | Salt: ${context.recipeIngredients.saltGrams}g | Levain: ${context.recipeIngredients.levainGrams}g${
         context.recipeIngredients.extras && context.recipeIngredients.extras.length > 0
-          ? ` | ${context.recipeIngredients.extras.map((e) => `${e.name}: ${e.grams}g`).join(" | ")}`
+          ? ` | ${context.recipeIngredients.extras
+              .map(
+                (e) =>
+                  `${e.name}: ${e.grams}g${
+                    e.incorporation
+                      ? ` (${
+                          e.incorporation === "mix"
+                            ? "mixed in during the Mix step"
+                            : e.incorporation === "fold"
+                              ? "folded in during bulk"
+                              : "added as a topping before baking"
+                        })`
+                      : ""
+                  }`
+              )
+              .join(" | ")}`
           : ""
       }`
     : ""

@@ -228,7 +228,8 @@ struct CoachChatView: View {
                 waterGrams: recipe.ingredients.waterGrams,
                 saltGrams: recipe.ingredients.saltGrams,
                 levainGrams: recipe.ingredients.levainGrams,
-                extras: recipe.ingredients.extras.map { ($0.name, $0.grams) }
+                extras: recipe.ingredients.extras.map { ($0.name, $0.grams, $0.incorporation.rawValue) },
+                flourBreakdown: recipe.ingredients.flourBreakdownRows.map { ($0.name, $0.grams) }
             ),
             steps: steps.map { step in
                 let stepType = step.stepType
