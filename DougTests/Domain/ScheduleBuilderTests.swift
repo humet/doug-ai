@@ -191,6 +191,113 @@ struct ScheduleBuilderTests {
         #expect(coldRetard.durationMinutes <= 1080)
     }
 
+    // MARK: - In-progress levain (ready/active starter)
+
+    /// Builds with a levain already fermenting in the jar (ready starter), fed `elapsed`
+    /// minutes ago, peaking in `peakMinutes`, against a target far enough out that the
+    /// "enforce earliest start" block fires. `earliestStartTime` = now (active starter).
+    private static func readyLevainInput(
+        elapsedMinutes: Double,
+        peakMinutes: Double = 300,
+        targetHoursFromNow: Double = 40,
+        kitchenTemp: Double = 22.0
+    ) -> ScheduleBuilderInput {
+        let now = Date()
+        // Wide availability so these levain-placement tests don't flake on the
+        // Date()-relative target landing at night.
+        let allDay = AvailabilityInput(startHour: 0, startMinute: 0, endHour: 23, endMinute: 59)
+        return ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: now.addingTimeInterval(targetHoursFromNow * 3600),
+            kitchenTemperatureCelsius: kitchenTemp,
+            availability: allDay,
+            levainContext: LevainContext(
+                fedAt: now.addingTimeInterval(-elapsedMinutes * 60),
+                expectedPeakMinutes: peakMinutes,
+                kitchenTemperatureCelsius: kitchenTemp
+            ),
+            earliestStartTime: now
+        )
+    }
+
+    @Test func readyStarterKeepsBuildWaitContiguous() throws {
+        let input = Self.readyLevainInput(elapsedMinutes: 90)
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let build = try #require(steps.first(where: { $0.stepTypeID == .buildLevain }))
+        let wait = try #require(steps.first(where: { $0.stepTypeID == .waitForLevainPeak }))
+        // No idle gap: the levain rises the instant it's built.
+        #expect(abs(build.endTime.timeIntervalSince(wait.startTime)) < 1)
+    }
+
+    @Test func readyStarterWaitDurationEqualsExpectedPeak() throws {
+        let input = Self.readyLevainInput(elapsedMinutes: 90, peakMinutes: 300)
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let wait = try #require(steps.first(where: { $0.stepTypeID == .waitForLevainPeak }))
+        let spanMinutes = wait.endTime.timeIntervalSince(wait.startTime) / 60
+        // Wait is its true peak, NOT stretched to absorb target-anchoring slack.
+        #expect(abs(spanMinutes - 300) < 1)
+        #expect(abs(wait.durationMinutes - 300) < 1)
+    }
+
+    @Test func readyStarterSlackAbsorbedByColdRetard() throws {
+        let input = Self.readyLevainInput(elapsedMinutes: 90, peakMinutes: 300)
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let wait = try #require(steps.first(where: { $0.stepTypeID == .waitForLevainPeak }))
+        let coldRetard = try #require(steps.first(where: { $0.stepTypeID == .coldRetard }))
+        // The overnight/target slack lives in the flexible cold retard, not the fixed wait.
+        #expect(coldRetard.durationMinutes > wait.durationMinutes)
+        // Schedule still lands on target despite the un-stretched wait.
+        let lastEnd = try #require(steps.last?.endTime)
+        #expect(abs(lastEnd.timeIntervalSince(input.targetBreadReadyTime)) < 60)
+    }
+
+    @Test func peakAlreadyPassedDoesNotInflateWait() throws {
+        // Fed long enough ago that the levain has already peaked (remaining <= 0).
+        let input = Self.readyLevainInput(elapsedMinutes: 320, peakMinutes: 300)
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let build = try #require(steps.first(where: { $0.stepTypeID == .buildLevain }))
+        let wait = try #require(steps.first(where: { $0.stepTypeID == .waitForLevainPeak }))
+        // A peaked-over levain must not be re-inflated to a full peak duration.
+        #expect(wait.durationMinutes < 60)
+        // Still contiguous.
+        #expect(abs(build.endTime.timeIntervalSince(wait.startTime)) < 1)
+    }
+
+    @Test func noLevainContextStillContiguous() throws {
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 14, minute: 0),
+            kitchenTemperatureCelsius: 22.0,
+            availability: Self.defaultAvailability
+        )
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let build = try #require(steps.first(where: { $0.stepTypeID == .buildLevain }))
+        let wait = try #require(steps.first(where: { $0.stepTypeID == .waitForLevainPeak }))
+        #expect(abs(build.endTime.timeIntervalSince(wait.startTime)) < 1)
+        // Generic levain build estimate at 22°C.
+        #expect(abs(wait.durationMinutes - 300) < 1)
+    }
+
     @Test func conflictWhenColdRetardExceedsFlexRange() {
         let input = ScheduleBuilderInput(
             recipe: RecipeBook.countryLoaf,

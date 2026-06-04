@@ -665,6 +665,138 @@ struct ScheduleAdjustmentsTests {
 
         #expect(steps[0].stepStatus == .active, "A step whose start has passed should promote right away")
     }
+
+    // MARK: - Levain continuation glue (gap + stretch repair)
+
+    /// A malformed active levain phase like the one observed in the field: an idle GAP
+    /// before the wait and a STRETCHED wait end. holdStarter(done) → buildLevain(active,
+    /// ends a few min from now) → waitForLevainPeak(upcoming, starts +26min after build,
+    /// end stretched ~999min) → autolyse(upcoming). `waitDurationMinutes` lets a test
+    /// simulate a corrupt stored duration.
+    private func makeGappedLevainSchedule(
+        context: ModelContext,
+        waitDurationMinutes: Double = 300
+    ) -> (Schedule, [ScheduleStep]) {
+        let now = Date()
+        let schedule = Schedule(
+            recipeID: .countryLoaf,
+            targetBreadReadyTime: now.addingTimeInterval(40 * 60 * 60),
+            kitchenTemperatureCelsius: 22
+        )
+        schedule.scheduleStatus = .active
+        context.insert(schedule)
+
+        let hold = ScheduleStep(
+            stepTypeID: .holdStarter,
+            sequenceIndex: 0,
+            computedStartTime: now.addingTimeInterval(-40 * 60),
+            computedEndTime: now.addingTimeInterval(-2 * 60),
+            computedDurationMinutes: 38
+        )
+        hold.schedule = schedule
+        hold.stepStatus = .done
+        hold.actualEndTime = now.addingTimeInterval(-2 * 60)
+        context.insert(hold)
+
+        let buildEnd = now.addingTimeInterval(3 * 60) // 3 min in the future
+        let build = ScheduleStep(
+            stepTypeID: .buildLevain,
+            sequenceIndex: 1,
+            computedStartTime: now.addingTimeInterval(-2 * 60),
+            computedEndTime: buildEnd,
+            computedDurationMinutes: 5
+        )
+        build.schedule = schedule
+        build.stepStatus = .active
+        context.insert(build)
+
+        let waitStart = buildEnd.addingTimeInterval(26 * 60) // 26-min idle GAP
+        let wait = ScheduleStep(
+            stepTypeID: .waitForLevainPeak,
+            sequenceIndex: 2,
+            computedStartTime: waitStart,
+            computedEndTime: waitStart.addingTimeInterval(999 * 60), // STRETCH
+            computedDurationMinutes: waitDurationMinutes
+        )
+        wait.schedule = schedule
+        context.insert(wait)
+
+        let autolyse = ScheduleStep(
+            stepTypeID: .autolyse,
+            sequenceIndex: 3,
+            computedStartTime: wait.computedEndTime,
+            computedEndTime: wait.computedEndTime.addingTimeInterval(45 * 60),
+            computedDurationMinutes: 45
+        )
+        autolyse.schedule = schedule
+        context.insert(autolyse)
+
+        return (schedule, [hold, build, wait, autolyse])
+    }
+
+    @Test func finishBuildLevainEarlyGluesWaitToNow() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let (schedule, steps) = makeGappedLevainSchedule(context: context)
+        let vm = makeViewModel(with: schedule)
+        let build = steps[1], wait = steps[2]
+
+        vm.finishStepEarly(build, modelContext: context)
+
+        #expect(abs(wait.computedStartTime.timeIntervalSinceNow) < 2, "Wait should start now")
+        let span = wait.computedEndTime.timeIntervalSince(wait.computedStartTime) / 60
+        #expect(abs(span - 300) < 1, "Wait should run for the expected peak, not the stretched end")
+        #expect(wait.stepStatus == .active)
+        #expect(abs(build.computedEndTime.timeIntervalSince(wait.computedStartTime)) < 2, "No gap")
+    }
+
+    @Test func markBuildLevainDoneGluesWaitToNow() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let (schedule, steps) = makeGappedLevainSchedule(context: context)
+        let vm = makeViewModel(with: schedule)
+        let build = steps[1], wait = steps[2], autolyse = steps[3]
+
+        vm.markStepDone(build, modelContext: context)
+
+        #expect(abs(wait.computedStartTime.timeIntervalSinceNow) < 2, "Wait should start now")
+        #expect(wait.stepStatus == .active)
+        let span = wait.computedEndTime.timeIntervalSince(wait.computedStartTime) / 60
+        #expect(abs(span - 300) < 1)
+        // Autolyse follows the de-stretched wait — no 16-hour hole.
+        #expect(abs(autolyse.computedStartTime.timeIntervalSince(wait.computedEndTime)) < 2)
+    }
+
+    @Test func markBuildLevainDoneClampsStretchedDuration() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // Stored duration itself is corrupt (matches the field bug: ~999 min).
+        let (schedule, steps) = makeGappedLevainSchedule(context: context, waitDurationMinutes: 999)
+        let vm = makeViewModel(with: schedule)
+        let build = steps[1], wait = steps[2]
+
+        vm.markStepDone(build, modelContext: context)
+
+        let span = wait.computedEndTime.timeIntervalSince(wait.computedStartTime) / 60
+        #expect(abs(span - 300) < 1, "Corrupt duration should be clamped to the expected peak")
+        #expect(abs(wait.computedDurationMinutes - 300) < 1)
+    }
+
+    @Test func completingNonLevainStepUsesNormalCascade() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // buildLevain → autolyse (no waitForLevainPeak): the glue must stay inert.
+        let anchor = Date().addingTimeInterval(-120 * 60)
+        let (schedule, steps) = makeLevainSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: schedule)
+        let autolyse = steps[1]
+        let originalAutolyseDuration = autolyse.computedDurationMinutes
+
+        vm.finishStepEarly(steps[0], modelContext: context)
+
+        // Glue does not touch a non-levain successor's duration.
+        #expect(autolyse.computedDurationMinutes == originalAutolyseDuration)
+    }
 }
 
 // MARK: - Step type copy coverage

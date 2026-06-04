@@ -476,18 +476,23 @@ enum ScheduleBuilder {
                     for i in 0 ..< flexIdx {
                         let old = result[i]
                         print("[ScheduleBuilder]   [\(i)] \(old.label) start=\(old.startTime) dur=\(Int(old.durationMinutes))min levainElapsed=\(old.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")")
-                        if old.levainElapsedMinutes != nil {
-                            let fedAt = input.levainContext?.fedAt ?? old.startTime
-                            let levainEnd = old.startTime.addingTimeInterval((old.durationMinutes + (old.levainElapsedMinutes ?? 0)) * 60)
+                        // An in-progress levain is fermenting in the jar: pin it to its
+                        // real fed time and its true peak duration. Never stretch it to
+                        // absorb target-anchoring slack — that belongs to the flex step
+                        // (compressed below). Re-gluing buildLevain happens after the loop.
+                        if old.levainElapsedMinutes != nil,
+                           let ctx = input.levainContext, ctx.remainingMinutes() > 0 {
+                            let fedAt = ctx.fedAt
+                            let levainEnd = fedAt.addingTimeInterval(ctx.expectedPeakMinutes * 60)
                             print("[ScheduleBuilder]   → levain: fedAt=\(fedAt) levainEnd=\(levainEnd)")
                             result[i] = ScheduledStep(
                                 methodStepID: old.methodStepID,
                                 stepTypeID: old.stepTypeID,
                                 label: old.label,
                                 classification: old.classification,
-                                startTime: input.levainContext?.fedAt ?? old.startTime,
-                                endTime: max(levainEnd, old.endTime.addingTimeInterval(delay)),
-                                durationMinutes: old.durationMinutes,
+                                startTime: fedAt,
+                                endTime: levainEnd,
+                                durationMinutes: ctx.expectedPeakMinutes,
                                 subSteps: old.subSteps,
                                 requiresTempReading: old.requiresTempReading,
                                 levainElapsedMinutes: old.levainElapsedMinutes
@@ -557,6 +562,30 @@ enum ScheduleBuilder {
             } else {
                 print("[ScheduleBuilder] no flex step found to absorb delay")
             }
+        }
+
+        // Re-glue Build Levain to the (pinned) levain wait so no idle gap can open
+        // between mixing the levain and waiting for it to peak — they're one continuous
+        // process. The earliest-start shift can move buildLevain without moving the
+        // fed-time-pinned wait; this restores the invariant build.end == wait.start.
+        // No-op when there is no in-progress levain (no levainElapsedMinutes step).
+        if let waitIdx = result.firstIndex(where: { $0.levainElapsedMinutes != nil }),
+           waitIdx > 0,
+           result[waitIdx - 1].stepTypeID == .buildLevain {
+            let mix = result[waitIdx - 1]
+            let waitStart = result[waitIdx].startTime
+            result[waitIdx - 1] = ScheduledStep(
+                methodStepID: mix.methodStepID,
+                stepTypeID: mix.stepTypeID,
+                label: mix.label,
+                classification: mix.classification,
+                startTime: waitStart.addingTimeInterval(-mix.durationMinutes * 60),
+                endTime: waitStart,
+                durationMinutes: mix.durationMinutes,
+                subSteps: mix.subSteps,
+                requiresTempReading: mix.requiresTempReading,
+                levainElapsedMinutes: mix.levainElapsedMinutes
+            )
         }
 
         // Validate all flexible steps stay within their flex range

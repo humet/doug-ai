@@ -1127,6 +1127,7 @@ final class ScheduleViewModel {
             profile: starterProfile, modelContext: modelContext
         )
 
+        glueLevainContinuation(after: step, in: schedule, now: now)
         promoteNextUpcoming(in: schedule)
 
         if let next = nextStep(after: step, in: schedule), next.stepStatus == .active {
@@ -1299,6 +1300,7 @@ final class ScheduleViewModel {
         }
 
         cascade(afterEnd: oldEnd, delta: delta, in: schedule)
+        glueLevainContinuation(after: step, in: schedule, now: now)
         promoteNextUpcoming(in: schedule)
         syncLiveActivity()
     }
@@ -1558,6 +1560,47 @@ final class ScheduleViewModel {
         activeSchedule = nil
         activeConflicts = []
         LiveActivityService.shared.endBakeActivity()
+    }
+
+    // MARK: - Levain continuation
+
+    /// When `step` is completed and the step immediately after it is the levain-peak
+    /// wait, glue that wait to `now`: the levain starts rising the instant it's built,
+    /// so there is no idle gap between the two. Snaps the wait's start to `now` and its
+    /// end to `now + intended peak duration`, discarding any stale or stretched end,
+    /// then cascades the rest of the schedule by how far the wait's end moved.
+    ///
+    /// The duration is clamped to the recipe's expected peak so this also self-heals an
+    /// already-persisted schedule whose stored wait duration was inflated. Targeted to
+    /// `waitForLevainPeak` only — other passive steps (cold retard, bulk, final proof)
+    /// are intentionally not auto-started on a predecessor's completion.
+    ///
+    /// Returns `true` if it glued a continuation.
+    @discardableResult
+    private func glueLevainContinuation(after step: ScheduleStep, in schedule: Schedule, now: Date) -> Bool {
+        let steps = orderedTopLevelSteps(in: schedule)
+        guard let idx = steps.firstIndex(where: { $0 === step }), idx + 1 < steps.count else { return false }
+        let next = steps[idx + 1]
+        guard next.stepTypeID == StepTypeID.waitForLevainPeak.rawValue,
+              next.stepStatus == .upcoming || next.stepStatus == .active else { return false }
+
+        let expected = TemperatureCalculator.levainBuildMinutes(
+            kitchenTemp: schedule.kitchenTemperatureCelsius
+        )
+        let duration = min(next.computedDurationMinutes, expected)
+
+        let oldNextEnd = next.computedEndTime
+        next.computedStartTime = now
+        next.computedEndTime = now.addingTimeInterval(duration * 60)
+        next.computedDurationMinutes = duration
+
+        cascade(
+            afterEnd: oldNextEnd,
+            delta: next.computedEndTime.timeIntervalSince(oldNextEnd),
+            in: schedule,
+            excluding: next
+        )
+        return true
     }
 
     // MARK: - Cascade helper
