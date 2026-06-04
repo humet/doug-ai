@@ -950,12 +950,9 @@ final class ScheduleViewModel {
     func adjustFlexibleStep(to newDurationMinutes: Double, modelContext _: ModelContext) {
         guard let schedule = activeSchedule else { return }
 
-        let steps = allSteps(in: schedule)
-        guard let flexStep = steps.first(where: { step in
-            guard let id = StepTypeID(rawValue: step.stepTypeID) else { return false }
-            return StepTypeRegistry.type(for: id).classification == .passiveFlexible
-                && StepTypeRegistry.type(for: id).flexRange != nil
-        }) else { return }
+        // Use the same step the UI offers via `flexibleStep` so the button
+        // label and the step actually adjusted can never disagree.
+        guard let flexStep = flexibleStep else { return }
 
         let oldEnd = flexStep.computedEndTime
         let newEnd = flexStep.computedStartTime.addingTimeInterval(newDurationMinutes * 60)
@@ -1020,11 +1017,20 @@ final class ScheduleViewModel {
     // MARK: - Flexible Step Lookup
 
     var flexibleStep: ScheduleStep? {
-        activeSchedule?.steps.first(where: { step in
-            guard let id = StepTypeID(rawValue: step.stepTypeID) else { return false }
-            let stepType = StepTypeRegistry.type(for: id)
-            return stepType.classification == .passiveFlexible && stepType.flexRange != nil
-        })
+        guard let schedule = activeSchedule else { return nil }
+        // Sort by sequenceIndex — `schedule.steps` is an unordered SwiftData
+        // relationship, so `.first(where:)` over it is nondeterministic and
+        // would flip the adjust button between flexible steps across redraws.
+        // Skip completed/skipped steps so a finished autolyse stops offering
+        // its button and we fall through to the next upcoming flexible step.
+        return schedule.steps
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+            .first(where: { step in
+                guard step.stepStatus != .done, step.stepStatus != .skipped,
+                      let id = StepTypeID(rawValue: step.stepTypeID) else { return false }
+                let stepType = StepTypeRegistry.type(for: id)
+                return stepType.classification == .passiveFlexible && stepType.flexRange != nil
+            })
     }
 
     var flexibleStepFlexRange: ClosedRange<Double>? {
