@@ -91,9 +91,12 @@ struct ScheduleBuilderTests {
             return
         }
 
-        let hasInclusions = steps.contains(where: { $0.stepTypeID == StepTypeID.addInclusions })
-            || steps.flatMap(\.subSteps).contains(where: { $0.stepTypeID == StepTypeID.addInclusions })
-        #expect(hasInclusions)
+        // Exactly one inclusion step, injected at the designated fold inside bulk —
+        // never a second standalone occurrence before shaping.
+        let topLevel = steps.filter { $0.stepTypeID == StepTypeID.addInclusions }
+        let inFolds = steps.flatMap(\.subSteps).filter { $0.stepTypeID == StepTypeID.addInclusions }
+        #expect(topLevel.isEmpty)
+        #expect(inFolds.count == 1)
     }
 
     // MARK: - Temperature Variations

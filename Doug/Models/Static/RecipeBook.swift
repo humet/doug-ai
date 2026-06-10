@@ -184,7 +184,6 @@ enum RecipeBook {
                 foldSpacingFraction: 0.67,
                 inclusionAtFold: 2
             ),
-            MethodStep(stepTypeID: .addInclusions),
             MethodStep(stepTypeID: .shape),
             MethodStep(
                 stepTypeID: .coldRetard,
