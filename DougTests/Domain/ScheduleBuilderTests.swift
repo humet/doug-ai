@@ -248,6 +248,42 @@ struct ScheduleBuilderTests {
         #expect(abs(wait.durationMinutes - 300) < 1)
     }
 
+    @Test func inProgressLevainBeforeEarliestStartIsNotAConflict() throws {
+        // An activating starter's rising feed used as the levain: the build and
+        // peak wait are pinned in the past (already happening) and the
+        // earliest-start floor lands exactly at the wait's end. The backdated
+        // steps must not read as "starting too early" — every step the baker
+        // still has to do begins after the floor. The 48h peak makes the
+        // phantom delay far larger than any flex step can absorb, which used
+        // to surface as a spurious "too soon" conflict.
+        let now = Date()
+        let allDay = AvailabilityInput(startHour: 0, startMinute: 0, endHour: 23, endMinute: 59)
+        let fedAt = now.addingTimeInterval(-60 * 60)
+        let peakMinutes = 2880.0
+        let earliestStart = fedAt.addingTimeInterval(peakMinutes * 60)
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: now.addingTimeInterval(80 * 3600),
+            kitchenTemperatureCelsius: 22.0,
+            availability: allDay,
+            levainContext: LevainContext(
+                fedAt: fedAt,
+                expectedPeakMinutes: peakMinutes,
+                kitchenTemperatureCelsius: 22.0
+            ),
+            earliestStartTime: earliestStart
+        )
+
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("An in-progress levain before the earliest start must not conflict")
+            return
+        }
+
+        let waitIdx = try #require(steps.firstIndex(where: { $0.stepTypeID == .waitForLevainPeak }))
+        let firstAfterWait = try #require(steps.indices.contains(waitIdx + 1) ? steps[waitIdx + 1] : nil)
+        #expect(firstAfterWait.startTime >= earliestStart.addingTimeInterval(-60))
+    }
+
     @Test func readyStarterSlackAbsorbedByColdRetard() throws {
         let input = Self.readyLevainInput(elapsedMinutes: 90, peakMinutes: 300)
         guard case let .success(steps) = ScheduleBuilder.build(input) else {

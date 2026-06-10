@@ -143,7 +143,20 @@ final class ScheduleViewModel {
 
     init() {
         NotificationRouter.shared.registerScheduleViewModel(self)
-        NotificationCenter.default.addObserver(
+    }
+
+    // nonisolated(unsafe): written once on the main actor, read in deinit;
+    // NotificationCenter.removeObserver is thread-safe.
+    private nonisolated(unsafe) var starterEventObserver: NSObjectProtocol?
+
+    /// Called by the hosting tab, not from init: only the app's live, tab-owned
+    /// ViewModel should react to Starter-tab events. Registering in init made
+    /// every test-created instance an observer, and events posted by one test
+    /// suite reached stale ViewModels from other suites whose in-memory
+    /// containers were already gone — SIGTRAP.
+    func startObservingStarterEvents() {
+        guard starterEventObserver == nil else { return }
+        starterEventObserver = NotificationCenter.default.addObserver(
             forName: StarterViewModel.starterEventNotification,
             object: nil,
             queue: .main
@@ -152,6 +165,12 @@ final class ScheduleViewModel {
             Task { @MainActor in
                 self?.handleStarterEvent(event)
             }
+        }
+    }
+
+    deinit {
+        if let starterEventObserver {
+            NotificationCenter.default.removeObserver(starterEventObserver)
         }
     }
 

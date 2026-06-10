@@ -2,7 +2,13 @@ import SwiftData
 import SwiftUI
 
 struct ScheduleTab: View {
-    @State private var viewModel = ScheduleViewModel()
+    @State private var viewModel: ScheduleViewModel = {
+        let viewModel = ScheduleViewModel()
+        // Only the tab-owned instance reacts to Starter-tab events; see
+        // startObservingStarterEvents for why this isn't in init.
+        viewModel.startObservingStarterEvents()
+        return viewModel
+    }()
     @State private var router = NotificationRouter.shared
     @State private var showConfig = false
     @State private var detailStep: ScheduleStep?

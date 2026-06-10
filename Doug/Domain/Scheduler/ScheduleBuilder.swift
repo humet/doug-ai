@@ -451,6 +451,16 @@ enum ScheduleBuilder {
         // Enforce earliest start: shift pre-flex steps forward, compress flex step
         let firstNonLevain = result.first(where: { $0.levainElapsedMinutes == nil })
         let shiftAnchor = firstNonLevain?.startTime ?? result.first?.startTime
+        // An in-progress levain (levainElapsedMinutes) is already fermenting in
+        // the jar, so its backdated build/wait steps legitimately sit before the
+        // earliest-start floor. When the shift can't be honoured, the violation
+        // is only real if work the baker still has to do — the first step after
+        // the pinned wait — would start before the floor.
+        let postLevainAnchor: Date? = {
+            guard let pinnedIdx = result.lastIndex(where: { $0.levainElapsedMinutes != nil }),
+                  pinnedIdx + 1 < result.count else { return nil }
+            return result[pinnedIdx + 1].startTime
+        }()
         print(
             "[ScheduleBuilder] pre-shift check: earliestStart=\(input.earliestStartTime?.description ?? "nil") shiftAnchor=\(shiftAnchor?.description ?? "nil") (\(firstNonLevain?.label ?? result.first?.label ?? "nil"))"
         )
@@ -569,6 +579,14 @@ enum ScheduleBuilder {
                             ))
                         }
                     }
+                } else if let postLevainAnchor, postLevainAnchor.timeIntervalSince(earliest) > -60 {
+                    // Phantom delay: only the backdated in-progress levain sits
+                    // before the floor; everything the baker still has to do
+                    // starts after it. Nothing real to enforce — keep the
+                    // schedule as built.
+                    print(
+                        "[ScheduleBuilder] flex compress skipped: delay is only the in-progress levain (post-levain start \(postLevainAnchor) ≥ earliest)"
+                    )
                 } else {
                     // The flex step can't compress enough to push the schedule's start up
                     // to the earliest allowed time. Honouring this bread-ready time would
@@ -585,6 +603,11 @@ enum ScheduleBuilder {
                         suggestedAlternativeTime: nil
                     ))
                 }
+            } else if let postLevainAnchor, postLevainAnchor.timeIntervalSince(earliest) > -60 {
+                // Same phantom-delay case as above, without a flex step.
+                print(
+                    "[ScheduleBuilder] earliest-start skipped: delay is only the in-progress levain (post-levain start \(postLevainAnchor) ≥ earliest)"
+                )
             } else {
                 // No flexible step exists to absorb the delay, so the start can't be pushed
                 // to the earliest allowed time. Same reasoning as above — report a conflict.
