@@ -1095,6 +1095,7 @@ final class ScheduleViewModel {
         if let parent = fold.parentStep {
             rescheduleRemainingFolds(in: parent)
         }
+        syncLiveActivity()
     }
 
     private func rescheduleRemainingFolds(in parent: ScheduleStep) {

@@ -2,10 +2,25 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
+private extension BakeActivityAttributes.ContentState {
+    /// Shown when the content goes stale — the timer target passed without
+    /// the app updating the activity (it was backgrounded the whole time).
+    var staleMessage: String {
+        if let foldLabel = nextFoldLabel {
+            return "\(foldLabel) due"
+        }
+        return "\(currentStepLabel) done"
+    }
+
+    var staleCompactMessage: String {
+        nextFoldLabel != nil ? "Due" : "Done"
+    }
+}
+
 struct BakeLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: BakeActivityAttributes.self) { context in
-            BakeLockScreenView(state: context.state)
+            BakeLockScreenView(state: context.state, isStale: context.isStale)
                 .activityBackgroundTint(LiveActivityColors.sourdoughBrown.opacity(0.9))
         } dynamicIsland: { context in
             DynamicIsland {
@@ -24,10 +39,22 @@ struct BakeLiveActivity: Widget {
                         Text("Paused")
                             .font(.caption.bold())
                             .foregroundStyle(.yellow)
+                    } else if context.isStale {
+                        Text(context.state.staleCompactMessage)
+                            .font(.headline)
+                            .foregroundStyle(.red)
                     } else {
-                        Text(context.state.stepEndTime, style: .timer)
-                            .font(.headline.monospacedDigit())
-                            .foregroundStyle(context.state.isOverdue ? .red : LiveActivityColors.crustGold)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(timerInterval: context.state.timerInterval, countsDown: true)
+                                .font(.headline.monospacedDigit())
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(context.state.isOverdue ? .red : LiveActivityColors.crustGold)
+                            if let foldLabel = context.state.nextFoldLabel {
+                                Text(foldLabel)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -71,8 +98,12 @@ struct BakeLiveActivity: Widget {
                     Text("Paused")
                         .font(.caption2)
                         .foregroundStyle(.yellow)
+                } else if context.isStale {
+                    Text(context.state.staleCompactMessage)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.red)
                 } else {
-                    Text(context.state.stepEndTime, style: .timer)
+                    Text(timerInterval: context.state.timerInterval, countsDown: true)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(context.state.isOverdue ? .red : LiveActivityColors.crustGold)
                 }
@@ -87,6 +118,7 @@ struct BakeLiveActivity: Widget {
 
 private struct BakeLockScreenView: View {
     let state: BakeActivityAttributes.ContentState
+    let isStale: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -114,12 +146,20 @@ private struct BakeLockScreenView: View {
                         Text("Open Doug to resume")
                             .font(.caption)
                             .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
+                    } else if isStale {
+                        Text("\(state.staleMessage) — open Doug")
+                            .font(.caption.bold())
+                            .foregroundStyle(.red)
                     } else if state.isOverdue {
                         Text("Overdue")
                             .font(.caption.bold())
                             .foregroundStyle(.red)
+                    } else if let foldLabel = state.nextFoldLabel {
+                        (Text("\(foldLabel) in ") + Text(timerInterval: state.timerInterval, countsDown: true))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(LiveActivityColors.crustGold)
                     } else {
-                        Text(state.stepEndTime, style: .timer)
+                        Text(timerInterval: state.timerInterval, countsDown: true)
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
                     }

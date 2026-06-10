@@ -16,10 +16,18 @@ final class LiveActivityService {
         currentBakeActivity != nil
     }
 
+    /// Five minutes past the countdown target the widget flips to its stale
+    /// "due — open Doug" rendering. Never in the past: a state pushed when the
+    /// target has already slipped is still fresh and should render as overdue,
+    /// not stale.
+    private static func bakeStaleDate(for state: BakeActivityAttributes.ContentState) -> Date {
+        max(state.timerTarget, Date()).addingTimeInterval(300)
+    }
+
     func startBakeActivity(recipeName: String, recipeID: String, state: BakeActivityAttributes.ContentState) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let attributes = BakeActivityAttributes(recipeName: recipeName, recipeID: recipeID)
-        let content = ActivityContent(state: state, staleDate: state.stepEndTime.addingTimeInterval(300))
+        let content = ActivityContent(state: state, staleDate: Self.bakeStaleDate(for: state))
         do {
             currentBakeActivity = try Activity.request(attributes: attributes, content: content)
         } catch {
@@ -29,7 +37,7 @@ final class LiveActivityService {
 
     func updateBakeActivity(state: BakeActivityAttributes.ContentState) {
         guard let activity = currentBakeActivity else { return }
-        let content = ActivityContent(state: state, staleDate: state.stepEndTime.addingTimeInterval(300))
+        let content = ActivityContent(state: state, staleDate: Self.bakeStaleDate(for: state))
         Task {
             await activity.update(content)
         }
@@ -87,7 +95,7 @@ final class LiveActivityService {
 
         let now = Date()
         let activeStep = steps.first { $0.stepStatus == .active }
-        let completedCount = steps.filter { $0.stepStatus == .done || $0.stepStatus == .skipped }.count
+        let completedCount = steps.count(where: { $0.stepStatus == .done || $0.stepStatus == .skipped })
 
         let currentStep = activeStep ?? steps.first { $0.stepStatus == .upcoming } ?? steps.last!
         let stepTypeID = StepTypeID(rawValue: currentStep.stepTypeID) ?? .mix
@@ -102,6 +110,15 @@ final class LiveActivityService {
 
         let isOverdue = currentStep.stepStatus == .active && currentStep.computedEndTime < now
 
+        // During steps with a fold checklist (bulk ferment), the next pending
+        // fold is the moment the baker actually needs — count down to it
+        // rather than to the end of the whole step.
+        let nextFold: ScheduleStep? = currentStep.stepStatus == .active
+            ? currentStep.subSteps
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+            .first { $0.stepStatus != .done && $0.stepStatus != .skipped }
+            : nil
+
         return BakeActivityAttributes.ContentState(
             currentStepLabel: stepType.label,
             currentStepIcon: StepTypeIcon.systemName(for: stepTypeID),
@@ -110,6 +127,9 @@ final class LiveActivityService {
             stepStartTime: currentStep.computedStartTime,
             nextStepLabel: nextStep.map { StepTypeRegistry.type(for: StepTypeID(rawValue: $0.stepTypeID)!).label },
             nextStepStartTime: nextStep?.computedStartTime,
+            nextFoldLabel: nextFold.flatMap { StepTypeID(rawValue: $0.stepTypeID) }
+                .map { StepTypeRegistry.type(for: $0).label },
+            nextFoldTime: nextFold?.computedStartTime,
             completedStepCount: completedCount,
             totalStepCount: steps.count,
             breadReadyTime: schedule.targetBreadReadyTime,
@@ -123,7 +143,9 @@ final class LiveActivityService {
         let totalSteps = steps.count
         let currentIndex = plan.currentStepIndex
 
-        guard currentIndex < totalSteps, let currentFeed = steps.first(where: { $0.sequenceIndex == currentIndex }) else {
+        guard currentIndex < totalSteps,
+              let currentFeed = steps.first(where: { $0.sequenceIndex == currentIndex })
+        else {
             return RevivalActivityAttributes.ContentState(
                 feedLabel: "Revival Complete",
                 feedStatus: RevivalFeedStatus.completed.rawValue,
