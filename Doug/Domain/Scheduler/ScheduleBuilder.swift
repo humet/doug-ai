@@ -440,7 +440,9 @@ enum ScheduleBuilder {
                             subSteps: next.subSteps,
                             requiresTempReading: next.requiresTempReading
                         )
-                        print("[ScheduleBuilder] extended \(next.label) earlier by \(Int(extendBy / 60))min to close levain gap")
+                        print(
+                            "[ScheduleBuilder] extended \(next.label) earlier by \(Int(extendBy / 60))min to close levain gap"
+                        )
                     }
                 }
             }
@@ -449,16 +451,20 @@ enum ScheduleBuilder {
         // Enforce earliest start: shift pre-flex steps forward, compress flex step
         let firstNonLevain = result.first(where: { $0.levainElapsedMinutes == nil })
         let shiftAnchor = firstNonLevain?.startTime ?? result.first?.startTime
-        print("[ScheduleBuilder] pre-shift check: earliestStart=\(input.earliestStartTime?.description ?? "nil") shiftAnchor=\(shiftAnchor?.description ?? "nil") (\(firstNonLevain?.label ?? result.first?.label ?? "nil"))")
+        print(
+            "[ScheduleBuilder] pre-shift check: earliestStart=\(input.earliestStartTime?.description ?? "nil") shiftAnchor=\(shiftAnchor?.description ?? "nil") (\(firstNonLevain?.label ?? result.first?.label ?? "nil"))"
+        )
         for (i, s) in result.enumerated() {
-            print("[ScheduleBuilder]   [\(i)] \(s.label) start=\(s.startTime) dur=\(Int(s.durationMinutes))min levainElapsed=\(s.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")")
+            print(
+                "[ScheduleBuilder]   [\(i)] \(s.label) start=\(s.startTime) dur=\(Int(s.durationMinutes))min levainElapsed=\(s.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")"
+            )
         }
         if let earliest = input.earliestStartTime,
            let firstStart = shiftAnchor,
            firstStart < earliest
         {
             let delay = earliest.timeIntervalSince(firstStart)
-            print("[ScheduleBuilder] earliest=\(earliest) firstStart=\(firstStart) delay=\(Int(delay/60))min")
+            print("[ScheduleBuilder] earliest=\(earliest) firstStart=\(firstStart) delay=\(Int(delay / 60))min")
 
             if let flexIdx = result.indices.max(by: { a, b in
                 result[a].classification != .passiveFlexible ? true
@@ -469,19 +475,24 @@ enum ScheduleBuilder {
                 let newDuration = flexStep.durationMinutes - (delay / 60.0)
                 let methodFlex = method.first { $0.stepTypeID == flexStep.stepTypeID }
                 let minDuration = methodFlex?.effectiveFlexRange?.lowerBound ?? 0
-                print("[ScheduleBuilder] flexStep=\(flexStep.label) idx=\(flexIdx) oldDur=\(Int(flexStep.durationMinutes))min newDur=\(Int(newDuration))min min=\(Int(minDuration))min")
+                print(
+                    "[ScheduleBuilder] flexStep=\(flexStep.label) idx=\(flexIdx) oldDur=\(Int(flexStep.durationMinutes))min newDur=\(Int(newDuration))min min=\(Int(minDuration))min"
+                )
 
                 if newDuration >= minDuration {
-                    print("[ScheduleBuilder] shifting \(flexIdx) steps forward by \(Int(delay/60))min")
+                    print("[ScheduleBuilder] shifting \(flexIdx) steps forward by \(Int(delay / 60))min")
                     for i in 0 ..< flexIdx {
                         let old = result[i]
-                        print("[ScheduleBuilder]   [\(i)] \(old.label) start=\(old.startTime) dur=\(Int(old.durationMinutes))min levainElapsed=\(old.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")")
+                        print(
+                            "[ScheduleBuilder]   [\(i)] \(old.label) start=\(old.startTime) dur=\(Int(old.durationMinutes))min levainElapsed=\(old.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")"
+                        )
                         // An in-progress levain is fermenting in the jar: pin it to its
                         // real fed time and its true peak duration. Never stretch it to
                         // absorb target-anchoring slack — that belongs to the flex step
                         // (compressed below). Re-gluing buildLevain happens after the loop.
                         if old.levainElapsedMinutes != nil,
-                           let ctx = input.levainContext, ctx.remainingMinutes() > 0 {
+                           let ctx = input.levainContext, ctx.remainingMinutes() > 0
+                        {
                             let fedAt = ctx.fedAt
                             let levainEnd = fedAt.addingTimeInterval(ctx.expectedPeakMinutes * 60)
                             print("[ScheduleBuilder]   → levain: fedAt=\(fedAt) levainEnd=\(levainEnd)")
@@ -537,7 +548,9 @@ enum ScheduleBuilder {
 
                     print("[ScheduleBuilder] after shift:")
                     for i in 0 ... flexIdx {
-                        print("[ScheduleBuilder]   [\(i)] \(result[i].label) start=\(result[i].startTime) end=\(result[i].endTime) dur=\(Int(result[i].durationMinutes))min")
+                        print(
+                            "[ScheduleBuilder]   [\(i)] \(result[i].label) start=\(result[i].startTime) end=\(result[i].endTime) dur=\(Int(result[i].durationMinutes))min"
+                        )
                     }
                     for i in 0 ..< flexIdx where result[i].classification == .handsOn {
                         let shifted = result[i]
@@ -557,10 +570,31 @@ enum ScheduleBuilder {
                         }
                     }
                 } else {
-                    print("[ScheduleBuilder] flex compress rejected: \(Int(newDuration))min < min \(Int(minDuration))min")
+                    // The flex step can't compress enough to push the schedule's start up
+                    // to the earliest allowed time. Honouring this bread-ready time would
+                    // mean starting before then — so it's genuinely not bakeable. Report a
+                    // conflict rather than returning a schedule that starts too early
+                    // (which the caller would later reject when prepending starter activation).
+                    print(
+                        "[ScheduleBuilder] flex compress rejected: \(Int(newDuration))min < min \(Int(minDuration))min"
+                    )
+                    return .conflict(ScheduleConflict(
+                        conflictingStepLabel: flexStep.label,
+                        conflictingWindowName: "schedule constraint",
+                        message: "This bread-ready time is too soon to fit the whole bake. Try a later time.",
+                        suggestedAlternativeTime: nil
+                    ))
                 }
             } else {
+                // No flexible step exists to absorb the delay, so the start can't be pushed
+                // to the earliest allowed time. Same reasoning as above — report a conflict.
                 print("[ScheduleBuilder] no flex step found to absorb delay")
+                return .conflict(ScheduleConflict(
+                    conflictingStepLabel: firstNonLevain?.label ?? result.first?.label ?? "Schedule",
+                    conflictingWindowName: "schedule constraint",
+                    message: "This bread-ready time is too soon to fit the whole bake. Try a later time.",
+                    suggestedAlternativeTime: nil
+                ))
             }
         }
 
@@ -571,7 +605,8 @@ enum ScheduleBuilder {
         // No-op when there is no in-progress levain (no levainElapsedMinutes step).
         if let waitIdx = result.firstIndex(where: { $0.levainElapsedMinutes != nil }),
            waitIdx > 0,
-           result[waitIdx - 1].stepTypeID == .buildLevain {
+           result[waitIdx - 1].stepTypeID == .buildLevain
+        {
             let mix = result[waitIdx - 1]
             let waitStart = result[waitIdx].startTime
             result[waitIdx - 1] = ScheduledStep(

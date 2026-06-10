@@ -1,7 +1,7 @@
 #if canImport(DougDomain)
-@testable import DougDomain
+    @testable import DougDomain
 #else
-@testable import Doug
+    @testable import Doug
 #endif
 import Foundation
 import Testing
@@ -146,6 +146,7 @@ struct ScheduleBuilderTests {
         #expect(!steps.isEmpty)
         #expect(try #require(steps.first?.startTime) < steps.last!.endTime)
     }
+
     // MARK: - Fold Availability
 
     @Test func bulkFermentFoldsAvoidSleepWindow() throws {
@@ -313,6 +314,72 @@ struct ScheduleBuilderTests {
         }
     }
 
+    // MARK: - Earliest Start Cannot Be Met
+
+    /// Reproduces the "this bread-ready time requires starting in the past" trap. An
+    /// overnight recipe with an earliest-start floor (e.g. waiting for a fridge starter to
+    /// wake) and a bread-ready time too soon to fit the ~20h+ bake after that floor. The
+    /// cold-retard flex can't compress far enough to absorb the gap, so the builder must
+    /// report a conflict — not silently return a schedule whose first step precedes the
+    /// floor (which the slot grid would show as bakeable, then selection would reject once
+    /// it prepends starter activation).
+    @Test func tooSoonTargetConflictsWhenEarliestStartCannotBeMet() {
+        let allDay = AvailabilityInput(startHour: 0, startMinute: 0, endHour: 23, endMinute: 59)
+        let target = Self.targetTime(day: 19, hour: 18, minute: 0)
+
+        // Precondition: with no earliest-start floor, this target builds fine.
+        let unconstrained = ScheduleBuilderInput(
+            recipe: RecipeBook.oliveRosemary,
+            targetBreadReadyTime: target,
+            kitchenTemperatureCelsius: 21.0,
+            availability: allDay
+        )
+        guard case .success = ScheduleBuilder.build(unconstrained) else {
+            Issue.record("Precondition: target should build without an earliest-start floor")
+            return
+        }
+
+        // With a floor only 10h before the target, the bake can't fit — expect a conflict,
+        // never a "success" that starts before the floor.
+        let constrained = ScheduleBuilderInput(
+            recipe: RecipeBook.oliveRosemary,
+            targetBreadReadyTime: target,
+            kitchenTemperatureCelsius: 21.0,
+            availability: allDay,
+            earliestStartTime: Self.targetTime(day: 19, hour: 8, minute: 0)
+        )
+        guard case .conflict = ScheduleBuilder.build(constrained) else {
+            Issue.record("Expected conflict — the earliest-start floor leaves too little time for the bake")
+            return
+        }
+    }
+
+    /// Invariant: whenever the builder reports success with an earliest-start floor set, the
+    /// first scheduled step must not begin before that floor.
+    @Test func successfulBuildNeverStartsBeforeEarliestStart() throws {
+        let allDay = AvailabilityInput(startHour: 0, startMinute: 0, endHour: 23, endMinute: 59)
+        let earliest = Self.targetTime(day: 19, hour: 8, minute: 0)
+        // A full day out, so the whole overnight bake comfortably fits after the floor.
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.oliveRosemary,
+            targetBreadReadyTime: Self.targetTime(day: 20, hour: 12, minute: 0),
+            kitchenTemperatureCelsius: 21.0,
+            availability: allDay,
+            earliestStartTime: earliest
+        )
+
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected success for a target a full day after the earliest start")
+            return
+        }
+
+        let firstStart = try #require(steps.first?.startTime)
+        #expect(
+            firstStart >= earliest.addingTimeInterval(-60),
+            "First step \(firstStart) must not precede earliest start \(earliest)"
+        )
+    }
+
     @Test func noChangeWhenFoldsAlreadyInAvailableHours() throws {
         let input = ScheduleBuilderInput(
             recipe: RecipeBook.countryLoaf,
@@ -446,8 +513,10 @@ struct ScheduleBuilderTests {
         let crWith = try #require(stepsWithWindow.first(where: { $0.stepTypeID == .coldRetard }))
         let crWithout = try #require(stepsWithout.first(where: { $0.stepTypeID == .coldRetard }))
 
-        #expect(crWith.durationMinutes > crWithout.durationMinutes,
-                "Cold Retard should expand when presence group shifts earlier")
+        #expect(
+            crWith.durationMinutes > crWithout.durationMinutes,
+            "Cold Retard should expand when presence group shifts earlier"
+        )
     }
 
     @Test func briefMidStepUnavailabilityDoesNotShift() throws {
