@@ -179,6 +179,10 @@ final class StarterViewModel {
         pendingLevainRecipeName = nil
 
         showLogFeed = false
+
+        // A feed is precious user data — persist now rather than waiting for
+        // autosave, which an abrupt termination can beat.
+        try? modelContext.save()
     }
 
     private func inferFeedIntent(profile: StarterProfile?) -> FeedIntent {
@@ -199,6 +203,7 @@ final class StarterViewModel {
         modelContext.delete(log)
         let remaining = feedLogs.filter { $0.persistentModelID != log.persistentModelID }
         updateProfileAverages(profile: profile, feedLogs: remaining)
+        try? modelContext.save()
     }
 
     /// Cross-ViewModel channel: the Schedule tab observes these to keep a live
@@ -239,6 +244,8 @@ final class StarterViewModel {
         }
 
         post(.peakMarked(at: peakDate, intent: log.starterFeedIntent))
+
+        try? log.modelContext?.save()
     }
 
     /// Best estimate of when an unobserved feed peaked, for the "it peaked
@@ -277,7 +284,6 @@ final class StarterViewModel {
     /// The single next action the hero card should offer.
     func primaryAction(
         lifecycleState: StarterLifecycleState,
-        healthStatus: StarterHealthStatus,
         hasRisingFeed: Bool,
         hasUpcomingRecipe: Bool,
         hasRecentLevainFeed: Bool,
@@ -287,7 +293,10 @@ final class StarterViewModel {
         case .reviving:
             return .followRevival
         case .dormant:
-            return healthStatus == .needsRevival ? .followRevival : .activateAndFeed
+            // Always offer activation — even when health says "needs revival"
+            // (which is also a fresh install's state, with zero feed history).
+            // The revival section below carries its own call to action.
+            return .activateAndFeed
         case .activating:
             return hasRisingFeed ? .markPeak : .logActivationFeed
         case .active:

@@ -232,7 +232,6 @@ struct StarterTab: View {
     private var currentPrimaryAction: StarterPrimaryAction {
         viewModel.primaryAction(
             lifecycleState: lifecycleState,
-            healthStatus: viewModel.healthStatus(profile: profile, feedLogs: feedLogs),
             hasRisingFeed: risingFeed != nil,
             hasUpcomingRecipe: upcomingRecipe != nil && activeBake == nil,
             hasRecentLevainFeed: hasRecentLevainFeed,

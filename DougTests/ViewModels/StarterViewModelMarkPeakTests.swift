@@ -86,50 +86,46 @@ struct StarterViewModelMarkPeakTests {
     @Test func primaryActionPerLifecycleState() {
         let viewModel = StarterViewModel()
 
+        // Dormant always offers activation — including the zero-history fresh
+        // install, whose health reads as needsRevival.
         #expect(viewModel.primaryAction(
-            lifecycleState: .dormant, healthStatus: .readyToBake,
+            lifecycleState: .dormant,
             hasRisingFeed: false, hasUpcomingRecipe: false,
             hasRecentLevainFeed: false, bakeAwaitingLevainMix: false
         ) == .activateAndFeed)
 
         #expect(viewModel.primaryAction(
-            lifecycleState: .dormant, healthStatus: .needsRevival,
-            hasRisingFeed: false, hasUpcomingRecipe: false,
-            hasRecentLevainFeed: false, bakeAwaitingLevainMix: false
-        ) == .followRevival)
-
-        #expect(viewModel.primaryAction(
-            lifecycleState: .activating, healthStatus: .readyToBake,
+            lifecycleState: .activating,
             hasRisingFeed: true, hasUpcomingRecipe: false,
             hasRecentLevainFeed: false, bakeAwaitingLevainMix: false
         ) == .markPeak)
 
         #expect(viewModel.primaryAction(
-            lifecycleState: .activating, healthStatus: .readyToBake,
+            lifecycleState: .activating,
             hasRisingFeed: false, hasUpcomingRecipe: false,
             hasRecentLevainFeed: false, bakeAwaitingLevainMix: false
         ) == .logActivationFeed)
 
         #expect(viewModel.primaryAction(
-            lifecycleState: .active, healthStatus: .readyToBake,
+            lifecycleState: .active,
             hasRisingFeed: false, hasUpcomingRecipe: true,
             hasRecentLevainFeed: false, bakeAwaitingLevainMix: false
         ) == .buildLevain)
 
         #expect(viewModel.primaryAction(
-            lifecycleState: .active, healthStatus: .readyToBake,
+            lifecycleState: .active,
             hasRisingFeed: false, hasUpcomingRecipe: true,
             hasRecentLevainFeed: true, bakeAwaitingLevainMix: false
         ) == .feedAndRefrigerate)
 
         #expect(viewModel.primaryAction(
-            lifecycleState: .active, healthStatus: .readyToBake,
+            lifecycleState: .active,
             hasRisingFeed: false, hasUpcomingRecipe: false,
             hasRecentLevainFeed: false, bakeAwaitingLevainMix: true
         ) == .waitForBake)
 
         #expect(viewModel.primaryAction(
-            lifecycleState: .reviving, healthStatus: .needsRevival,
+            lifecycleState: .reviving,
             hasRisingFeed: false, hasUpcomingRecipe: false,
             hasRecentLevainFeed: false, bakeAwaitingLevainMix: false
         ) == .followRevival)

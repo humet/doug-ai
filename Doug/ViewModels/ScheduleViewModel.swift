@@ -1194,6 +1194,10 @@ final class ScheduleViewModel {
         }
 
         syncLiveActivity()
+
+        // Step completions can log feeds and move starter state — persist now
+        // rather than waiting for autosave, which an abrupt termination can beat.
+        try? modelContext.save()
     }
 
     /// Completing a gate step unblocks the stretch of timeline behind it, whose
