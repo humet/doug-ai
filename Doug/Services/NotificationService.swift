@@ -98,12 +98,21 @@ final class NotificationService {
 
     /// Schedules notifications for hands-on steps (5 min before start),
     /// passive-flexible steps (at timer completion), and bake substep transitions.
+    ///
+    /// Steps beyond the first pending gate step (levain peak, bulk ferment) are not
+    /// scheduled — their times are speculative until the baker confirms the gate.
+    /// See `NotificationGate`.
     func scheduleNotifications(for steps: [ScheduleStep]) async {
         let authorized = await requestAuthorization()
         guard authorized else { return }
 
-        for step in steps {
+        for step in stepsWithinGateCutoff(steps) {
             let stepType = step.stepType
+
+            if NotificationGate.isGate(stepTypeID: step.stepTypeID) {
+                await scheduleGateCheckNotification(step: step)
+                continue
+            }
 
             if stepType.classification == .passiveFlexible {
                 await scheduleFlexibleCompletionNotification(step: step)
@@ -416,5 +425,65 @@ final class NotificationService {
     func cancelAllRevivalReminders(planID: String, stepCount: Int) {
         let identifiers = (0 ..< stepCount).map { Self.revivalMixIdentifier(planID: planID, stepIndex: $0) }
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+}
+
+// MARK: - Gate Cutoff
+
+extension NotificationService {
+    /// Drops steps that sit beyond the first pending gate step in the schedule.
+    /// The gate itself and its substeps (e.g. folds inside bulk ferment) are kept.
+    private func stepsWithinGateCutoff(_ steps: [ScheduleStep]) -> [ScheduleStep] {
+        guard let schedule = steps.first?.schedule else { return steps }
+        let topLevel = schedule.steps
+            .filter { $0.parentStep == nil }
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+        let infos = topLevel.map {
+            NotificationGate.StepInfo(
+                stepTypeID: $0.stepTypeID,
+                isPending: $0.stepStatus == .upcoming || $0.stepStatus == .active
+            )
+        }
+        guard let gateIndex = NotificationGate.firstPendingGateIndex(in: infos) else {
+            return steps
+        }
+        let gateSequenceIndex = topLevel[gateIndex].sequenceIndex
+        return steps.filter { ($0.parentStep ?? $0).sequenceIndex <= gateSequenceIndex }
+    }
+
+    /// A gate step ends on the baker's judgement, so the only notification it gets
+    /// is a check-in when its predicted timer elapses.
+    private func scheduleGateCheckNotification(step: ScheduleStep) async {
+        let notifTime = step.computedEndTime
+        guard notifTime > Date() else { return }
+
+        let stepType = step.stepType
+        let content = UNMutableNotificationContent()
+        content.title = stepType.label
+        content.body = StepTypeRegistry.notificationText(for: stepType.id, recipe: step.schedule?.recipe)
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        content.categoryIdentifier = Category.handsOnStep
+        content.userInfo = [
+            "stepTypeID": step.stepTypeID,
+            "sequenceIndex": step.sequenceIndex,
+        ]
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: max(notifTime.timeIntervalSinceNow, 1),
+            repeats: false
+        )
+
+        let identifier = "step-\(step.stepTypeID)-\(step.sequenceIndex)-check"
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: trigger
+        )
+
+        do {
+            try await center.add(request)
+            step.notificationIdentifier = identifier
+        } catch {}
     }
 }

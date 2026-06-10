@@ -1136,6 +1136,8 @@ final class ScheduleViewModel {
         glueLevainContinuation(after: step, in: schedule, now: now)
         promoteNextUpcoming(in: schedule)
 
+        unlockNotificationsAfterGate(step, in: schedule)
+
         if let next = nextStep(after: step, in: schedule), next.stepStatus == .active {
             let nextTypeID = StepTypeID(rawValue: next.stepTypeID)
             let skipAutoStart = nextTypeID == .buildLevain || nextTypeID == .activateStarter
@@ -1148,6 +1150,16 @@ final class ScheduleViewModel {
         }
 
         syncLiveActivity()
+    }
+
+    /// Completing a gate step unblocks the stretch of timeline behind it, whose
+    /// notifications were deliberately never scheduled (see `NotificationGate`).
+    /// The completion cascade usually reschedules, but only when the timeline moved.
+    private func unlockNotificationsAfterGate(_ step: ScheduleStep, in schedule: Schedule) {
+        guard schedule.pausedAt == nil,
+              NotificationGate.isGate(stepTypeID: step.stepTypeID) else { return }
+        let steps = allSteps(in: schedule)
+        Task { await NotificationService.shared.rescheduleNotifications(for: steps) }
     }
 
     /// Reverts the most-recently-completed step to active without moving any times.
