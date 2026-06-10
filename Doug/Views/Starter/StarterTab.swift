@@ -94,11 +94,12 @@ struct StarterTab: View {
     var body: some View {
         NavigationStack {
             List {
-                lifecycleSection
+                heroSection
+                plannedBakeSection
                 levainGuidanceSection
-                whatsNextSection
                 revivalSection
-                feedHistorySection
+                starterCareSection
+                recentFeedsSection
             }
             .scrollContentBackground(.hidden)
             .navigationTitle("Starter")
@@ -133,6 +134,9 @@ struct StarterTab: View {
             }
             .sheet(item: $viewModel.editingFeedLog) { log in
                 EditFeedLogSheet(log: log, profile: profile, allLogs: Array(feedLogs), viewModel: viewModel)
+            }
+            .sheet(item: $viewModel.markPeakTarget) { log in
+                MarkPeakSheet(log: log, viewModel: viewModel, profile: profile, allLogs: Array(feedLogs))
             }
             .alert("Delete Feed Log?", isPresented: Binding(
                 get: { feedLogToDelete != nil },
@@ -199,102 +203,73 @@ struct StarterTab: View {
         }
     }
 
-    // MARK: - Lifecycle Status
+    // MARK: - Hero
 
-    private var lifecycleSection: some View {
+    private var heroSection: some View {
         Section {
-            LifecycleStatusRow(
+            StarterHeroCard(
                 state: lifecycleState,
-                icon: lifecycleIcon,
-                color: lifecycleColor,
-                title: lifecycleTitle,
-                subtitle: lifecycleSubtitle(now: now)
+                healthStatus: viewModel.healthStatus(profile: profile, feedLogs: feedLogs),
+                storageType: profile?.starterStorageType ?? .fridge,
+                lastFeedDate: feedLogs.first?.timestamp,
+                risingSince: risingFeed?.timestamp,
+                expectedPeak: risingFeed.map {
+                    viewModel.expectedPeakDate(for: $0, profile: profile, allLogs: Array(feedLogs))
+                },
+                stateChangedAt: profile?.stateChangedAt,
+                bakeAwaitingLevainMix: bakeAwaitingLevainMix,
+                primaryAction: currentPrimaryAction,
+                now: now,
+                onAction: handleHeroAction
             )
 
-            starterDetailRow
-
-            typicalRiseRow
-
-            lifecycleActions
+            TypicalRiseRow(feedLogs: Array(feedLogs))
         } header: {
             Text("Starter")
         }
     }
 
-    private var starterDetailRow: some View {
-        HStack(spacing: 16) {
-            Label(
-                profile?.starterStorageType == .counter ? "Counter" : "Fridge",
-                systemImage: profile?.starterStorageType == .counter ? "sun.max" : "refrigerator"
-            )
-            let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
-            Label(
-                status == .readyToBake ? "Healthy" : status == .needsFeed ? "Needs feed" : "Needs revival",
-                systemImage: healthIcon(status)
-            )
-            .foregroundStyle(healthColor(status))
-            if let lastFeed = feedLogs.first {
-                Label {
-                    RelativeTimeLabel(date: lastFeed.timestamp)
-                } icon: {
-                    Image(systemName: "clock")
-                }
-            }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
-
-    /// Surfaces the personalised time-to-peak the scheduler plans with, so the user
-    /// can sanity-check it (and spot bad feed data) at a glance. Same input the
-    /// builder uses: activation feeds at the standard 1:5:5 levain ratio.
-    @ViewBuilder
-    private var typicalRiseRow: some View {
-        let peakProfile = StarterPeakProfile(
-            feedLogs: feedLogs.map { FeedLogInput(from: $0) },
-            intentFilter: .activation
+    private var currentPrimaryAction: StarterPrimaryAction {
+        viewModel.primaryAction(
+            lifecycleState: lifecycleState,
+            healthStatus: viewModel.healthStatus(profile: profile, feedLogs: feedLogs),
+            hasRisingFeed: risingFeed != nil,
+            hasUpcomingRecipe: upcomingRecipe != nil && activeBake == nil,
+            hasRecentLevainFeed: hasRecentLevainFeed,
+            bakeAwaitingLevainMix: bakeAwaitingLevainMix
         )
-        let latestActivationTemp = feedLogs
-            .first(where: { $0.starterFeedIntent == .activation })?
-            .kitchenTemperatureCelsius
+    }
 
-        switch peakProfile.typicalRise(ratio: .oneToFive, nearTemperatureCelsius: latestActivationTemp) {
-        case let .known(minutes, bracket, matchesCurrentTemp):
-            let hours = Int((minutes / 60).rounded())
-            if minutes > StarterPeakProfile.unusuallyLongRiseMinutes {
-                Label(
-                    "Typically ~\(hours)h to peak — unusually long, check your feed history",
-                    systemImage: "exclamationmark.triangle"
-                )
-                .font(.caption)
-                .foregroundStyle(.orange)
-            } else {
-                let context: String = if matchesCurrentTemp, let temp = latestActivationTemp {
-                    "at \(Int(temp.rounded()))°C"
-                } else {
-                    Self.bracketPhrase(bracket)
-                }
-                Label("Typically ~\(hours)h to peak \(context)", systemImage: "hourglass")
-                    .font(.caption)
-                    .foregroundStyle(.green)
+    private func handleHeroAction(_ action: StarterHeroAction) {
+        switch action {
+        case .activateAndFeed, .logActivationFeed:
+            viewModel.logFeedLockedIntent = .activation
+            viewModel.showLogFeed = true
+        case .markPeak:
+            viewModel.markPeakTarget = risingFeed
+        case .buildLevain:
+            if let recipe = upcomingRecipe {
+                let kitchenTemp = feedLogs.first?.kitchenTemperatureCelsius ?? 22
+                viewModel.prepareLevainBuild(for: recipe, kitchenTemp: kitchenTemp)
+                viewModel.showLogFeed = true
             }
-        case .insufficientData:
-            if feedLogs.contains(where: { $0.starterFeedIntent == .activation }) {
-                Label(
-                    "Log a couple more activations to learn your starter's rhythm",
-                    systemImage: "hourglass"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
+        case .feedAndRefrigerate:
+            viewModel.showPostBake = true
+        case .logMaintenanceFeed:
+            viewModel.showLogFeed = true
+        case .refrigerate:
+            showRefrigerateConfirm = true
         }
     }
 
-    private static func bracketPhrase(_ bracket: TemperatureBracket) -> String {
-        switch bracket {
-        case .cool: "in a cool kitchen"
-        case .moderate: "at room temp"
-        case .warm: "in a warm kitchen"
+    // MARK: - Planned Bake
+
+    @ViewBuilder
+    private var plannedBakeSection: some View {
+        if let schedule = schedules.first(where: {
+            $0.scheduleStatus == .planning || $0.scheduleStatus == .active
+        }) {
+            PlannedBakeCard(schedule: schedule)
         }
     }
 
@@ -314,89 +289,6 @@ struct StarterTab: View {
     /// wait to be used, not be rebuilt or fed & refrigerated.
     private var bakeAwaitingLevainMix: Bool {
         activeBake != nil && !levainUsedInActiveBake
-    }
-
-    @ViewBuilder
-    private var lifecycleActions: some View {
-        // While a bake is mid-flight and the levain isn't mixed in yet, the only
-        // .active action ("Feed & Refrigerate") would put the culture away before
-        // it's used — so for .active we show a wait note instead of that button.
-        // Other states keep their controls so the starter is never trapped with no
-        // way to re-activate or feed (the original dead-end this section had).
-        if bakeAwaitingLevainMix, lifecycleState == .active {
-            HStack(spacing: 8) {
-                Image(systemName: "oven")
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Bake in progress")
-                        .font(.subheadline.weight(.medium))
-                    Text("Feed after the levain is mixed in")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } else {
-            lifecycleActionsContent
-        }
-    }
-
-    @ViewBuilder
-    private var lifecycleActionsContent: some View {
-        switch lifecycleState {
-        case .dormant:
-            Button {
-                if let profile {
-                    viewModel.activate(profile: profile)
-                }
-            } label: {
-                Text("Activate for Bake")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
-            Button {
-                viewModel.showLogFeed = true
-            } label: {
-                Label("Log Maintenance Feed", systemImage: "snowflake")
-            }
-        case .activating:
-            if risingFeed != nil {
-                Button {
-                    if let feed = risingFeed {
-                        viewModel.markPeak(for: feed, profile: profile, allLogs: Array(feedLogs))
-                    }
-                } label: {
-                    Text("Mark Peak")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-            } else {
-                Button {
-                    viewModel.showLogFeed = true
-                } label: {
-                    Text("Log Activation Feed")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-            }
-            Button {
-                showRefrigerateConfirm = true
-            } label: {
-                Label("Put Back in Fridge", systemImage: "snowflake")
-            }
-        case .active:
-            Button {
-                viewModel.showPostBake = true
-            } label: {
-                Text("Feed & Refrigerate")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-        case .reviving:
-            EmptyView()
-        }
     }
 
     // MARK: - Levain Build Guidance
@@ -464,13 +356,14 @@ struct StarterTab: View {
         }
     }
 
-    // MARK: - What's Next (unified section)
+    // MARK: - Starter Care (maintenance rhythm + plan-ahead)
 
     @ViewBuilder
-    private var whatsNextSection: some View {
-        if lifecycleState == .dormant, let bakeStart = upcomingBakeStart {
-            bakeAwarenessContent(bakeStart: bakeStart)
-        } else if lifecycleState == .dormant, upcomingBakeStart == nil {
+    private var starterCareSection: some View {
+        // A dormant starter with a bake on the books gets its context from the
+        // hero ("Activate & Feed") and the planned-bake card, so this section
+        // only carries the no-bake maintenance rhythm and general suggestions.
+        if lifecycleState == .dormant, upcomingBakeStart == nil {
             if let suggestion = currentSuggestion {
                 maintenanceFeedContent(suggestion)
             }
@@ -480,7 +373,7 @@ struct StarterTab: View {
                 availabilities: Array(availabilities),
                 windows: Array(windows)
             )
-        } else if activeRevivalPlan == nil, let suggestion = currentSuggestion {
+        } else if lifecycleState != .dormant, activeRevivalPlan == nil, let suggestion = currentSuggestion {
             suggestionContent(suggestion)
         }
     }
@@ -512,39 +405,6 @@ struct StarterTab: View {
                 Text("Your starter is overdue for a feed.")
                     .foregroundStyle(.orange)
             }
-        }
-    }
-
-    private func bakeAwarenessContent(bakeStart: Date) -> some View {
-        Section {
-            HStack(spacing: 12) {
-                Image(systemName: "calendar.badge.clock")
-                    .foregroundStyle(.orange)
-                    .font(.title3)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Upcoming bake needs active starter")
-                        .font(.subheadline.bold())
-                    Text(
-                        "Feed your starter on the counter by \(bakeStart.addingTimeInterval(-6 * 3600), format: .dateTime.weekday(.wide).hour().minute())"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            Button {
-                if let profile {
-                    viewModel.activate(profile: profile)
-                }
-            } label: {
-                Text("Activate Now")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
-        } header: {
-            Text("What's Next")
         }
     }
 
@@ -607,10 +467,12 @@ struct StarterTab: View {
         }
     }
 
-    // MARK: - Feed History
+    // MARK: - Recent Feeds
+
+    private static let recentFeedCount = 4
 
     @ViewBuilder
-    private var feedHistorySection: some View {
+    private var recentFeedsSection: some View {
         if feedLogs.isEmpty {
             ContentUnavailableView(
                 "No Feeds Logged",
@@ -619,9 +481,9 @@ struct StarterTab: View {
             )
         } else {
             Section {
-                ForEach(feedLogs) { log in
+                ForEach(feedLogs.prefix(Self.recentFeedCount)) { log in
                     FeedLogRow(log: log) {
-                        viewModel.markPeak(for: log, profile: profile, allLogs: feedLogs)
+                        viewModel.markPeakTarget = log
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
@@ -637,112 +499,20 @@ struct StarterTab: View {
                         .tint(.blue)
                     }
                 }
+
+                if feedLogs.count > Self.recentFeedCount {
+                    NavigationLink {
+                        FeedHistoryView(viewModel: viewModel, profile: profile)
+                    } label: {
+                        Text("See All (\(feedLogs.count))")
+                            .font(.subheadline)
+                            .foregroundStyle(.tint)
+                    }
+                }
             } header: {
-                Text("Feed History")
+                Text("Recent Feeds")
             }
         }
-    }
-
-    // MARK: - Lifecycle Helpers
-
-    private var lifecycleIcon: String {
-        switch lifecycleState {
-        case .dormant:
-            let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
-            return healthIcon(status)
-        case .activating: return "flame.fill"
-        case .active: return "checkmark.circle.fill"
-        case .reviving: return "arrow.triangle.2.circlepath.circle.fill"
-        }
-    }
-
-    private var lifecycleColor: Color {
-        switch lifecycleState {
-        case .dormant:
-            let status = viewModel.healthStatus(profile: profile, feedLogs: feedLogs)
-            return healthColor(status)
-        case .activating: return .orange
-        case .active: return DougTheme.starterReady
-        case .reviving: return .accentColor
-        }
-    }
-
-    private var lifecycleTitle: String {
-        switch lifecycleState {
-        case .dormant: "In the Fridge"
-        case .activating: risingFeed != nil ? "Waking Up" : "Activating"
-        case .active: bakeAwaitingLevainMix ? "Powering Your Bake" : "Ready to Bake!"
-        case .reviving: "In Revival"
-        }
-    }
-
-    private func lifecycleSubtitle(now: Date) -> String {
-        switch lifecycleState {
-        case .dormant:
-            if let lastFeed = feedLogs.first {
-                let days = Int(now.timeIntervalSince(lastFeed.timestamp) / 86400)
-                return "Last fed \(days) day\(days == 1 ? "" : "s") ago"
-            }
-            return "No feeds logged yet"
-        case .activating:
-            if let feed = risingFeed {
-                let hours = Int(now.timeIntervalSince(feed.timestamp) / 3600)
-                return "Rising on the counter — \(hours)h since feed"
-            }
-            return "Feed your starter on the counter to wake it up"
-        case .active:
-            let hours = Int(now.timeIntervalSince(profile?.stateChangedAt ?? now) / 3600)
-            if bakeAwaitingLevainMix {
-                return "Active for \(hours)h — feed & refrigerate once it's mixed into your dough"
-            }
-            return "Active for \(hours)h — build your levain or feed & refrigerate"
-        case .reviving:
-            return "Your starter is rebuilding strength. Follow the revival plan below."
-        }
-    }
-
-    private func healthIcon(_ status: StarterHealthStatus) -> String {
-        switch status {
-        case .readyToBake: "checkmark.circle.fill"
-        case .needsFeed: "exclamationmark.circle.fill"
-        case .needsRevival: "xmark.circle.fill"
-        }
-    }
-
-    private func healthColor(_ status: StarterHealthStatus) -> Color {
-        switch status {
-        case .readyToBake: DougTheme.starterReady
-        case .needsFeed: DougTheme.starterNeedsFeed
-        case .needsRevival: DougTheme.starterNeedsRevival
-        }
-    }
-}
-
-// MARK: - Lifecycle Status Row
-
-private struct LifecycleStatusRow: View {
-    let state: StarterLifecycleState
-    let icon: String
-    let color: Color
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-                .font(.title2)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .padding(.vertical, 4)
     }
 }
 

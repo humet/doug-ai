@@ -406,6 +406,19 @@ enum StepTypeRegistry {
         return type(for: id).notificationText
     }
 
+    /// Completion-button copy for steps whose tap confirms a specific physical
+    /// act with feed-logging side effects — naming the act beats a generic
+    /// "Done" (matches the "Bulk Done" / "Bread Out" pattern elsewhere).
+    /// Nil → caller falls back to its generic label.
+    static func completionLabel(for id: StepTypeID) -> String? {
+        switch id {
+        case .activateStarter: "Starter Fed"
+        case .buildLevain: "Levain Mixed"
+        case .refeedAndRefrigerate: "Fed & Refrigerated"
+        default: nil
+        }
+    }
+
     /// Lower-cased names of the extras a recipe works in during the Mix step.
     private static func mixExtraNames(for recipe: Recipe?) -> [String] {
         (recipe?.ingredients.extras ?? [])

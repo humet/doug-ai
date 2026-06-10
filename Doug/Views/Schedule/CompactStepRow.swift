@@ -18,6 +18,11 @@ struct CompactStepRow: View {
                     Text(step.stepType.label)
                         .font(isSubStep ? .caption.weight(.medium) : .subheadline.weight(.medium))
                     StepCountdownLabel(step: step, referenceDate: referenceDate)
+                    if let summary = levainBuildSummary {
+                        Text(summary)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 if hasConflict {
@@ -57,6 +62,21 @@ struct CompactStepRow: View {
     private var ovenTemperature: Int? {
         guard [.preheat, .bakeCovered, .bakeUncovered].contains(stepTypeIDEnum) else { return nil }
         return step.schedule?.recipe.bakeTemperature(for: stepTypeIDEnum)
+    }
+
+    /// One-line measurements for an upcoming Build Levain step, so the amounts
+    /// are visible before the step opens.
+    private var levainBuildSummary: String? {
+        guard stepTypeIDEnum == .buildLevain,
+              step.stepStatus == .upcoming,
+              let schedule = step.schedule else { return nil }
+        let build = LevainBuildCalculator.calculate(.init(
+            levainGramsNeeded: schedule.recipe.ingredients.levainGrams,
+            baseRatio: schedule.recipe.levainBuildRatio,
+            referenceTemp: schedule.recipe.referenceTemperatureCelsius,
+            kitchenTemp: schedule.kitchenTemperatureCelsius
+        ))
+        return "\(Int(build.starterGrams))g starter + \(Int(build.flourGrams))g flour + \(Int(build.waterGrams))g water"
     }
 
     private var statusDot: some View {

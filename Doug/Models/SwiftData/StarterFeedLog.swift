@@ -48,6 +48,14 @@ final class StarterFeedLog {
         timeToPeakMinutes = StarterPeakProfile.isPlausibleTimeToPeak(minutes) ? minutes : nil
     }
 
+    /// Records an estimated peak ("it peaked while I slept"): timestamp only.
+    /// `timeToPeakMinutes` stays nil so an estimate never feeds the scheduler's
+    /// time-to-peak averages.
+    func markEstimatedPeak(at peakTime: Date) {
+        peakTimestamp = peakTime
+        timeToPeakMinutes = nil
+    }
+
     var ratioDescription: String {
         "\(ratioStarter):\(ratioFlour):\(ratioWater)"
     }

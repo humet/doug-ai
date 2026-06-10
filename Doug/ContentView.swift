@@ -5,6 +5,7 @@ struct ContentView: View {
     @Query private var availabilities: [UserAvailability]
     @State private var hasCompletedOnboarding = false
     @State private var router = NotificationRouter.shared
+    @State private var toasts = ToastCenter.shared
 
     private var needsOnboarding: Bool {
         availabilities.isEmpty && !hasCompletedOnboarding
@@ -36,6 +37,18 @@ struct ContentView: View {
             }
             .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .background(DougTheme.warmCream.ignoresSafeArea())
+            .overlay(alignment: .bottom) {
+                if let message = toasts.message {
+                    ToastBanner(message: message)
+                        .padding(.bottom, 60) // clear the tab bar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(duration: 0.3), value: toasts.message)
+            // Success tap when a confirmation appears (not when it clears).
+            .sensoryFeedback(.success, trigger: toasts.message) { _, newValue in
+                newValue != nil
+            }
         }
     }
 }

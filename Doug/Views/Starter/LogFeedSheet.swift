@@ -14,6 +14,13 @@ struct LogFeedSheet: View {
         viewModel.pendingLevainBuild != nil
     }
 
+    /// The merged "Activate & Feed" flow opens this sheet locked to the
+    /// activation intent — one guided step instead of separate activate and
+    /// log-feed chores.
+    private var isLockedActivation: Bool {
+        viewModel.logFeedLockedIntent == .activation
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -29,15 +36,34 @@ struct LogFeedSheet: View {
                                 Text("Needs \(Int(build.totalGrams))g total — leftover goes to the fridge")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Text("~\(String(format: "%.0f", build.estimatedPeakHours))h to peak at \(Int(viewModel.feedKitchenTemp))°C")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Text(
+                                    "~\(String(format: "%.0f", build.estimatedPeakHours))h to peak at \(Int(viewModel.feedKitchenTemp))°C"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             }
                         }
                     }
                 }
 
-                if !isLevainBuild {
+                if isLockedActivation {
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "flame")
+                                .font(.title3)
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Wake your starter up")
+                                    .font(.subheadline.bold())
+                                Text(
+                                    "Take it out of the fridge and feed it on the counter. Mark the peak when it's domed and bubbly."
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } else if !isLevainBuild {
                     Section {
                         Picker("Feeding", selection: $viewModel.feedIntent) {
                             Text("To activate").tag(FeedIntent.activation)
@@ -129,8 +155,16 @@ struct LogFeedSheet: View {
                                 in: 1 ... 20
                             )
                         } else {
-                            Stepper("Flour: \(viewModel.feedRatioFlour)", value: $viewModel.feedRatioFlour, in: 1 ... 20)
-                            Stepper("Water: \(viewModel.feedRatioWater)", value: $viewModel.feedRatioWater, in: 1 ... 20)
+                            Stepper(
+                                "Flour: \(viewModel.feedRatioFlour)",
+                                value: $viewModel.feedRatioFlour,
+                                in: 1 ... 20
+                            )
+                            Stepper(
+                                "Water: \(viewModel.feedRatioWater)",
+                                value: $viewModel.feedRatioWater,
+                                in: 1 ... 20
+                            )
                         }
                     }
                 } header: {
@@ -161,10 +195,13 @@ struct LogFeedSheet: View {
 
                 howToFeedSection
             }
-            .navigationTitle("Log Feed")
+            .navigationTitle(isLockedActivation ? "Activate Starter" : "Log Feed")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        viewModel.logFeedLockedIntent = nil
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
@@ -180,7 +217,7 @@ struct LogFeedSheet: View {
                 if isLevainBuild {
                     // prepareLevainBuild already set ratio and grams
                 } else {
-                    viewModel.feedIntent = defaultIntent
+                    viewModel.feedIntent = isLockedActivation ? .activation : defaultIntent
                     applyRatioDefaults(for: viewModel.feedIntent)
                 }
                 if viewModel.logFeedStarterGrams.isEmpty {

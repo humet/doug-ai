@@ -41,10 +41,3 @@ final class ScheduleStep {
         StepTypeRegistry.type(for: StepTypeID(rawValue: stepTypeID)!)
     }
 }
-
-enum StepStatus: String, Codable {
-    case upcoming
-    case active
-    case done
-    case skipped
-}

@@ -146,4 +146,59 @@ struct TemperatureCalculatorTests {
         )
         #expect(helper == direct)
     }
+
+    // MARK: - Activation Water Temperature
+
+    @Test func fridgeColdStarterGetsWarmNotScaldingWater() {
+        // 1:5:5 feed, 22°C kitchen, 4°C starter, targeting 24+2=26°C:
+        // water = (11×26 − 1×4 − 5×22) / 5 = 34.4°C — warm, well under the
+        // 50°C+ the equal-weights dough formula would demand here.
+        let water = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 24,
+            kitchenTemp: 22,
+            starterTempCelsius: TemperatureCalculator.fridgeStarterTempCelsius,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5
+        )
+        #expect(abs(water - 34.4) < 0.01)
+    }
+
+    @Test func counterStarterNeedsCoolerWaterThanFridgeStarter() {
+        let fridge = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: 22,
+            starterTempCelsius: TemperatureCalculator.fridgeStarterTempCelsius,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5
+        )
+        // On the counter the starter is already at kitchen temp:
+        // water = (11×26 − 1×22 − 5×22) / 5 = 30.8°C
+        let counter = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: 22,
+            starterTempCelsius: 22,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5
+        )
+        #expect(abs(counter - 30.8) < 0.01)
+        #expect(counter < fridge)
+    }
+
+    @Test func activationWaterIsClampedToYeastSafeCeiling() {
+        // A cold kitchen and a fast 1:2:2 ratio push the raw answer past the
+        // ceiling — the small water mass must never approach yeast-stress temps.
+        let water = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 26,
+            kitchenTemp: 16,
+            starterTempCelsius: TemperatureCalculator.fridgeStarterTempCelsius,
+            ratioStarter: 1, ratioFlour: 2, ratioWater: 2
+        )
+        #expect(water == TemperatureCalculator.activationWaterMaxCelsius)
+    }
+
+    @Test func warmKitchenWarmStarterStaysModerate() {
+        // 28°C kitchen, counter starter: water = (11×26 − 1×28 − 5×28) / 5 = 23.6°C
+        let water = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 24,
+            kitchenTemp: 28,
+            starterTempCelsius: 28,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5
+        )
+        #expect(abs(water - 23.6) < 0.01)
+    }
 }

@@ -126,6 +126,50 @@ enum TemperatureCalculator {
         )
     }
 
+    /// Assumed temperature of a starter coming straight from the fridge (°C).
+    static let fridgeStarterTempCelsius = 4.0
+
+    /// Ceiling for activation feed water. Water is ~5/11ths of a small culture's
+    /// mass, so unlike dough water (clamped at 45°C) anything past the high 30s
+    /// risks stressing the yeast rather than waking it.
+    static let activationWaterMaxCelsius = 38.0
+
+    /// Recommended water temperature for an activation feed.
+    ///
+    /// Unlike `desiredWaterTemperature`'s equal-weights factor method (calibrated
+    /// for dough), this is mass-weighted by the actual feed ratio — in a 1:5:5
+    /// feed the starter is only 1/11th of the mass, so a fridge-cold starter
+    /// needs warm-not-scalding water, not the 50°C+ the equal-weights formula
+    /// would demand. Flour is assumed to be at kitchen temperature.
+    ///
+    /// Targets `referenceDoughTemp + levainTargetOffsetCelsius`, same as a
+    /// levain build: the small culture should sit slightly warm to stay in the
+    /// active fermentation zone through its rise.
+    ///
+    /// - Parameters:
+    ///   - referenceDoughTemp: The recipe's reference/target dough temperature (°C).
+    ///   - kitchenTemp: Current kitchen temperature (°C), used for the flour.
+    ///   - starterTempCelsius: The starter's current temperature — fridge-cold
+    ///     (`fridgeStarterTempCelsius`) or kitchen temperature when on the counter.
+    ///   - ratioStarter/ratioFlour/ratioWater: The feed ratio by mass.
+    /// - Returns: Recommended water temperature in °C, clamped to 2...38.
+    static func desiredActivationWaterTemperature(
+        referenceDoughTemp: Double,
+        kitchenTemp: Double,
+        starterTempCelsius: Double,
+        ratioStarter: Int,
+        ratioFlour: Int,
+        ratioWater: Int
+    ) -> Double {
+        let target = referenceDoughTemp + levainTargetOffsetCelsius
+        let starter = Double(max(ratioStarter, 1))
+        let flour = Double(max(ratioFlour, 0))
+        let water = Double(max(ratioWater, 1))
+        let total = starter + flour + water
+        let raw = (total * target - starter * starterTempCelsius - flour * kitchenTemp) / water
+        return min(max(raw, 2.0), activationWaterMaxCelsius)
+    }
+
     /// Computes the effective duration of a method step, applying temperature
     /// adjustment if the step type is temperature-adjusted.
     ///
