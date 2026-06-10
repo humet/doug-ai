@@ -406,6 +406,19 @@ enum StepTypeRegistry {
         return type(for: id).notificationText
     }
 
+    /// Notification body for a gate step's check-in, which fires when the
+    /// predicted timer elapses — the moment to judge the dough, not a status
+    /// update. Steps whose `notificationText` is already check-phrased (the
+    /// levain gates) fall through to it.
+    static func gateCheckNotificationText(for id: StepTypeID) -> String {
+        switch id {
+        case .bulkFerment:
+            "Check your dough — bulk ferment may be done. Look for a 50–75% rise, an airy feel, and bubbles on the surface and sides."
+        default:
+            type(for: id).notificationText
+        }
+    }
+
     /// Completion-button copy for steps whose tap confirms a specific physical
     /// act with feed-logging side effects — naming the act beats a generic
     /// "Done" (matches the "Bulk Done" / "Bread Out" pattern elsewhere).

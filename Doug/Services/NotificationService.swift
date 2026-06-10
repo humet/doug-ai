@@ -14,6 +14,7 @@ final class NotificationService {
         static let coldRetardEnd = "COLD_RETARD_END"
         static let bakePhase = "BAKE_PHASE"
         static let starterFeed = "STARTER_FEED"
+        static let revivalMix = "REVIVAL_MIX"
     }
 
     /// Action identifiers for interactive notifications.
@@ -41,7 +42,7 @@ final class NotificationService {
     func registerCategories() {
         let logFeedAction = UNNotificationAction(
             identifier: Action.logFeed,
-            title: "Log Feed",
+            title: "Log Feed…",
             options: [.foreground]
         )
         let snoozeFeedAction = UNNotificationAction(
@@ -73,7 +74,20 @@ final class NotificationService {
             intentIdentifiers: [],
             options: []
         )
+        let coldRetardEndCategory = UNNotificationCategory(
+            identifier: Category.coldRetardEnd,
+            actions: [snoozeStepAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        let revivalMixCategory = UNNotificationCategory(
+            identifier: Category.revivalMix,
+            actions: [snoozeStepAction],
+            intentIdentifiers: [],
+            options: []
+        )
 
+        // No snooze on bake phases — the bread is on a physical timeline.
         let markDoneAction = UNNotificationAction(
             identifier: Action.markBakePhaseDone,
             title: "Done",
@@ -81,7 +95,7 @@ final class NotificationService {
         )
         let bakePhaseCategory = UNNotificationCategory(
             identifier: Category.bakePhase,
-            actions: [markDoneAction, snoozeStepAction],
+            actions: [markDoneAction],
             intentIdentifiers: [],
             options: []
         )
@@ -90,8 +104,29 @@ final class NotificationService {
             starterFeedCategory,
             handsOnStepCategory,
             foldStepCategory,
+            coldRetardEndCategory,
+            revivalMixCategory,
             bakePhaseCategory,
         ])
+    }
+
+    // MARK: - Snooze
+
+    /// Re-schedules an already-delivered notification's content `minutes` from
+    /// now. Reuses the original identifier so the existing cancel paths (step
+    /// notification ids, stable reminder ids) still match the snoozed copy, and
+    /// repeated snoozes replace rather than stack.
+    func snoozeDelivered(identifier: String, content: UNNotificationContent, minutes: Int) async {
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: Double(minutes) * 60,
+            repeats: false
+        )
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: trigger
+        )
+        try? await center.add(request)
     }
 
     // MARK: - Schedule Notifications
@@ -115,7 +150,11 @@ final class NotificationService {
             }
 
             if stepType.classification == .passiveFlexible {
-                await scheduleFlexibleCompletionNotification(step: step)
+                if NotificationPolicy.shouldScheduleFlexibleCompletion(
+                    nextTopLevelStepTypeID: nextTopLevelStepTypeID(after: step)
+                ) {
+                    await scheduleFlexibleCompletionNotification(step: step)
+                }
                 continue
             }
 
@@ -374,7 +413,11 @@ final class NotificationService {
         content.title = "Time to mix your starter"
         content.body = title
         content.sound = .default
-        content.categoryIdentifier = Category.starterFeed
+        content.categoryIdentifier = Category.revivalMix
+        content.userInfo = [
+            "planID": planID,
+            "stepIndex": stepIndex,
+        ]
 
         let trigger = UNTimeIntervalNotificationTrigger(
             timeInterval: max(date.timeIntervalSinceNow, 1),
@@ -451,6 +494,20 @@ extension NotificationService {
         return steps.filter { ($0.parentStep ?? $0).sequenceIndex <= gateSequenceIndex }
     }
 
+    /// The top-level step that immediately follows `step` in its schedule,
+    /// used to decide whether a flexible step's completion notification would
+    /// double up with the next step's before-start reminder.
+    private func nextTopLevelStepTypeID(after step: ScheduleStep) -> String? {
+        guard let schedule = step.schedule else { return nil }
+        let topLevel = schedule.steps
+            .filter { $0.parentStep == nil }
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+        guard let idx = topLevel.firstIndex(where: { $0 === step }) else { return nil }
+        let next = topLevel.index(after: idx)
+        guard next < topLevel.endIndex else { return nil }
+        return topLevel[next].stepTypeID
+    }
+
     /// A gate step ends on the baker's judgement, so the only notification it gets
     /// is a check-in when its predicted timer elapses.
     private func scheduleGateCheckNotification(step: ScheduleStep) async {
@@ -460,7 +517,7 @@ extension NotificationService {
         let stepType = step.stepType
         let content = UNMutableNotificationContent()
         content.title = stepType.label
-        content.body = StepTypeRegistry.notificationText(for: stepType.id, recipe: step.schedule?.recipe)
+        content.body = StepTypeRegistry.gateCheckNotificationText(for: stepType.id)
         content.sound = .default
         content.interruptionLevel = .timeSensitive
         content.categoryIdentifier = Category.handsOnStep

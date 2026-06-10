@@ -10,7 +10,13 @@ struct DougApp: App {
     init() {
         let container = Self.makeContainer()
         sharedModelContainer = container
-        _notificationHandler = State(initialValue: NotificationActionHandler(modelContainer: container))
+        let handler = NotificationActionHandler(modelContainer: container)
+        _notificationHandler = State(initialValue: handler)
+        // The delegate must be live before launch finishes: notification
+        // actions (e.g. snooze) background-launch the app and deliver the
+        // response immediately — a .task-assigned delegate would miss them.
+        UNUserNotificationCenter.current().delegate = handler
+        NotificationService.shared.registerCategories()
     }
 
     private static func makeContainer() -> ModelContainer {
@@ -40,8 +46,6 @@ struct DougApp: App {
         WindowGroup {
             ContentView()
                 .task {
-                    NotificationService.shared.registerCategories()
-                    UNUserNotificationCenter.current().delegate = notificationHandler
                     reconcileLiveActivities()
                 }
         }

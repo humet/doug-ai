@@ -21,18 +21,29 @@ final class NotificationRouter {
         case schedule, starter, history, settings
     }
 
+    /// Starter-tab work requested from a notification. StarterViewModel is
+    /// recreated with the tab, so StarterTab consumes this directly (on appear
+    /// and on change) rather than via view-model registration.
+    enum PendingStarterAction: Equatable {
+        case logFeed
+    }
+
     var selectedTab: Tab = .schedule
 
     /// Set by "Bake again" in History to ask the Schedule tab to start planning a
     /// recipe. The Schedule tab consumes and clears it.
     var pendingPlanRecipeID: RecipeID?
 
+    var pendingStarterAction: PendingStarterAction?
+
     private weak var scheduleViewModel: ScheduleViewModel?
     private var bufferedFoldEntry: PendingFoldEntry?
     private var bufferedStepDetail: PendingStepDetail?
-    private var bufferedSnooze: PendingStepDetail?
+    private var bufferedBakeDone: PendingStepDetail?
 
-    private init() {}
+    /// Internal (not private) so tests can exercise fresh instances; production
+    /// code uses `shared`.
+    init() {}
 
     func registerScheduleViewModel(_ viewModel: ScheduleViewModel) {
         scheduleViewModel = viewModel
@@ -44,9 +55,12 @@ final class NotificationRouter {
             viewModel.pendingStepDetail = buffered
             bufferedStepDetail = nil
         }
-        if let buffered = bufferedSnooze {
-            applySnooze(buffered, on: viewModel)
-            bufferedSnooze = nil
+        if let buffered = bufferedBakeDone {
+            // Registration happens in ScheduleViewModel.init, before
+            // activeSchedule is restored — the view model drains this once
+            // restoreActiveSchedule has a schedule to search.
+            viewModel.pendingBakeDone = buffered
+            bufferedBakeDone = nil
         }
     }
 
@@ -70,45 +84,29 @@ final class NotificationRouter {
         }
     }
 
-    /// Applies a 30-minute snooze to a scheduled step (hands-on or fold) from a notification action.
-    /// If the ScheduleViewModel is not yet attached (app was cold-launched), the request buffers
-    /// and is applied once the view model registers.
-    func snoozeStep(stepTypeID: String, sequenceIndex: Int) {
-        let entry = PendingStepDetail(stepTypeID: stepTypeID, sequenceIndex: sequenceIndex)
-        if let viewModel = scheduleViewModel {
-            applySnooze(entry, on: viewModel)
-        } else {
-            bufferedSnooze = entry
-        }
-    }
-
-    private func applySnooze(_ entry: PendingStepDetail, on viewModel: ScheduleViewModel) {
-        guard let schedule = viewModel.activeSchedule else { return }
-        let step = findStep(in: schedule, matching: entry)
-        guard let step, let context = step.modelContext else { return }
-        viewModel.extendStep(step, byMinutes: 30, modelContext: context)
-    }
-
-    private func findStep(in schedule: Schedule, matching entry: PendingStepDetail) -> ScheduleStep? {
-        let allSteps = schedule.steps + schedule.steps.flatMap(\.subSteps)
-        return allSteps.first {
-            $0.stepTypeID == entry.stepTypeID && $0.sequenceIndex == entry.sequenceIndex
-        }
-    }
-
     func markBakeSubStepDone(stepTypeID: String, sequenceIndex: Int) {
         selectedTab = .schedule
-        guard let viewModel = scheduleViewModel,
-              let schedule = viewModel.activeSchedule else { return }
-        let step = findStep(in: schedule, matching: PendingStepDetail(
-            stepTypeID: stepTypeID, sequenceIndex: sequenceIndex
-        ))
-        guard let step, let context = step.modelContext else { return }
-        viewModel.markStepDone(step, modelContext: context)
+        let entry = PendingStepDetail(stepTypeID: stepTypeID, sequenceIndex: sequenceIndex)
+        if let viewModel = scheduleViewModel {
+            viewModel.pendingBakeDone = entry
+            viewModel.consumePendingBakeDone()
+        } else {
+            bufferedBakeDone = entry
+        }
     }
 
     func focusScheduleTab() {
         selectedTab = .schedule
+    }
+
+    func focusStarterTab() {
+        selectedTab = .starter
+    }
+
+    /// Switches to the Starter tab and asks it to open the log-feed sheet.
+    func requestStarterLogFeed() {
+        selectedTab = .starter
+        pendingStarterAction = .logFeed
     }
 
     /// Switches to the Schedule tab and requests the plan flow for `recipeID`.

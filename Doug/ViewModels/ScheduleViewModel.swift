@@ -66,6 +66,9 @@ final class ScheduleViewModel {
     var starterHealthBlock: StarterHealthStatus?
     var pendingFoldEntry: PendingFoldEntry?
     var pendingStepDetail: PendingStepDetail?
+    /// A bake-phase "Done" notification action waiting for the active schedule
+    /// to be available (cold launch delivers the action before restore runs).
+    var pendingBakeDone: PendingStepDetail?
     var bulkFermentTargetReached = false
     var lastScheduleAdjustment: ScheduleAdjustment?
 
@@ -197,9 +200,23 @@ final class ScheduleViewModel {
             if let active = orderedTopLevelSteps(in: schedule).first(where: { $0.stepStatus == .active }) {
                 initializeFeedDefaults(for: active)
             }
+            consumePendingBakeDone()
             syncLiveActivity()
             validateConflicts(in: schedule)
         }
+    }
+
+    /// Applies a buffered bake-phase "Done" notification action once the active
+    /// schedule is available. Searches sub-steps too — bake phases live under
+    /// the bake step.
+    func consumePendingBakeDone() {
+        guard let entry = pendingBakeDone, let schedule = activeSchedule else { return }
+        let allSteps = schedule.steps + schedule.steps.flatMap(\.subSteps)
+        guard let step = allSteps.first(where: {
+            $0.stepTypeID == entry.stepTypeID && $0.sequenceIndex == entry.sequenceIndex
+        }), let context = step.modelContext else { return }
+        pendingBakeDone = nil
+        markStepDone(step, modelContext: context)
     }
 
     private func cleanupStaleSchedules(modelContext: ModelContext) {

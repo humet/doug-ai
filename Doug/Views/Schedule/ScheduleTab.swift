@@ -9,6 +9,7 @@ struct ScheduleTab: View {
         viewModel.startObservingStarterEvents()
         return viewModel
     }()
+
     @State private var router = NotificationRouter.shared
     @State private var showConfig = false
     @State private var detailStep: ScheduleStep?
@@ -235,6 +236,9 @@ struct ScheduleTab: View {
                 }
                 .task {
                     viewModel.restoreActiveSchedule(modelContext: modelContext)
+                    // A notification tap can set the pending detail before this
+                    // view exists (cold launch) — onChange alone would miss it.
+                    consumePendingStepDetail()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
@@ -250,17 +254,21 @@ struct ScheduleTab: View {
                     guard viewModel.activeSchedule == nil else { return }
                     planBake(for: recipeID)
                 }
-                .onChange(of: viewModel.pendingStepDetail) { _, newValue in
-                    guard let detail = newValue,
-                          let schedule = viewModel.activeSchedule,
-                          let step = schedule.steps.first(where: {
-                              $0.stepTypeID == detail.stepTypeID
-                                  && $0.sequenceIndex == detail.sequenceIndex
-                          }) else { return }
-                    detailStep = step
-                    viewModel.pendingStepDetail = nil
+                .onChange(of: viewModel.pendingStepDetail) { _, _ in
+                    consumePendingStepDetail()
                 }
         }
+    }
+
+    private func consumePendingStepDetail() {
+        guard let detail = viewModel.pendingStepDetail,
+              let schedule = viewModel.activeSchedule,
+              let step = schedule.steps.first(where: {
+                  $0.stepTypeID == detail.stepTypeID
+                      && $0.sequenceIndex == detail.sequenceIndex
+              }) else { return }
+        detailStep = step
+        viewModel.pendingStepDetail = nil
     }
 
     // MARK: - Main content
@@ -367,10 +375,13 @@ struct ScheduleTab: View {
                         Button {
                             viewModel.showFlexStepSlider = true
                         } label: {
-                            Label("Adjust \(StepTypeRegistry.type(for: stepID).label)", systemImage: "clock.arrow.2.circlepath")
-                                .font(.subheadline)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
+                            Label(
+                                "Adjust \(StepTypeRegistry.type(for: stepID).label)",
+                                systemImage: "clock.arrow.2.circlepath"
+                            )
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
                         }
                         .adaptiveGlassButtonStyle()
                     }
@@ -430,7 +441,10 @@ struct ScheduleTab: View {
             }
             let restArray = Array(rest)
             ForEach(Array(restArray.enumerated()), id: \.element.id) { index, step in
-                if index > 0, !Calendar.current.isDate(restArray[index - 1].computedStartTime, inSameDayAs: step.computedStartTime) {
+                if index > 0, !Calendar.current.isDate(
+                    restArray[index - 1].computedStartTime,
+                    inSameDayAs: step.computedStartTime
+                ) {
                     OvernightDivider(from: restArray[index - 1].computedStartTime, to: step.computedStartTime)
                 }
 

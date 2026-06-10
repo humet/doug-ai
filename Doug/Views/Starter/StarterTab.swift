@@ -4,6 +4,7 @@ import SwiftUI
 
 struct StarterTab: View {
     @State private var viewModel = StarterViewModel()
+    @State private var router = NotificationRouter.shared
 
     @Query(sort: \StarterFeedLog.timestamp, order: .reverse)
     private var feedLogs: [StarterFeedLog]
@@ -190,6 +191,12 @@ struct StarterTab: View {
                 if let profile {
                     viewModel.evaluateLifecycle(profile: profile, feedLogs: Array(feedLogs))
                 }
+                // A notification tap can set the pending action before this tab
+                // exists (cold launch) — onChange alone would miss it.
+                consumePendingStarterAction()
+            }
+            .onChange(of: router.pendingStarterAction) { _, _ in
+                consumePendingStarterAction()
             }
             .task(id: currentSuggestion?.time) {
                 await viewModel.syncFeedReminder(
@@ -200,6 +207,15 @@ struct StarterTab: View {
             .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { tick in
                 now = tick
             }
+        }
+    }
+
+    private func consumePendingStarterAction() {
+        guard let action = router.pendingStarterAction else { return }
+        router.pendingStarterAction = nil
+        switch action {
+        case .logFeed:
+            viewModel.showLogFeed = true
         }
     }
 
