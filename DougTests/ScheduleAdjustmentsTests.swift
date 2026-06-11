@@ -315,6 +315,41 @@ struct ScheduleAdjustmentsTests {
         #expect(bake.stepStatus == .active)
     }
 
+    @Test func firstBakePhaseDoneHandsOffWithoutCompletingParent() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-21 * 60)
+        let (schedule, bake, subs) = makeBakeSchedule(anchor: anchor, context: context)
+        let vm = makeViewModel(with: schedule)
+
+        vm.markStepDone(subs[0], modelContext: context)
+
+        // "Lid Removed" promotes the uncovered phase immediately — waiting on
+        // the next tick leaves the hero looking unresponsive.
+        #expect(subs[0].stepStatus == .done)
+        #expect(subs[1].stepStatus == .active)
+        #expect(bake.stepStatus == .active)
+    }
+
+    @Test func lastBakePhaseDoneCompletesBakeStep() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date().addingTimeInterval(-40 * 60)
+        let (schedule, bake, subs) = makeBakeSchedule(anchor: anchor, context: context)
+        subs[0].stepStatus = .done
+        subs[0].actualEndTime = subs[0].computedEndTime
+        subs[1].stepStatus = .active
+        let vm = makeViewModel(with: schedule)
+
+        vm.markStepDone(subs[1], modelContext: context)
+
+        // "Bread Out" ends the whole bake step — it must not stay active until
+        // its scheduled end, demanding a second tap on "Finish Early".
+        #expect(subs[1].stepStatus == .done)
+        #expect(bake.stepStatus == .done)
+        #expect(bake.actualEndTime != nil)
+    }
+
     @Test func markStepDoneCascadesLateBakeSubStep() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
@@ -444,7 +479,7 @@ struct ScheduleAdjustmentsTests {
 
         vm.markStepDone(steps[0], modelContext: context)
 
-        let saved = originalAutolyseStart.timeIntervalSince(steps[0].actualEndTime!)
+        let saved = try originalAutolyseStart.timeIntervalSince(#require(steps[0].actualEndTime))
 
         #expect(steps[0].stepStatus == .done)
         #expect(saved > 0, "Should have finished before original end")
@@ -479,7 +514,7 @@ struct ScheduleAdjustmentsTests {
         let context = ModelContext(container)
         let anchor = Date().addingTimeInterval(-120 * 60)
         let (_, steps) = makeLevainSchedule(anchor: anchor, context: context)
-        let vm = makeViewModel(with: steps[0].schedule!)
+        let vm = try makeViewModel(with: #require(steps[0].schedule))
 
         vm.markStepDone(steps[0], modelContext: context)
 
@@ -532,7 +567,7 @@ struct ScheduleAdjustmentsTests {
         let context = ModelContext(container)
         let anchor = Date().addingTimeInterval(-35 * 60)
         let (_, _, folds) = makeBulkWithFolds(anchor: anchor, context: context)
-        let vm = makeViewModel(with: folds[0].schedule!)
+        let vm = try makeViewModel(with: #require(folds[0].schedule))
 
         vm.markFoldDone(folds[0])
 
@@ -545,7 +580,7 @@ struct ScheduleAdjustmentsTests {
         let context = ModelContext(container)
         let anchor = Date().addingTimeInterval(-35 * 60)
         let (_, _, folds) = makeBulkWithFolds(anchor: anchor, context: context)
-        let vm = makeViewModel(with: folds[0].schedule!)
+        let vm = try makeViewModel(with: #require(folds[0].schedule))
 
         let originalFold2Start = folds[1].computedStartTime
 
@@ -560,7 +595,7 @@ struct ScheduleAdjustmentsTests {
         let context = ModelContext(container)
         let anchor = Date().addingTimeInterval(-60 * 60)
         let (_, bulk, folds) = makeBulkWithFolds(anchor: anchor, context: context)
-        let vm = makeViewModel(with: bulk.schedule!)
+        let vm = try makeViewModel(with: #require(bulk.schedule))
 
         vm.markFoldDone(folds[0])
         vm.finishStepEarly(bulk, modelContext: context)

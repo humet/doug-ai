@@ -1262,6 +1262,26 @@ final class ScheduleViewModel {
             advanceSubSteps(in: schedule, now: now)
         }
 
+        // The bake step is its phases: "Bread Out" on the last one means the
+        // bake is over. Left active until its scheduled end, the hero shows a
+        // whole-step "Finish Early" the user must tap a second time to move
+        // on. (Bulk ferment keeps fermenting after its last fold — only the
+        // bake step completes with its sub-steps.)
+        if let parent = step.parentStep,
+           parent.stepStatus == .active,
+           parent.stepTypeID == StepTypeID.bake.rawValue,
+           parent.subSteps.allSatisfy({ $0.stepStatus == .done || $0.stepStatus == .skipped })
+        {
+            markStepDone(
+                parent,
+                feedDetails: nil,
+                starterProfile: nil,
+                modelContext: modelContext,
+                completedAt: effectiveCompletion
+            )
+            return
+        }
+
         unlockNotificationsAfterGate(step, in: schedule)
 
         if applyStarterSideEffects,
