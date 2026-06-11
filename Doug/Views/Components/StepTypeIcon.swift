@@ -11,7 +11,8 @@ enum StepTypeIcon {
         case .stretchAndFold: "hand.raised.fingers.spread"
         case .addInclusions: "leaf"
         case .shape: "circle.circle"
-        case .coldRetard: "snowflake"
+        case .coldRetard, .coldRetardBalls: "snowflake"
+        case .temper: "thermometer.medium"
         case .finalProof: "sun.max"
         case .panShape: "hand.raised"
         case .bakeSheet: "flame"
@@ -33,9 +34,9 @@ enum StepTypeIcon {
             DougTheme.sourdoughBrown
         case .autolyse, .bulkFerment:
             DougTheme.crustGold
-        case .coldRetard, .fridgeRest, .holdStarter:
+        case .coldRetard, .coldRetardBalls, .fridgeRest, .holdStarter:
             .blue
-        case .finalProof:
+        case .finalProof, .temper:
             DougTheme.crustGold
         case .panShape:
             DougTheme.sourdoughBrown

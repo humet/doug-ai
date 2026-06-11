@@ -306,7 +306,10 @@ struct ScheduleTab: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     activeHeader(schedule: schedule)
-                    IngredientsDisclosure(ingredients: schedule.recipe.ingredients)
+                    IngredientsDisclosure(
+                        ingredients: schedule.scaledIngredients,
+                        yieldSummary: schedule.yieldSummary
+                    )
 
                     if let pausedAt = schedule.pausedAt {
                         PausedBanner(
@@ -639,6 +642,7 @@ private struct RecipeCardButtonStyle: ButtonStyle {
 
 private struct IngredientsDisclosure: View {
     let ingredients: Ingredients
+    var yieldSummary: String?
     @State private var expanded = false
 
     var body: some View {
@@ -653,6 +657,12 @@ private struct IngredientsDisclosure: View {
                         .foregroundStyle(.secondary)
                     Text("Ingredients")
                         .font(.subheadline.weight(.semibold))
+                    if let yieldSummary {
+                        Text(yieldSummary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                     Spacer()
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))

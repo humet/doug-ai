@@ -658,7 +658,7 @@ struct NowStepHero: View {
     }
 
     private var recipeIngredients: Ingredients? {
-        step.schedule?.recipe.ingredients
+        step.schedule?.scaledIngredients
     }
 
     /// Calculator-derived levain build, shown whenever the editable form state
@@ -667,7 +667,7 @@ struct NowStepHero: View {
     private var levainBuildFallback: LevainBuildCalculator.Result? {
         guard stepTypeIDEnum == .buildLevain, let schedule = step.schedule else { return nil }
         return LevainBuildCalculator.calculate(.init(
-            levainGramsNeeded: schedule.recipe.ingredients.levainGrams,
+            levainGramsNeeded: schedule.scaledIngredients.levainGrams,
             baseRatio: schedule.recipe.levainBuildRatio,
             referenceTemp: schedule.recipe.referenceTemperatureCelsius,
             kitchenTemp: schedule.kitchenTemperatureCelsius

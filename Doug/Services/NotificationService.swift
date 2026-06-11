@@ -191,7 +191,9 @@ final class NotificationService {
 
         if stepType.requiresTempReading {
             content.categoryIdentifier = Category.foldStep
-        } else if stepType.id == .preheat {
+        } else if stepType.id == .preheat || stepType.id == .temper {
+            // The step that ends a cold retard: preheat for bread, temper for
+            // pizza. Either way the dough must come out of the fridge on time.
             content.categoryIdentifier = Category.coldRetardEnd
             content.interruptionLevel = .timeSensitive
         } else {

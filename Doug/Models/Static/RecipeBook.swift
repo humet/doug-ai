@@ -284,7 +284,13 @@ enum RecipeBook {
         ],
         bakeTemperatureCelsius: 220,
         degreeHourTarget: 80,
-        referenceTemperatureCelsius: 24.0
+        referenceTemperatureCelsius: 24.0,
+        yield: RecipeYield(
+            unitSingular: "tray",
+            unitPlural: "trays",
+            baseCount: 1,
+            countRange: 1 ... 2
+        )
     )
 
     // MARK: - Pizza Dough
@@ -292,10 +298,10 @@ enum RecipeBook {
     static let pizzaDough = Recipe(
         id: .pizzaDough,
         name: "Pizza Dough",
-        description: "Sourdough pizza dough — 65% hydration with olive oil. Divide into balls and proof at room temperature. You handle the bake.",
+        description: "Sourdough pizza dough — 65% hydration with olive oil. Divide into balls, cold retard in the fridge for 12–72 hours, then temper before stretching. You handle the bake.",
         difficulty: .beginner,
         hydrationPercent: 65,
-        approximateTotalHours: 7 ... 10,
+        approximateTotalHours: 20 ... 76,
         ingredients: Ingredients(
             flourGrams: 450,
             waterGrams: 293,
@@ -318,15 +324,25 @@ enum RecipeBook {
                 foldSpacingFraction: 0.67
             ),
             MethodStep(stepTypeID: .shape),
-            MethodStep(
-                stepTypeID: .finalProof,
-                flexRangeOverride: 60 ... 150
-            ),
+            MethodStep(stepTypeID: .coldRetardBalls),
+            MethodStep(stepTypeID: .temper),
         ],
         bakeTemperatureCelsius: 0,
         degreeHourTarget: 70,
         referenceTemperatureCelsius: 24.0,
-        completionLabel: "Dough Ready"
+        completionLabel: "Dough Ready",
+        yield: RecipeYield(
+            unitSingular: "ball",
+            unitPlural: "balls",
+            baseCount: 3,
+            approxUnitGrams: 285,
+            countRange: 1 ... 8,
+            sizePresets: [
+                YieldSizePreset(id: "10in", label: "10\"", unitGrams: 230),
+                YieldSizePreset(id: "12in", label: "12\"", unitGrams: 270),
+                YieldSizePreset(id: "14in", label: "14\"", unitGrams: 340),
+            ]
+        )
     )
 
     // MARK: - Soft Rolls
@@ -369,6 +385,12 @@ enum RecipeBook {
         ],
         bakeTemperatureCelsius: 200,
         degreeHourTarget: 70,
-        referenceTemperatureCelsius: 24.0
+        referenceTemperatureCelsius: 24.0,
+        yield: RecipeYield(
+            unitSingular: "roll",
+            unitPlural: "rolls",
+            baseCount: 8,
+            countRange: 4 ... 16
+        )
     )
 }

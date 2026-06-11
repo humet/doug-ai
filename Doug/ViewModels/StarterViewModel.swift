@@ -111,9 +111,9 @@ final class StarterViewModel {
         await NotificationService.shared.scheduleStarterFeedReminder(at: nextFeed, context: context)
     }
 
-    func prepareLevainBuild(for recipe: Recipe, kitchenTemp: Double) {
+    func prepareLevainBuild(for recipe: Recipe, kitchenTemp: Double, levainGramsNeeded: Double? = nil) {
         let result = LevainBuildCalculator.calculate(.init(
-            levainGramsNeeded: recipe.ingredients.levainGrams,
+            levainGramsNeeded: levainGramsNeeded ?? recipe.ingredients.levainGrams,
             baseRatio: recipe.levainBuildRatio,
             referenceTemp: recipe.referenceTemperatureCelsius,
             kitchenTemp: kitchenTemp

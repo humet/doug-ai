@@ -141,6 +141,8 @@ final class LiveActivityService {
         StepTypeID.autolyse.rawValue,
         StepTypeID.bulkFerment.rawValue,
         StepTypeID.coldRetard.rawValue,
+        StepTypeID.coldRetardBalls.rawValue,
+        StepTypeID.temper.rawValue,
         StepTypeID.finalProof.rawValue,
         StepTypeID.preheat.rawValue,
         StepTypeID.bake.rawValue,
@@ -155,6 +157,7 @@ final class LiveActivityService {
         StepTypeID.waitForPeak.rawValue,
         StepTypeID.waitForLevainPeak.rawValue,
         StepTypeID.coldRetard.rawValue,
+        StepTypeID.coldRetardBalls.rawValue,
     ]
 
     private static let liveActivityResumeThreshold: TimeInterval = 60 * 60

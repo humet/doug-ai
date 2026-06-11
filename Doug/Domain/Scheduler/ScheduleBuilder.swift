@@ -666,7 +666,7 @@ enum ScheduleBuilder {
         }
 
         // Same-day recipes: verify no step starts during unavailable hours
-        let isSameDay = !method.contains { $0.stepTypeID == .coldRetard }
+        let isSameDay = !method.contains { $0.stepTypeID.isColdRetard }
         if isSameDay {
             for scheduled in result {
                 for block in unavailableBlocks {

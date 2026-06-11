@@ -40,7 +40,46 @@ struct TimeSlot: Identifiable {
 @Observable
 @MainActor
 final class ScheduleViewModel {
-    var selectedRecipeID: RecipeID = .countryLoaf
+    var selectedRecipeID: RecipeID = .countryLoaf {
+        didSet {
+            guard oldValue != selectedRecipeID else { return }
+            yieldCount = nil
+            yieldUnitGrams = nil
+            nudgeTargetDateForMultiDayRecipe()
+        }
+    }
+
+    /// A recipe with a multi-day retard (pizza balls, 12–72h) can't finish by
+    /// the default tomorrow-morning target — move it to dinner on the earliest
+    /// feasible day so the config sheet opens on viable slots, not conflicts.
+    private func nudgeTargetDateForMultiDayRecipe() {
+        let method = selectedRecipe.method
+        guard let retard = method.first(where: { $0.stepTypeID.isColdRetard }),
+              let flex = retard.effectiveFlexRange,
+              flex.upperBound > 1440 else { return }
+        let earliest = Date().addingTimeInterval(
+            Double(selectedRecipe.approximateTotalHours.lowerBound) * 3600
+        )
+        guard targetDate < earliest else { return }
+        let dinner = Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: earliest) ?? earliest
+        targetDate = max(dinner, earliest)
+    }
+
+    // Plan-time yield selection. Nil means the recipe's written quantities;
+    // the factor scales ingredients only — never step durations.
+    var yieldCount: Int?
+    var yieldUnitGrams: Double?
+
+    var yieldScaleFactor: Double {
+        guard yieldCount != nil || yieldUnitGrams != nil else { return 1 }
+        return RecipeScaler.factor(
+            count: yieldCount ?? selectedRecipe.yield.baseCount,
+            unitGrams: yieldUnitGrams,
+            yield: selectedRecipe.yield,
+            baseIngredients: selectedRecipe.ingredients
+        )
+    }
+
     var targetDate: Date = {
         let calendar = Calendar.current
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
@@ -107,7 +146,7 @@ final class ScheduleViewModel {
             if let recipe = step.schedule?.recipe {
                 let kitchenTemp = step.schedule?.kitchenTemperatureCelsius ?? temp
                 let build = LevainBuildCalculator.calculate(.init(
-                    levainGramsNeeded: recipe.ingredients.levainGrams,
+                    levainGramsNeeded: (step.schedule?.scaledIngredients ?? recipe.ingredients).levainGrams,
                     baseRatio: recipe.levainBuildRatio,
                     referenceTemp: recipe.referenceTemperatureCelsius,
                     kitchenTemp: kitchenTemp
@@ -936,6 +975,9 @@ final class ScheduleViewModel {
             kitchenTemperatureCelsius: kitchenTemperature
         )
         schedule.scheduleStatus = .active
+        schedule.yieldScaleFactor = yieldScaleFactor
+        schedule.yieldCount = yieldCount
+        schedule.yieldUnitGrams = yieldUnitGrams
         modelContext.insert(schedule)
 
         var persistedSteps: [ScheduleStep] = []

@@ -5,7 +5,7 @@ extension ScheduleBuilder {
         recipe: Recipe,
         kitchenTemperatureCelsius: Double,
         availability: AvailabilityInput,
-        windows: [WindowInput] = [],
+        windows _: [WindowInput] = [],
         earliestStartTime: Date? = nil,
         referenceDate: Date = Date(),
         calendar: Calendar = .current,
@@ -13,7 +13,7 @@ extension ScheduleBuilder {
     ) -> ClosedRange<Date>? {
         let effectiveStart = earliestStartTime ?? referenceDate
         let method = recipe.method
-        let hasColdRetard = method.contains { $0.stepTypeID == .coldRetard }
+        let hasColdRetard = method.contains { $0.stepTypeID.isColdRetard }
 
         if hasColdRetard {
             return overnightViableRange(
@@ -49,13 +49,13 @@ extension ScheduleBuilder {
         calendar: Calendar,
         peakProfile: StarterPeakProfile?
     ) -> ClosedRange<Date>? {
-        guard let coldRetardMethod = method.first(where: { $0.stepTypeID == .coldRetard }),
+        guard let coldRetardMethod = method.first(where: { $0.stepTypeID.isColdRetard }),
               let flexRange = coldRetardMethod.effectiveFlexRange
         else {
             return nil
         }
 
-        let coldRetardIndex = method.firstIndex(where: { $0.stepTypeID == .coldRetard })!
+        let coldRetardIndex = method.firstIndex(where: { $0.stepTypeID.isColdRetard })!
         let postColdRetardSteps = method[(coldRetardIndex + 1)...]
         let postColdRetardMinutes = postColdRetardSteps.reduce(0.0) { total, step in
             total + TemperatureCalculator.effectiveDuration(
@@ -117,7 +117,18 @@ extension ScheduleBuilder {
             second: 0,
             of: tomorrowStart
         ) ?? tomorrowStart
-        let cappedLatest = min(latestBreadReady, nextSleep)
+        // Bread retards (≤18h) always finish by tomorrow night, but a multi-day
+        // retard (pizza balls, up to 72h) can legitimately end days out — cap at
+        // end-of-availability on the day the longest retard would finish, not
+        // at tomorrow's.
+        let lastDay = calendar.startOfDay(for: latestBreadReady)
+        let lastSleep = calendar.date(
+            bySettingHour: availability.endHour,
+            minute: availability.endMinute,
+            second: 0,
+            of: lastDay
+        ) ?? latestBreadReady
+        let cappedLatest = min(latestBreadReady, max(nextSleep, lastSleep))
 
         guard earliestBreadReady <= cappedLatest else { return nil }
 

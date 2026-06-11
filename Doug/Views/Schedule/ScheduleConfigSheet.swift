@@ -28,8 +28,17 @@ struct ScheduleConfigSheet: View {
             Form {
                 Section {
                     HStack {
-                        Label(viewModel.selectedRecipe.name, systemImage: "book")
-                            .font(.headline)
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(viewModel.selectedRecipe.name)
+                                    .font(.headline)
+                                Text(viewModel.selectedRecipe.yield.label)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "book")
+                        }
                         Spacer()
                         Text("\(viewModel.selectedRecipe.hydrationPercent)%")
                             .foregroundStyle(.secondary)
@@ -37,6 +46,8 @@ struct ScheduleConfigSheet: View {
                 } header: {
                     Text("Recipe")
                 }
+
+                yieldSection
 
                 Section {
                     if !viewModel.timeSlots.isEmpty {
@@ -58,7 +69,9 @@ struct ScheduleConfigSheet: View {
                     Text("\(viewModel.selectedRecipe.completionLabel) Time")
                 } footer: {
                     if let range = viewModel.viableBreadReadyRange {
-                        Text("\(viewModel.selectedRecipe.completionLabel) between \(range.lowerBound, style: .time) and \(range.upperBound, style: .time)")
+                        Text(
+                            "\(viewModel.selectedRecipe.completionLabel) between \(range.lowerBound, style: .time) and \(range.upperBound, style: .time)"
+                        )
                     }
                 }
 
@@ -98,7 +111,10 @@ struct ScheduleConfigSheet: View {
                     Section {
                         let steps = viewModel.previewSteps
                         ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                            if index > 0, !Calendar.current.isDate(steps[index - 1].startTime, inSameDayAs: step.startTime) {
+                            if index > 0, !Calendar.current.isDate(
+                                steps[index - 1].startTime,
+                                inSameDayAs: step.startTime
+                            ) {
                                 OvernightDivider(from: steps[index - 1].startTime, to: step.startTime)
                                     .listRowSeparator(.hidden)
                             }
@@ -159,6 +175,55 @@ struct ScheduleConfigSheet: View {
                 SlotExplainerSheet(slot: slot, recipeName: viewModel.selectedRecipe.name)
             }
         }
+    }
+
+    // MARK: - Yield Section
+
+    private var yieldCountBinding: Binding<Int> {
+        Binding(
+            get: { viewModel.yieldCount ?? viewModel.selectedRecipe.yield.baseCount },
+            set: { viewModel.yieldCount = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private var yieldSection: some View {
+        let yield = viewModel.selectedRecipe.yield
+        Section {
+            if !yield.sizePresets.isEmpty {
+                Picker("Size", selection: $viewModel.yieldUnitGrams) {
+                    Text("Recipe").tag(Double?.none)
+                    ForEach(yield.sizePresets) { preset in
+                        Text(preset.label).tag(Double?.some(preset.unitGrams))
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+            Stepper(value: yieldCountBinding, in: yield.countRange) {
+                HStack {
+                    Text("How many")
+                    Spacer()
+                    Text("\(yieldCountBinding.wrappedValue) \(yield.unitName(for: yieldCountBinding.wrappedValue))")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Yield")
+        } footer: {
+            Text(yieldFooter)
+        }
+    }
+
+    private var yieldFooter: String {
+        let recipe = viewModel.selectedRecipe
+        let yield = recipe.yield
+        let count = viewModel.yieldCount ?? yield.baseCount
+        let totalGrams = RecipeScaler.totalMass(recipe.ingredients) * viewModel.yieldScaleFactor
+        let perUnit = totalGrams / Double(count)
+        let perUnitText = "~\(Int(perUnit.rounded()))g per \(yield.unitSingular)"
+        let totalText = "~\(Int(totalGrams.rounded()))g dough total"
+        return "\(perUnitText) · \(totalText). Ingredients scale to your yield — timings don't change."
     }
 
     // MARK: - Starter Section (merged starter + levain)

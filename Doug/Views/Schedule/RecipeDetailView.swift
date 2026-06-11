@@ -48,6 +48,7 @@ struct RecipeDetailView: View {
                     systemImage: "clock"
                 )
             }
+            heroChip(label: recipe.yield.label, systemImage: "circle.grid.2x2")
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)

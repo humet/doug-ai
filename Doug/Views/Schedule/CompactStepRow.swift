@@ -71,7 +71,7 @@ struct CompactStepRow: View {
               step.stepStatus == .upcoming,
               let schedule = step.schedule else { return nil }
         let build = LevainBuildCalculator.calculate(.init(
-            levainGramsNeeded: schedule.recipe.ingredients.levainGrams,
+            levainGramsNeeded: schedule.scaledIngredients.levainGrams,
             baseRatio: schedule.recipe.levainBuildRatio,
             referenceTemp: schedule.recipe.referenceTemperatureCelsius,
             kitchenTemp: schedule.kitchenTemperatureCelsius

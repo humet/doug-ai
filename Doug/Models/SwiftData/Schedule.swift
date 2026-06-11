@@ -15,6 +15,15 @@ final class Schedule {
     /// good bakes (`DegreeHourCalibrator`). Nil until enough history exists;
     /// optional so pre-existing stores migrate without a versioned schema.
     var calibratedDegreeHourTarget: Double?
+    /// Multiplier applied to the recipe's ingredient grams for this bake.
+    /// Default at the declaration site so pre-existing stores migrate without
+    /// a versioned schema.
+    var yieldScaleFactor: Double = 1.0
+    /// The unit count the user chose (display only — the factor is what
+    /// scales). Nil means the recipe's base yield.
+    var yieldCount: Int?
+    /// Grams per unit when chosen from a size preset (display only).
+    var yieldUnitGrams: Double?
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduleStep.schedule)
     var steps: [ScheduleStep] = []
@@ -52,6 +61,25 @@ extension Schedule {
     /// value when one was resolved at bake start, otherwise the recipe default.
     var effectiveDegreeHourTarget: Double {
         calibratedDegreeHourTarget ?? recipe.degreeHourTarget
+    }
+
+    /// The recipe's ingredients scaled to this bake's chosen yield.
+    var scaledIngredients: Ingredients {
+        RecipeScaler.scaled(recipe.ingredients, by: yieldScaleFactor)
+    }
+
+    /// "4 × 12″ balls (~270g each)" / "2 loaves" — nil at the recipe's base
+    /// yield, where there's nothing worth calling out.
+    var yieldSummary: String? {
+        guard let count = yieldCount else { return nil }
+        let yield = recipe.yield
+        if let grams = yieldUnitGrams {
+            let preset = yield.sizePresets.first { $0.unitGrams == grams }
+            let size = preset.map { "\($0.label) " } ?? ""
+            return "\(count) × \(size)\(yield.unitName(for: count)) (~\(Int(grams.rounded()))g each)"
+        }
+        guard count != yield.baseCount else { return nil }
+        return "\(count) \(yield.unitName(for: count))"
     }
 
     var bulkFermentStep: ScheduleStep? {

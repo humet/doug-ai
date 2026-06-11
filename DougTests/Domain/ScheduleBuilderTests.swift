@@ -131,8 +131,12 @@ struct ScheduleBuilderTests {
 
     @Test(arguments: RecipeBook.all)
     func allRecipesBuildSuccessfully(recipe: Recipe) throws {
-        let hasColdRetard = recipe.method.contains { $0.stepTypeID == .coldRetard }
-        let targetHour = hasColdRetard ? 9 : 20
+        let retard = recipe.method.first { $0.stepTypeID.isColdRetard }
+        let isMultiDayRetard = (retard?.effectiveDuration ?? 0) >= 1440
+        // Overnight bread → morning bake. A multi-day retard (pizza's 24h)
+        // lands pre-retard work at the same clock time the day before, so a
+        // 9am target would put the folds in the small hours — dinner it is.
+        let targetHour = retard == nil ? 20 : (isMultiDayRetard ? 18 : 9)
         let input = ScheduleBuilderInput(
             recipe: recipe,
             targetBreadReadyTime: Self.targetTime(hour: targetHour),
@@ -643,6 +647,110 @@ struct ScheduleBuilderTests {
         #expect(earliestHour >= 6 && earliestHour <= 10, "Earliest should be morning")
         #expect(latestHour >= 14 && latestHour <= 21, "Latest should be afternoon/evening")
         #expect(range.lowerBound < range.upperBound)
+    }
+
+    /// A bread retard (≤18h) always ends by tomorrow night — the multi-day cap
+    /// for pizza must leave bread viable ranges exactly where they were.
+    @Test func breadViableRangeStaysCappedAtTomorrowNight() throws {
+        let reference = Self.targetTime(hour: 12, minute: 0)
+        let range = try #require(ScheduleBuilder.viableRange(
+            recipe: RecipeBook.countryLoaf,
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability,
+            referenceDate: reference
+        ))
+
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: reference)!
+        let tomorrowSleep = calendar.date(
+            bySettingHour: 21, minute: 0, second: 0,
+            of: calendar.startOfDay(for: tomorrow)
+        )!
+        #expect(range.upperBound <= tomorrowSleep)
+    }
+
+    /// Pizza's 12–72h ball retard means the latest viable dough-ready time is
+    /// days out — the range must not be silently capped at tomorrow night.
+    @Test func pizzaViableRangeExtendsPastTomorrow() throws {
+        let reference = Self.targetTime(hour: 12, minute: 0)
+        let range = try #require(ScheduleBuilder.viableRange(
+            recipe: RecipeBook.pizzaDough,
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability,
+            referenceDate: reference
+        ))
+
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: reference)!
+        let tomorrowSleep = calendar.date(
+            bySettingHour: 21, minute: 0, second: 0,
+            of: calendar.startOfDay(for: tomorrow)
+        )!
+        #expect(range.upperBound > tomorrowSleep, "72h retard upper bound should reach past tomorrow")
+        #expect(range.lowerBound < range.upperBound)
+    }
+
+    // MARK: - Pizza (Cold Retard Balls + Temper)
+
+    @Test func pizzaBuildsWithRetardAndTemperEndingAtTarget() throws {
+        let target = Self.targetTime(day: 20, hour: 18, minute: 0)
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.pizzaDough,
+            targetBreadReadyTime: target,
+            kitchenTemperatureCelsius: 22.0,
+            availability: Self.defaultAvailability
+        )
+
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected pizza to build")
+            return
+        }
+
+        #expect(steps.last?.stepTypeID == StepTypeID.temper)
+        #expect(!steps.contains { $0.stepTypeID == StepTypeID.preheat })
+        #expect(!steps.contains { $0.stepTypeID == StepTypeID.bake })
+        #expect(!steps.contains { $0.stepTypeID == StepTypeID.finalProof })
+
+        let retard = try #require(steps.first { $0.stepTypeID == StepTypeID.coldRetardBalls })
+        #expect(retard.durationMinutes >= 720 && retard.durationMinutes <= 4320)
+
+        // Temper immediately follows the retard — out of the fridge, straight
+        // to coming up to temperature.
+        let temper = try #require(steps.last)
+        #expect(abs(temper.startTime.timeIntervalSince(retard.endTime)) < 60)
+
+        let lastEnd = try #require(steps.last?.endTime)
+        #expect(abs(lastEnd.timeIntervalSince(target)) < 60)
+    }
+
+    /// With an earliest-start floor squeezing the timeline, the compression
+    /// should come out of the 24h retard (the longest flexible step), staying
+    /// within its 12h minimum — not fail or squash the 90-minute temper.
+    @Test func pizzaCompressesRetardWhenStartIsFloored() throws {
+        let allDay = AvailabilityInput(startHour: 0, startMinute: 0, endHour: 23, endMinute: 59)
+        let target = Self.targetTime(day: 20, hour: 18, minute: 0)
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.pizzaDough,
+            targetBreadReadyTime: target,
+            kitchenTemperatureCelsius: 22.0,
+            availability: allDay,
+            earliestStartTime: Self.targetTime(day: 19, hour: 16, minute: 0) // 26h before target
+        )
+
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected pizza to build with a 26h window")
+            return
+        }
+
+        let retard = try #require(steps.first { $0.stepTypeID == StepTypeID.coldRetardBalls })
+        #expect(retard.durationMinutes >= 720, "Compression must respect the 12h retard minimum")
+        #expect(retard.durationMinutes < 1440, "The retard, not the temper, should absorb the squeeze")
+
+        let temper = try #require(steps.first { $0.stepTypeID == StepTypeID.temper })
+        #expect(temper.durationMinutes >= 60)
+
+        let firstStart = try #require(steps.first?.startTime)
+        #expect(firstStart >= Self.targetTime(day: 19, hour: 16, minute: 0))
     }
 }
 

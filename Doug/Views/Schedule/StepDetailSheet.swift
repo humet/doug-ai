@@ -149,17 +149,17 @@ struct StepDetailSheet: View {
 
     @ViewBuilder
     private var contextualIngredients: some View {
-        if let ing = step.schedule?.recipe.ingredients {
+        if let ing = step.schedule?.scaledIngredients {
             let items: [(String, Double)] = switch stepTypeIDEnum {
             case .buildLevain: levainBuildWeights(ingredients: ing)
             case .autolyse: ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [("Water", ing.waterGrams)]
             // Flour and water are already in the dough from autolyse; the Mix
             // step only adds levain, salt, and any mix-time extras.
             case .mix: ((step.schedule?.recipe.hydratesFlourBeforeMix ?? false)
-                ? []
-                : ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [("Water", ing.waterGrams)])
-                + [("Levain", ing.levainGrams), ("Salt", ing.saltGrams)]
-                + ing.extras.filter { $0.incorporation == .mix }.map { ($0.name, $0.grams) }
+                    ? []
+                    : ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [("Water", ing.waterGrams)])
+                    + [("Levain", ing.levainGrams), ("Salt", ing.saltGrams)]
+                    + ing.extras.filter { $0.incorporation == .mix }.map { ($0.name, $0.grams) }
             case .addInclusions: ing.extras.filter { $0.incorporation == .fold }.map { ($0.name, $0.grams) }
             default: []
             }

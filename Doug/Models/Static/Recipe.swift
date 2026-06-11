@@ -133,6 +133,7 @@ struct Recipe: Identifiable {
     let degreeHourTarget: Double
     let referenceTemperatureCelsius: Double
     let completionLabel: String
+    let yield: RecipeYield
 
     init(
         id: RecipeID,
@@ -146,7 +147,8 @@ struct Recipe: Identifiable {
         bakeTemperatureCelsius: Int,
         degreeHourTarget: Double,
         referenceTemperatureCelsius: Double,
-        completionLabel: String = "Bread Ready"
+        completionLabel: String = "Bread Ready",
+        yield: RecipeYield = RecipeYield()
     ) {
         self.id = id
         self.name = name
@@ -160,6 +162,7 @@ struct Recipe: Identifiable {
         self.degreeHourTarget = degreeHourTarget
         self.referenceTemperatureCelsius = referenceTemperatureCelsius
         self.completionLabel = completionLabel
+        self.yield = yield
     }
 
     func bakeTemperature(for stepTypeID: StepTypeID) -> Int {

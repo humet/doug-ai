@@ -47,17 +47,24 @@ struct StarterTab: View {
         return levainStarts.filter { $0 > now }.min()
     }
 
+    private var upcomingSchedule: Schedule? {
+        schedules.first { $0.scheduleStatus == .planning || $0.scheduleStatus == .active }
+    }
+
     private var upcomingRecipe: Recipe? {
-        schedules
-            .first { $0.scheduleStatus == .planning || $0.scheduleStatus == .active }
-            .map(\.recipe)
+        upcomingSchedule.map(\.recipe)
+    }
+
+    /// Levain the upcoming bake actually needs — scaled to its chosen yield.
+    private var upcomingLevainGrams: Double? {
+        upcomingSchedule?.scaledIngredients.levainGrams
     }
 
     private var levainBuild: LevainBuildCalculator.Result? {
         guard let recipe = upcomingRecipe else { return nil }
         let kitchenTemp = feedLogs.first?.kitchenTemperatureCelsius ?? 22
         return LevainBuildCalculator.calculate(.init(
-            levainGramsNeeded: recipe.ingredients.levainGrams,
+            levainGramsNeeded: upcomingLevainGrams ?? recipe.ingredients.levainGrams,
             baseRatio: recipe.levainBuildRatio,
             referenceTemp: recipe.referenceTemperatureCelsius,
             kitchenTemp: kitchenTemp
@@ -265,7 +272,9 @@ struct StarterTab: View {
         case .buildLevain:
             if let recipe = upcomingRecipe {
                 let kitchenTemp = feedLogs.first?.kitchenTemperatureCelsius ?? 22
-                viewModel.prepareLevainBuild(for: recipe, kitchenTemp: kitchenTemp)
+                viewModel.prepareLevainBuild(
+                    for: recipe, kitchenTemp: kitchenTemp, levainGramsNeeded: upcomingLevainGrams
+                )
                 viewModel.showLogFeed = true
             }
         case .feedAndRefrigerate:
@@ -354,7 +363,9 @@ struct StarterTab: View {
 
                     Button {
                         let kitchenTemp = feedLogs.first?.kitchenTemperatureCelsius ?? 22
-                        viewModel.prepareLevainBuild(for: recipe, kitchenTemp: kitchenTemp)
+                        viewModel.prepareLevainBuild(
+                            for: recipe, kitchenTemp: kitchenTemp, levainGramsNeeded: upcomingLevainGrams
+                        )
                         viewModel.showLogFeed = true
                     } label: {
                         Label("Log Levain Build", systemImage: "plus.circle.fill")
@@ -365,7 +376,7 @@ struct StarterTab: View {
                 Text("Levain Build")
             } footer: {
                 Text(
-                    "Recipe needs \(Int(recipe.ingredients.levainGrams))g levain — extra goes to the fridge as maintenance."
+                    "Recipe needs \(Int(upcomingLevainGrams ?? recipe.ingredients.levainGrams))g levain — extra goes to the fridge as maintenance."
                 )
             }
         }
