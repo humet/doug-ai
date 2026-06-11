@@ -103,7 +103,11 @@ export function buildSystemPrompt(
 Recipe: ${context.recipeName} (${context.hydrationPercent}% hydration)
 Kitchen temperature: ${context.kitchenTempCelsius}°C
 Target bread ready: ${context.targetBreadReadyTime}
-Degree-hour target: ${context.degreeHourTarget}
+Degree-hour target: ${context.degreeHourTarget}${
+      context.currentDegreeHours != null
+        ? `\nCurrent degree-hours: ${context.currentDegreeHours.toFixed(1)} (live value, extrapolated past the last logged reading — more current than the per-reading DH snapshots below)`
+        : ""
+    }
 ${
   context.recipeIngredients
     ? `

@@ -61,6 +61,10 @@ export const BakeContextSchema = z.object({
     })
   ),
   degreeHourTarget: z.number(),
+  // Degree-hours extrapolated past the last reading (to now, or to bulk's end
+  // once bulk is done). The per-reading accumulatedDegreeHours snapshots freeze
+  // at the last logged temperature, which lands around the final fold.
+  currentDegreeHours: z.number().optional(),
   delays: z.array(
     z.object({
       stepLabel: z.string(),
