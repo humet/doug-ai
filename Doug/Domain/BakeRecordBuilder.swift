@@ -17,9 +17,16 @@ enum BakeRecordBuilder {
     static func summarize(
         recipe: Recipe,
         kitchenTempCelsius: Double,
-        readings: [(timestamp: Date, temperatureCelsius: Double)]
+        readings: [(timestamp: Date, temperatureCelsius: Double)],
+        bulkEndTime: Date? = nil,
+        targetDegreeHours: Double? = nil
     ) -> BakeFermentationSummary {
-        let finalDegreeHours = DegreeHourCalculator.accumulatedDegreeHours(readings: readings)
+        // Extrapolate to the end of bulk: readings stop at the last fold, but the
+        // dough kept fermenting until bulk was marked done.
+        let finalDegreeHours = DegreeHourCalculator.accumulatedDegreeHours(
+            readings: readings,
+            extrapolatedTo: bulkEndTime
+        )
         // Initial mix temp is the earliest reading; fall back to kitchen temp when
         // no readings were logged (e.g. a bake finished without fold check-ins).
         let initialMixTemp = readings
@@ -28,7 +35,9 @@ enum BakeRecordBuilder {
 
         return BakeFermentationSummary(
             finalDegreeHours: finalDegreeHours,
-            targetDegreeHoursUsed: recipe.degreeHourTarget,
+            // Record the (possibly calibrated) target this bake ran against,
+            // not the recipe default it may have diverged from.
+            targetDegreeHoursUsed: targetDegreeHours ?? recipe.degreeHourTarget,
             initialMixTemp: initialMixTemp,
             kitchenTemperatureCelsius: kitchenTempCelsius
         )

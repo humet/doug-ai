@@ -156,7 +156,12 @@ struct BakeDetailView: View {
     private var chartSection: some View {
         DegreeHoursChartView(
             readings: schedule.temperatureReadings,
-            targetDegreeHours: recipe.degreeHourTarget
+            // The target the bake actually ran against (calibration may have
+            // shifted it since); recipe default only for pre-calibration records.
+            targetDegreeHours: profile?.targetDegreeHoursUsed ?? recipe.degreeHourTarget,
+            // Frozen at bulk's end for a completed bake, matching the recorded
+            // finalDegreeHours rather than freezing at the last logged reading.
+            asOf: schedule.degreeHourCutoff(now: schedule.completedAt ?? Date())
         )
     }
 

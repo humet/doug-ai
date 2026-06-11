@@ -352,7 +352,8 @@ struct ScheduleTab: View {
                     if !schedule.temperatureReadings.isEmpty {
                         DegreeHoursChartView(
                             readings: schedule.temperatureReadings,
-                            targetDegreeHours: schedule.recipe.degreeHourTarget
+                            targetDegreeHours: schedule.effectiveDegreeHourTarget,
+                            asOf: minuteBucketed(schedule.degreeHourCutoff(now: now))
                         )
 
                         if isBulkFermentActive(in: schedule) {
@@ -391,6 +392,9 @@ struct ScheduleTab: View {
                 .padding()
             }
             .task(id: effectiveTickBucket(now: now)) {
+                // Refresh first so the Bulk Done affordance reflects this tick's
+                // state before any step promotion.
+                viewModel.refreshBulkFermentTarget(now: now)
                 viewModel.advanceIfReady(now: now, modelContext: modelContext)
             }
         }
@@ -533,6 +537,13 @@ struct ScheduleTab: View {
     /// `advanceIfReady` without thrashing.
     private func effectiveTickBucket(now: Date) -> Int {
         Int(now.timeIntervalSince1970)
+    }
+
+    /// Floor a date to the minute. The degree-hour chart sits inside a per-second
+    /// TimelineView; a per-second `asOf` would force a Chart relayout every tick
+    /// for under 0.2% of progress movement per minute.
+    private func minuteBucketed(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 60).rounded(.down) * 60)
     }
 
     private func planBake(for recipeID: RecipeID) {

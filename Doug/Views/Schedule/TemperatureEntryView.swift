@@ -24,11 +24,13 @@ struct TemperatureEntryView: View {
         let pairs = existingReadings.map {
             (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
         }
-        return DegreeHourCalculator.accumulatedDegreeHours(readings: pairs)
+        // Extrapolated to now so the sheet's progress matches the main chart
+        // rather than freezing at the last logged reading.
+        return DegreeHourCalculator.accumulatedDegreeHours(readings: pairs, extrapolatedTo: Date())
     }
 
     private var targetDegreeHours: Double {
-        schedule.recipe.degreeHourTarget
+        schedule.effectiveDegreeHourTarget
     }
 
     private var progress: Double {

@@ -965,7 +965,13 @@ final class ScheduleViewModel {
             }
         }
 
+        calibrateDegreeHourTarget(for: schedule, modelContext: modelContext)
+
         activeSchedule = schedule
+        // Clear per-bake UI state left over from a previous bake on this
+        // ViewModel instance — neither is reset anywhere else.
+        bulkFermentTargetReached = false
+        lastScheduleAdjustment = nil
         promoteNextUpcoming(in: schedule)
 
         if let firstActive = orderedTopLevelSteps(in: schedule).first(where: { $0.stepStatus == .active }) {
@@ -1015,6 +1021,58 @@ final class ScheduleViewModel {
 
     // MARK: - Degree-Hour Schedule Correction
 
+    /// Tick-driven: extrapolates degree-hours to `now` assuming the last logged
+    /// temperature holds, and latches `bulkFermentTargetReached` when within 15
+    /// minutes of target. Readings are only prompted through the fold window, so
+    /// without this the flag could never fire after the last fold. Never moves
+    /// the schedule — only new readings do that, via `handleNewTemperatureReading`.
+    /// Deliberately no `pausedAt` guard: fermentation continues while paused.
+    func refreshBulkFermentTarget(now: Date) {
+        guard !bulkFermentTargetReached,
+              let schedule = activeSchedule,
+              let bulk = schedule.bulkFermentStep, bulk.stepStatus == .active
+        else { return }
+
+        let readings = schedule.temperatureReadings.sorted { $0.timestamp < $1.timestamp }
+        guard let latest = readings.last else { return }
+
+        let pairs = readings.map {
+            (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
+        }
+        let currentDH = DegreeHourCalculator.accumulatedDegreeHours(readings: pairs, extrapolatedTo: now)
+
+        guard let remainingMinutes = DegreeHourCalculator.estimatedMinutesRemaining(
+            currentDegreeHours: currentDH,
+            targetDegreeHours: schedule.effectiveDegreeHourTarget,
+            latestTempCelsius: latest.temperatureCelsius
+        ) else { return }
+
+        if remainingMinutes < 15 {
+            bulkFermentTargetReached = true
+        }
+    }
+
+    /// Resolves a personalized degree-hour target from past good bakes of the
+    /// same recipe and pins it to the schedule for the duration of the bake.
+    /// Stays nil (recipe default applies) until enough history accumulates.
+    func calibrateDegreeHourTarget(for schedule: Schedule, modelContext: ModelContext) {
+        let profiles = (try? modelContext.fetch(FetchDescriptor<BakeFermentationProfile>())) ?? []
+        let inputs = profiles.compactMap { profile -> BakeProfileInput? in
+            guard let recipeID = RecipeID(rawValue: profile.recipeID) else { return nil }
+            return BakeProfileInput(
+                recipeID: recipeID,
+                finalDegreeHours: profile.finalDegreeHours,
+                completedAt: profile.completedAt,
+                rating: profile.rating,
+                outcomeNote: profile.outcomeNote
+            )
+        }
+        schedule.calibratedDegreeHourTarget = DegreeHourCalibrator.refinedTarget(
+            recipeID: RecipeID(rawValue: schedule.recipeID)!,
+            profiles: inputs
+        )
+    }
+
     func handleNewTemperatureReading(schedule: Schedule) {
         let readings = schedule.temperatureReadings.sorted { $0.timestamp < $1.timestamp }
         guard readings.count >= 2 else { return }
@@ -1023,7 +1081,7 @@ final class ScheduleViewModel {
             (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
         }
         let currentDH = DegreeHourCalculator.accumulatedDegreeHours(readings: pairs)
-        let target = schedule.recipe.degreeHourTarget
+        let target = schedule.effectiveDegreeHourTarget
         let latestTemp = readings.last!.temperatureCelsius
 
         guard let remainingMinutes = DegreeHourCalculator.estimatedMinutesRemaining(
@@ -1706,7 +1764,9 @@ final class ScheduleViewModel {
             let summary = BakeRecordBuilder.summarize(
                 recipe: schedule.recipe,
                 kitchenTempCelsius: schedule.kitchenTemperatureCelsius,
-                readings: readings
+                readings: readings,
+                bulkEndTime: schedule.bulkFermentStep.map { $0.actualEndTime ?? $0.computedEndTime },
+                targetDegreeHours: schedule.effectiveDegreeHourTarget
             )
             let trimmedNote = reflection.notes.trimmingCharacters(in: .whitespacesAndNewlines)
             let profile = BakeFermentationProfile(
@@ -1743,6 +1803,8 @@ final class ScheduleViewModel {
         NotificationService.shared.cancelRefeedReminder()
         activeSchedule = nil
         activeConflicts = []
+        bulkFermentTargetReached = false
+        lastScheduleAdjustment = nil
         modelContext.delete(schedule)
         LiveActivityService.shared.endBakeActivity()
     }
@@ -1754,6 +1816,8 @@ final class ScheduleViewModel {
         schedule.scheduleStatus = .complete
         activeSchedule = nil
         activeConflicts = []
+        bulkFermentTargetReached = false
+        lastScheduleAdjustment = nil
         LiveActivityService.shared.endBakeActivity()
     }
 

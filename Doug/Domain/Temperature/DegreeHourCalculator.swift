@@ -13,24 +13,36 @@ enum DegreeHourCalculator {
     /// Uses trapezoidal integration: for each interval, the average of the two
     /// endpoint temperatures (minus base) is multiplied by the interval duration.
     ///
-    /// - Parameter readings: Array of (timestamp, temperature°C) pairs, need not be sorted.
+    /// - Parameters:
+    ///   - readings: Array of (timestamp, temperature°C) pairs, need not be sorted.
+    ///   - asOf: When later than the last reading, extends the integration from
+    ///     the last reading to this date assuming its temperature holds constant.
+    ///     Readings are only prompted through the fold window, so without this
+    ///     tail the total freezes at the last fold and under-reports.
     /// - Returns: Accumulated degree-hours above base temperature.
     static func accumulatedDegreeHours(
-        readings: [(timestamp: Date, temperatureCelsius: Double)]
+        readings: [(timestamp: Date, temperatureCelsius: Double)],
+        extrapolatedTo asOf: Date? = nil
     ) -> Double {
-        guard readings.count >= 2 else { return 0 }
-
         let sorted = readings.sorted { $0.timestamp < $1.timestamp }
         var total = 0.0
 
-        for i in 1 ..< sorted.count {
-            let prev = sorted[i - 1]
-            let curr = sorted[i]
+        if sorted.count >= 2 {
+            for i in 1 ..< sorted.count {
+                let prev = sorted[i - 1]
+                let curr = sorted[i]
 
-            let avgTemp = (prev.temperatureCelsius + curr.temperatureCelsius) / 2.0
-            let effectiveTemp = max(avgTemp - baseTempCelsius, 0)
-            let hours = curr.timestamp.timeIntervalSince(prev.timestamp) / 3600.0
+                let avgTemp = (prev.temperatureCelsius + curr.temperatureCelsius) / 2.0
+                let effectiveTemp = max(avgTemp - baseTempCelsius, 0)
+                let hours = curr.timestamp.timeIntervalSince(prev.timestamp) / 3600.0
 
+                total += effectiveTemp * hours
+            }
+        }
+
+        if let asOf, let last = sorted.last, asOf > last.timestamp {
+            let effectiveTemp = max(last.temperatureCelsius - baseTempCelsius, 0)
+            let hours = asOf.timeIntervalSince(last.timestamp) / 3600.0
             total += effectiveTemp * hours
         }
 

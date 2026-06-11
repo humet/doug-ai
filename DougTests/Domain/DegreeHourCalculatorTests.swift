@@ -57,6 +57,99 @@ struct DegreeHourCalculatorTests {
         #expect(result == 0)
     }
 
+    // MARK: - Extrapolation
+
+    @Test func extrapolatesTailAfterLastReading() {
+        let start = Date()
+        let readings: [(timestamp: Date, temperatureCelsius: Double)] = [
+            (start, 24.0),
+            (start.addingTimeInterval(3600), 24.0),
+        ]
+
+        let result = DegreeHourCalculator.accumulatedDegreeHours(
+            readings: readings,
+            extrapolatedTo: start.addingTimeInterval(7200)
+        )
+        // 20 integrated + (24 - 4) × 1h tail = 40
+        #expect(abs(result - 40.0) < 0.01)
+    }
+
+    @Test func asOfAtOrBeforeLastReadingIsNoOp() {
+        let start = Date()
+        let readings: [(timestamp: Date, temperatureCelsius: Double)] = [
+            (start, 24.0),
+            (start.addingTimeInterval(3600), 24.0),
+        ]
+
+        let atLast = DegreeHourCalculator.accumulatedDegreeHours(
+            readings: readings,
+            extrapolatedTo: start.addingTimeInterval(3600)
+        )
+        let beforeLast = DegreeHourCalculator.accumulatedDegreeHours(
+            readings: readings,
+            extrapolatedTo: start.addingTimeInterval(1800)
+        )
+        #expect(abs(atLast - 20.0) < 0.01)
+        #expect(abs(beforeLast - 20.0) < 0.01)
+    }
+
+    @Test func singleReadingWithAsOfReturnsTailOnly() {
+        let start = Date()
+        let readings: [(timestamp: Date, temperatureCelsius: Double)] = [
+            (start, 24.0),
+        ]
+
+        let result = DegreeHourCalculator.accumulatedDegreeHours(
+            readings: readings,
+            extrapolatedTo: start.addingTimeInterval(3600)
+        )
+        #expect(abs(result - 20.0) < 0.01)
+    }
+
+    @Test func singleReadingWithNilAsOfStillReturnsZero() {
+        let readings: [(timestamp: Date, temperatureCelsius: Double)] = [
+            (Date(), 24.0),
+        ]
+        #expect(DegreeHourCalculator.accumulatedDegreeHours(readings: readings, extrapolatedTo: nil) == 0)
+    }
+
+    @Test func belowBaseTempTailContributesZero() {
+        let start = Date()
+        let readings: [(timestamp: Date, temperatureCelsius: Double)] = [
+            (start, 24.0),
+            (start.addingTimeInterval(3600), 3.0),
+        ]
+
+        let withTail = DegreeHourCalculator.accumulatedDegreeHours(
+            readings: readings,
+            extrapolatedTo: start.addingTimeInterval(10800)
+        )
+        let withoutTail = DegreeHourCalculator.accumulatedDegreeHours(readings: readings)
+        #expect(withTail == withoutTail)
+    }
+
+    @Test func emptyReadingsWithAsOfReturnsZero() {
+        let result = DegreeHourCalculator.accumulatedDegreeHours(
+            readings: [],
+            extrapolatedTo: Date()
+        )
+        #expect(result == 0)
+    }
+
+    @Test func nilAsOfMatchesLegacyBehavior() {
+        let start = Date()
+        let readings: [(timestamp: Date, temperatureCelsius: Double)] = [
+            (start, 24.0),
+            (start.addingTimeInterval(3600), 26.0),
+            (start.addingTimeInterval(7200), 26.0),
+        ]
+
+        let implicit = DegreeHourCalculator.accumulatedDegreeHours(readings: readings)
+        let explicit = DegreeHourCalculator.accumulatedDegreeHours(readings: readings, extrapolatedTo: nil)
+        #expect(implicit == explicit)
+        #expect(abs(implicit - 43.0) < 0.01)
+    }
+
     // MARK: - Estimation
 
     @Test func estimatesRemainingTime() throws {

@@ -253,8 +253,23 @@ struct CoachChatView: View {
                     associatedStepTypeId: reading.associatedStepTypeID
                 )
             },
-            degreeHourTarget: schedule.recipe.degreeHourTarget,
+            degreeHourTarget: schedule.effectiveDegreeHourTarget,
+            currentDegreeHours: currentDegreeHours(for: schedule),
             delays: computeDelays(for: schedule)
+        )
+    }
+
+    /// Degree-hours extrapolated past the last reading (to now, or to bulk's
+    /// end once bulk is done) so the coach sees live fermentation progress,
+    /// not the value frozen at the last fold.
+    private func currentDegreeHours(for schedule: Schedule) -> Double? {
+        guard !schedule.temperatureReadings.isEmpty else { return nil }
+        let pairs = schedule.temperatureReadings.map {
+            (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
+        }
+        return DegreeHourCalculator.accumulatedDegreeHours(
+            readings: pairs,
+            extrapolatedTo: schedule.degreeHourCutoff(now: Date())
         )
     }
 

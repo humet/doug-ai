@@ -103,4 +103,65 @@ struct ScheduleViewModelFinishBakeTests {
 
         #expect(schedule.fermentationProfile?.outcomeNote == nil)
     }
+
+    @Test func recordsCalibratedTargetWhenSet() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let schedule = makeActiveSchedule(in: ctx)
+        schedule.calibratedDegreeHourTarget = 92.5
+
+        let viewModel = ScheduleViewModel()
+        viewModel.activeSchedule = schedule
+        viewModel.finishBake(reflection: BakeReflection(notes: ""), modelContext: ctx)
+
+        #expect(schedule.fermentationProfile?.targetDegreeHoursUsed == 92.5)
+    }
+
+    @Test func finalDegreeHoursExtrapolateToBulkEnd() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let schedule = makeActiveSchedule(in: ctx)
+
+        // Bulk ended an hour after the last 24°C reading: the recorded total
+        // must include the unlogged tail, not freeze at the last reading.
+        let lastReading = Date(timeIntervalSince1970: 1_000_000).addingTimeInterval(3600)
+        let bulk = ScheduleStep(
+            stepTypeID: .bulkFerment,
+            sequenceIndex: 0,
+            computedStartTime: Date(timeIntervalSince1970: 1_000_000),
+            computedEndTime: lastReading.addingTimeInterval(3600),
+            computedDurationMinutes: 120
+        )
+        bulk.stepStatus = .done
+        bulk.actualEndTime = lastReading.addingTimeInterval(3600)
+        bulk.schedule = schedule
+        ctx.insert(bulk)
+
+        let viewModel = ScheduleViewModel()
+        viewModel.activeSchedule = schedule
+        viewModel.finishBake(reflection: BakeReflection(notes: ""), modelContext: ctx)
+
+        let profile = try #require(schedule.fermentationProfile)
+        // 20 integrated + (24 - 4) × 1h tail = 40.
+        #expect(abs(profile.finalDegreeHours - 40) < 0.001)
+    }
+
+    @Test func finishAndCancelResetBulkTargetFlag() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+
+        let finished = makeActiveSchedule(in: ctx)
+        let finishViewModel = ScheduleViewModel()
+        finishViewModel.activeSchedule = finished
+        finishViewModel.bulkFermentTargetReached = true
+        finishViewModel.finishBake(reflection: nil, modelContext: ctx)
+        #expect(!finishViewModel.bulkFermentTargetReached)
+
+        let cancelled = makeActiveSchedule(in: ctx)
+        let cancelViewModel = ScheduleViewModel()
+        cancelViewModel.activeSchedule = cancelled
+        cancelViewModel.bulkFermentTargetReached = true
+        cancelViewModel.cancelBake(modelContext: ctx)
+        #expect(!cancelViewModel.bulkFermentTargetReached)
+    }
 }
