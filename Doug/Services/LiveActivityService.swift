@@ -212,6 +212,18 @@ final class LiveActivityService {
         let nextFoldIsRunning = nextFold?.stepStatus == .active
         let nextFoldTarget = nextFold.map { nextFoldIsRunning ? $0.computedEndTime : $0.computedStartTime }
 
+        // Running bake phases complete with one confirmation and no data
+        // entry, so they get a button on the activity itself. Folds want a
+        // dough temperature reading and keep directing into the app.
+        let nextFoldActionLabel: String? = {
+            guard nextFoldIsRunning else { return nil }
+            switch nextFold.flatMap({ StepTypeID(rawValue: $0.stepTypeID) }) {
+            case .bakeCovered: return "Lid Removed"
+            case .bakeUncovered: return "Bread Out"
+            default: return nil
+            }
+        }()
+
         return BakeActivityAttributes.ContentState(
             currentStepLabel: stepType.label,
             currentStepIcon: StepTypeIcon.systemName(for: stepTypeID),
@@ -224,6 +236,9 @@ final class LiveActivityService {
                 .map { StepTypeRegistry.type(for: $0).label },
             nextFoldTime: nextFoldTarget,
             nextFoldIsRunning: nextFoldIsRunning,
+            nextFoldStepTypeID: nextFold?.stepTypeID,
+            nextFoldSequenceIndex: nextFold?.sequenceIndex,
+            nextFoldActionLabel: nextFoldActionLabel,
             completedStepCount: completedCount,
             totalStepCount: steps.count,
             breadReadyTime: schedule.targetBreadReadyTime,

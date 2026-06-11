@@ -17,6 +17,15 @@ struct DougApp: App {
         // response immediately — a .task-assigned delegate would miss them.
         UNUserNotificationCenter.current().delegate = handler
         NotificationService.shared.registerCategories()
+        // Live Activity buttons perform in the app process — possibly a
+        // background launch where no view (and no view model) exists yet.
+        LiveActivityIntentRunner.modelContainer = container
+        CompleteBakePhaseIntent.performHandler = { stepTypeID, sequenceIndex in
+            LiveActivityIntentRunner.completeBakePhase(
+                stepTypeID: stepTypeID,
+                sequenceIndex: sequenceIndex
+            )
+        }
     }
 
     private static func makeContainer() -> ModelContainer {

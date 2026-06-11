@@ -1,8 +1,20 @@
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
 
 private extension BakeActivityAttributes.ContentState {
+    /// The complete-this-phase intent, when the current sub-step offers one
+    /// ("Lid Removed" / "Bread Out") and the bake isn't paused.
+    var phaseDoneIntent: (label: String, intent: CompleteBakePhaseIntent)? {
+        guard !isPaused,
+              let label = nextFoldActionLabel,
+              let stepTypeID = nextFoldStepTypeID,
+              let sequenceIndex = nextFoldSequenceIndex
+        else { return nil }
+        return (label, CompleteBakePhaseIntent(stepTypeID: stepTypeID, sequenceIndex: sequenceIndex))
+    }
+
     /// Shown when the content goes stale — the timer target passed without
     /// the app updating the activity (it was backgrounded the whole time).
     var staleMessage: String {
@@ -58,18 +70,30 @@ struct BakeLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack {
-                        if let nextLabel = context.state.nextStepLabel,
-                           let nextTime = context.state.nextStepStartTime
-                        {
-                            Text("Next: \(nextLabel) at \(nextTime, format: .dateTime.hour().minute())")
-                                .font(.caption)
+                    VStack(spacing: 8) {
+                        if let action = context.state.phaseDoneIntent {
+                            Button(intent: action.intent) {
+                                Label(action.label, systemImage: "checkmark.circle.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(LiveActivityColors.crustGold)
+                            .foregroundStyle(LiveActivityColors.sourdoughBrown)
+                        }
+                        HStack {
+                            if let nextLabel = context.state.nextStepLabel,
+                               let nextTime = context.state.nextStepStartTime
+                            {
+                                Text("Next: \(nextLabel) at \(nextTime, format: .dateTime.hour().minute())")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("\(context.state.completedStepCount)/\(context.state.totalStepCount) steps")
+                                .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
-                        Spacer()
-                        Text("\(context.state.completedStepCount)/\(context.state.totalStepCount) steps")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
                     }
                 }
             } compactLeading: {
@@ -177,6 +201,18 @@ private struct BakeLockScreenView: View {
                 Text("\(state.completedStepCount) of \(state.totalStepCount)")
                     .font(.caption2)
                     .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
+            }
+
+            if let action = state.phaseDoneIntent {
+                Button(intent: action.intent) {
+                    Label(action.label, systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 2)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(LiveActivityColors.crustGold)
+                .foregroundStyle(LiveActivityColors.sourdoughBrown)
             }
 
             if !state.isPaused {

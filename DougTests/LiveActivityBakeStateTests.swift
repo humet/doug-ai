@@ -218,6 +218,23 @@ struct LiveActivityBakeStateTests {
         #expect(state.nextFoldIsRunning)
         #expect(state.nextFoldTime == phases[0].computedEndTime)
         #expect(state.timerTarget == phases[0].computedEndTime)
+        // Running phases offer one-tap completion from the widget.
+        #expect(state.nextFoldActionLabel == "Lid Removed")
+        #expect(state.nextFoldStepTypeID == phases[0].stepTypeID)
+        #expect(state.nextFoldSequenceIndex == phases[0].sequenceIndex)
+    }
+
+    @Test func uncoveredPhaseOffersBreadOut() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date()
+        let (schedule, phases) = makeBakeSchedule(anchor: anchor, context: context)
+
+        phases[0].stepStatus = .done
+        phases[1].stepStatus = .active
+        let state = LiveActivityService.buildBakeState(from: schedule)
+
+        #expect(state.nextFoldActionLabel == "Bread Out")
     }
 
     @Test func pendingBakePhaseCountsDownToItsStart() throws {
@@ -250,6 +267,8 @@ struct LiveActivityBakeStateTests {
         // targets their start.
         #expect(!state.nextFoldIsRunning)
         #expect(state.timerTarget == folds[0].computedStartTime)
+        // No widget button for folds — they want a temperature reading in-app.
+        #expect(state.nextFoldActionLabel == nil)
     }
 
     @Test func showsActivityDuringActiveBulkFerment() throws {

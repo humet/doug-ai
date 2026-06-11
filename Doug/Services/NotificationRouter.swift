@@ -45,6 +45,10 @@ final class NotificationRouter {
     /// code uses `shared`.
     init() {}
 
+    var hasRegisteredViewModel: Bool {
+        scheduleViewModel != nil
+    }
+
     func registerScheduleViewModel(_ viewModel: ScheduleViewModel) {
         scheduleViewModel = viewModel
         if let buffered = bufferedFoldEntry {
