@@ -7,13 +7,13 @@ private extension BakeActivityAttributes.ContentState {
     /// the app updating the activity (it was backgrounded the whole time).
     var staleMessage: String {
         if let foldLabel = nextFoldLabel {
-            return "\(foldLabel) due"
+            return nextFoldIsRunning ? "\(foldLabel) done" : "\(foldLabel) due"
         }
         return "\(currentStepLabel) done"
     }
 
     var staleCompactMessage: String {
-        nextFoldLabel != nil ? "Due" : "Done"
+        nextFoldLabel != nil && !nextFoldIsRunning ? "Due" : "Done"
     }
 }
 
@@ -155,9 +155,18 @@ private struct BakeLockScreenView: View {
                             .font(.caption.bold())
                             .foregroundStyle(.red)
                     } else if let foldLabel = state.nextFoldLabel {
-                        (Text("\(foldLabel) in ") + Text(timerInterval: state.timerInterval, countsDown: true))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(LiveActivityColors.crustGold)
+                        Group {
+                            if state.nextFoldIsRunning {
+                                Text("\(foldLabel) — ")
+                                    + Text(timerInterval: state.timerInterval, countsDown: true)
+                                    + Text(" left")
+                            } else {
+                                Text("\(foldLabel) in ")
+                                    + Text(timerInterval: state.timerInterval, countsDown: true)
+                            }
+                        }
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(LiveActivityColors.crustGold)
                     } else {
                         Text(timerInterval: state.timerInterval, countsDown: true)
                             .font(.caption.monospacedDigit())

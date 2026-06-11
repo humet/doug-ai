@@ -154,6 +154,157 @@ struct LiveActivityBakeStateTests {
         #expect(inverted.timerInterval.upperBound == folds[0].computedStartTime)
     }
 
+    /// Active bake step with covered/uncovered phase sub-steps, the covered
+    /// phase already running.
+    private func makeBakeSchedule(
+        anchor: Date,
+        context: ModelContext
+    ) -> (schedule: Schedule, phases: [ScheduleStep]) {
+        let schedule = Schedule(
+            recipeID: .oliveRosemary,
+            targetBreadReadyTime: anchor.addingTimeInterval(60 * 60),
+            kitchenTemperatureCelsius: 24
+        )
+        schedule.scheduleStatus = .active
+        context.insert(schedule)
+
+        let bake = ScheduleStep(
+            stepTypeID: .bake,
+            sequenceIndex: 0,
+            computedStartTime: anchor.addingTimeInterval(-5 * 60),
+            computedEndTime: anchor.addingTimeInterval(40 * 60),
+            computedDurationMinutes: 45
+        )
+        bake.schedule = schedule
+        bake.stepStatus = .active
+        context.insert(bake)
+
+        let covered = ScheduleStep(
+            stepTypeID: .bakeCovered,
+            sequenceIndex: 0,
+            computedStartTime: anchor.addingTimeInterval(-5 * 60),
+            computedEndTime: anchor.addingTimeInterval(15 * 60),
+            computedDurationMinutes: 20
+        )
+        covered.parentStep = bake
+        covered.schedule = schedule
+        covered.stepStatus = .active
+        context.insert(covered)
+
+        let uncovered = ScheduleStep(
+            stepTypeID: .bakeUncovered,
+            sequenceIndex: 1,
+            computedStartTime: covered.computedEndTime,
+            computedEndTime: covered.computedEndTime.addingTimeInterval(25 * 60),
+            computedDurationMinutes: 25
+        )
+        uncovered.parentStep = bake
+        uncovered.schedule = schedule
+        context.insert(uncovered)
+
+        return (schedule, [covered, uncovered])
+    }
+
+    @Test func runningBakePhaseCountsDownToItsEnd() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date()
+        let (schedule, phases) = makeBakeSchedule(anchor: anchor, context: context)
+
+        let state = LiveActivityService.buildBakeState(from: schedule)
+
+        // Counting down to the phase's start would pin the timer at 0:00 —
+        // the phase is underway, so the target is its end.
+        #expect(state.nextFoldIsRunning)
+        #expect(state.nextFoldTime == phases[0].computedEndTime)
+        #expect(state.timerTarget == phases[0].computedEndTime)
+    }
+
+    @Test func pendingBakePhaseCountsDownToItsStart() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date()
+        let (schedule, phases) = makeBakeSchedule(anchor: anchor, context: context)
+
+        phases[0].stepStatus = .done
+        let state = LiveActivityService.buildBakeState(from: schedule)
+
+        #expect(!state.nextFoldIsRunning)
+        #expect(state.timerTarget == phases[1].computedStartTime)
+
+        phases[1].stepStatus = .active
+        let running = LiveActivityService.buildBakeState(from: schedule)
+        #expect(running.nextFoldIsRunning)
+        #expect(running.timerTarget == phases[1].computedEndTime)
+    }
+
+    @Test func pendingFoldsAreNotRunning() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date()
+        let (schedule, folds) = makeBulkSchedule(anchor: anchor, context: context)
+
+        let state = LiveActivityService.buildBakeState(from: schedule)
+
+        // Folds stay `.upcoming` until done/skipped — the countdown still
+        // targets their start.
+        #expect(!state.nextFoldIsRunning)
+        #expect(state.timerTarget == folds[0].computedStartTime)
+    }
+
+    @Test func showsActivityDuringActiveBulkFerment() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date()
+        let (schedule, _) = makeBulkSchedule(anchor: anchor, context: context)
+
+        #expect(LiveActivityService.shouldShowBakeActivity(for: schedule, now: anchor))
+    }
+
+    @Test func hidesActivityForHandsOnStepAndInactiveSchedule() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date()
+        let (schedule, folds) = makeBulkSchedule(anchor: anchor, context: context)
+
+        // Hands-on step types never get a Live Activity.
+        let bulk = try #require(folds[0].parentStep)
+        bulk.stepTypeID = StepTypeID.mix.rawValue
+        #expect(!LiveActivityService.shouldShowBakeActivity(for: schedule, now: anchor))
+
+        bulk.stepTypeID = StepTypeID.bulkFerment.rawValue
+        schedule.scheduleStatus = .complete
+        #expect(!LiveActivityService.shouldShowBakeActivity(for: schedule, now: anchor))
+    }
+
+    @Test func longWaitStepsOnlyShowInsideTheFinalHour() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date()
+        let (schedule, folds) = makeBulkSchedule(anchor: anchor, context: context)
+
+        let bulk = try #require(folds[0].parentStep)
+        bulk.stepTypeID = StepTypeID.coldRetard.rawValue
+
+        // 240-minute step: far from its end the activity stays hidden.
+        #expect(!LiveActivityService.shouldShowBakeActivity(for: schedule, now: anchor))
+        // Inside the final hour it appears.
+        let lateNow = bulk.computedEndTime.addingTimeInterval(-30 * 60)
+        #expect(LiveActivityService.shouldShowBakeActivity(for: schedule, now: lateNow))
+    }
+
+    @Test func noActiveStepStillShowsActivity() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let anchor = Date()
+        let (schedule, folds) = makeBulkSchedule(anchor: anchor, context: context)
+
+        // Between steps (previous done, next not yet promoted) the activity
+        // persists, pointing at the upcoming step.
+        folds[0].parentStep?.stepStatus = .done
+        #expect(LiveActivityService.shouldShowBakeActivity(for: schedule, now: anchor))
+    }
+
     @Test func upcomingBulkStepDoesNotSurfaceFolds() throws {
         let container = try makeContainer()
         let context = ModelContext(container)

@@ -16,10 +16,17 @@ struct BakeActivityAttributes: ActivityAttributes {
         let nextStepStartTime: Date?
 
         /// Next pending sub-step within the current step (stretch & fold or
-        /// add inclusions during bulk ferment). When set, the countdown timer
-        /// targets this instead of the step end.
+        /// add inclusions during bulk ferment, covered/uncovered phases during
+        /// bake). When set, the countdown timer targets this instead of the
+        /// step end.
         let nextFoldLabel: String?
+        /// When the baker is next needed for that sub-step: its start when it
+        /// hasn't begun (a pending fold), its end when it's already running
+        /// (an active bake phase).
         let nextFoldTime: Date?
+        /// True when the sub-step is underway — the countdown then reads as
+        /// time remaining rather than time until it begins.
+        let nextFoldIsRunning: Bool
 
         /// The moment the countdown should target: the next fold if one is
         /// pending, otherwise the end of the current step.

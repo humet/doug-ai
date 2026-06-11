@@ -1254,6 +1254,14 @@ final class ScheduleViewModel {
         glueLevainContinuation(after: step, in: schedule, now: effectiveCompletion)
         promoteNextUpcoming(in: schedule)
 
+        // A completed bake phase hands off to the next one right here — the
+        // tick that would otherwise promote it doesn't run while the app is
+        // backgrounded (notification "Done" action), and the Live Activity
+        // would count down to a start time that has already passed.
+        if step.parentStep != nil {
+            advanceSubSteps(in: schedule, now: now)
+        }
+
         unlockNotificationsAfterGate(step, in: schedule)
 
         if applyStarterSideEffects,
@@ -1318,7 +1326,9 @@ final class ScheduleViewModel {
                     promoteNextUpcoming(in: schedule, now: now)
                     syncLiveActivity()
                 }
-                advanceSubSteps(in: schedule, now: now)
+                if advanceSubSteps(in: schedule, now: now) {
+                    syncLiveActivity()
+                }
                 return
             case .active:
                 if step.stepType.classification == .passiveFixed, step.computedEndTime <= now {
@@ -1351,7 +1361,9 @@ final class ScheduleViewModel {
                     promoteNextUpcoming(in: schedule, now: now)
                     syncLiveActivity()
                 }
-                advanceSubSteps(in: schedule, now: now)
+                if advanceSubSteps(in: schedule, now: now) {
+                    syncLiveActivity()
+                }
                 return
             }
         }
@@ -1361,10 +1373,13 @@ final class ScheduleViewModel {
         }
     }
 
-    private func advanceSubSteps(in schedule: Schedule, now: Date) {
+    /// Returns true when a sub-step's status changed — the Live Activity
+    /// countdown targets sub-steps, so a change needs a resync.
+    @discardableResult
+    private func advanceSubSteps(in schedule: Schedule, now: Date) -> Bool {
         let steps = orderedTopLevelSteps(in: schedule)
         guard let active = steps.first(where: { $0.stepStatus == .active }),
-              !active.subSteps.isEmpty else { return }
+              !active.subSteps.isEmpty else { return false }
 
         let subs = active.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
 
@@ -1372,26 +1387,30 @@ final class ScheduleViewModel {
             for sub in subs {
                 switch sub.stepStatus {
                 case .done, .skipped: continue
-                case .active: return
+                case .active: return false
                 case .upcoming:
                     if !subs.contains(where: { $0.stepStatus == .active }) {
                         sub.stepStatus = .active
+                        return true
                     }
-                    return
+                    return false
                 }
             }
-            return
+            return false
         }
 
         // Fold checklist: skip missed folds when the next fold's time has arrived.
+        var didChange = false
         let folds = subs.filter { $0.stepTypeID == StepTypeID.stretchAndFold.rawValue }
         for (index, fold) in folds.enumerated() where fold.stepStatus != .done && fold.stepStatus != .skipped {
             let nextDue = index + 1 < folds.count && folds[index + 1].computedStartTime <= now
             if nextDue {
                 fold.stepStatus = .skipped
                 NotificationService.shared.cancelNotifications(for: [fold])
+                didChange = true
             }
         }
+        return didChange
     }
 
     // MARK: - Pause / Resume
@@ -1980,48 +1999,12 @@ final class ScheduleViewModel {
 
     // MARK: - Live Activity
 
-    private static let liveActivitySteps: Set<String> = [
-        StepTypeID.autolyse.rawValue,
-        StepTypeID.bulkFerment.rawValue,
-        StepTypeID.coldRetard.rawValue,
-        StepTypeID.finalProof.rawValue,
-        StepTypeID.preheat.rawValue,
-        StepTypeID.bake.rawValue,
-        StepTypeID.bakeSheet.rawValue,
-        StepTypeID.waitForPeak.rawValue,
-        StepTypeID.waitForLevainPeak.rawValue,
-    ]
-
-    private static let liveActivityLongWaitSteps: Set<String> = [
-        StepTypeID.waitForPeak.rawValue,
-        StepTypeID.waitForLevainPeak.rawValue,
-        StepTypeID.coldRetard.rawValue,
-    ]
-
-    private static let liveActivityResumeThreshold: TimeInterval = 60 * 60
-
     private func syncLiveActivity() {
-        guard let schedule = activeSchedule, schedule.scheduleStatus == .active else {
+        guard let schedule = activeSchedule,
+              LiveActivityService.shouldShowBakeActivity(for: schedule)
+        else {
             LiveActivityService.shared.endBakeActivity()
             return
-        }
-
-        let steps = orderedTopLevelSteps(in: schedule)
-        let activeStep = steps.first { $0.stepStatus == .active }
-
-        if let active = activeStep {
-            if !Self.liveActivitySteps.contains(active.stepTypeID) {
-                LiveActivityService.shared.endBakeActivity()
-                return
-            }
-
-            if Self.liveActivityLongWaitSteps.contains(active.stepTypeID) {
-                let remaining = active.computedEndTime.timeIntervalSince(Date())
-                if remaining > Self.liveActivityResumeThreshold {
-                    LiveActivityService.shared.endBakeActivity()
-                    return
-                }
-            }
         }
 
         let state = LiveActivityService.buildBakeState(from: schedule)
