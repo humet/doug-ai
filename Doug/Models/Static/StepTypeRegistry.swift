@@ -234,6 +234,25 @@ enum StepTypeRegistry {
             successSignal: "Dough fills most of the pan evenly, with a dimpled surface glistening with olive oil."
         ),
 
+        .tinShape: StepType(
+            id: .tinShape,
+            label: "Shape & Pan",
+            classification: .handsOn,
+            baseDurationMinutes: 15,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Grease a loaf tin. Pre-shape the dough into a round and rest 10 minutes, then shape into a tight log the length of the tin: flatten gently, fold the sides in, and roll up snugly to build surface tension. Place it seam-side down in the tin.",
+            notificationText: "Time to shape — pre-shape, bench rest, then shape into a log and drop it seam-down into a greased loaf tin.",
+            successSignal: "The log fills the tin corner to corner, sits seam-side down, and has a taut, smooth top.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 60,
+                warning: "The dough has been bulk fermenting longer than planned. It may be over-proofed — slack and sticky, with little tension left to build.",
+                salvageAdvice: "Shape it gently and get it into the tin — the pan will support a slacker dough. Expect a slightly denser, more open crumb."
+            )
+        ),
+
         .bakeSheet: StepType(
             id: .bakeSheet,
             label: "Bake",
@@ -251,6 +270,26 @@ enum StepTypeRegistry {
                 thresholdMinutes: 30,
                 warning: "Your oven has been at temperature for a long time — wasting energy, but the dough on the counter is still fine.",
                 salvageAdvice: "Turn the oven off and try again when you're ready."
+            )
+        ),
+
+        .bakeTin: StepType(
+            id: .bakeTin,
+            label: "Bake",
+            classification: .passiveFixed,
+            baseDurationMinutes: 40,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            requiresPresence: true,
+            instructionText: "Place the tin in the preheated oven and bake until deep golden. Tip the loaf out of the tin for the last few minutes to firm up the sides. It's done when the bottom sounds hollow and the internal temperature reads 93–96°C. Cool completely on a rack before slicing.",
+            notificationText: "Time to bake — get the tin in the oven.",
+            successSignal: "Crust is deep golden, the loaf sounds hollow when tapped underneath, and the internal temperature reads 93–96°C.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 30,
+                warning: "Your oven has been at temperature for a long time — wasting energy, but the dough in the fridge is fine. No harm to the bread.",
+                salvageAdvice: "Turn the oven off and try again when you're ready. The dough will keep in the fridge."
             )
         ),
 

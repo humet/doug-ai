@@ -659,7 +659,7 @@ struct NowStepHero: View {
     }
 
     private var ovenTemperature: Int? {
-        guard [.preheat, .bake, .bakeCovered, .bakeUncovered].contains(stepTypeIDEnum) else { return nil }
+        guard [.preheat, .bake, .bakeCovered, .bakeUncovered, .bakeTin].contains(stepTypeIDEnum) else { return nil }
         return step.schedule?.recipe.bakeTemperature(for: stepTypeIDEnum)
     }
 
@@ -791,7 +791,7 @@ struct NowStepHero: View {
         switch stepTypeIDEnum {
         case .bulkFerment: return "Bulk Done"
         case .preheat: return "Dough Loaded"
-        case .bakeSheet: return "Bread Out"
+        case .bakeSheet, .bakeTin: return "Bread Out"
         default: return nil
         }
     }

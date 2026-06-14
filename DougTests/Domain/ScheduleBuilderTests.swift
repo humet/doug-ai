@@ -613,7 +613,7 @@ struct ScheduleBuilderTests {
     }
 
     @Test func requiresPresenceFlagValues() {
-        let presenceSteps: Set<StepTypeID> = [.preheat, .bake, .bakeCovered, .bakeUncovered, .bakeSheet]
+        let presenceSteps: Set<StepTypeID> = [.preheat, .bake, .bakeCovered, .bakeUncovered, .bakeSheet, .bakeTin]
 
         for id in StepTypeID.allCases {
             let stepType = StepTypeRegistry.type(for: id)

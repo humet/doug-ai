@@ -15,7 +15,9 @@ enum StepTypeIcon {
         case .temper: "thermometer.medium"
         case .finalProof: "sun.max"
         case .panShape: "hand.raised"
+        case .tinShape: "rectangle.portrait"
         case .bakeSheet: "flame"
+        case .bakeTin: "oven"
         case .preheat: "flame"
         case .bake: "oven"
         case .bakeCovered: "oven"
@@ -38,9 +40,9 @@ enum StepTypeIcon {
             .blue
         case .finalProof, .temper:
             DougTheme.crustGold
-        case .panShape:
+        case .panShape, .tinShape:
             DougTheme.sourdoughBrown
-        case .preheat, .bake, .bakeCovered, .bakeUncovered, .bakeSheet:
+        case .preheat, .bake, .bakeCovered, .bakeUncovered, .bakeSheet, .bakeTin:
             .orange
         case .activateStarter, .waitForPeak, .waitForLevainPeak:
             .green

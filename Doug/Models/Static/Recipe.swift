@@ -11,6 +11,7 @@ enum RecipeID: String, CaseIterable, Codable {
     case focaccia
     case pizzaDough
     case softRolls
+    case sandwichLoaf
 }
 
 // MARK: - Difficulty

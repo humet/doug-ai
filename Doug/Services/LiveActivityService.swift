@@ -147,6 +147,7 @@ final class LiveActivityService {
         StepTypeID.preheat.rawValue,
         StepTypeID.bake.rawValue,
         StepTypeID.bakeSheet.rawValue,
+        StepTypeID.bakeTin.rawValue,
         StepTypeID.waitForPeak.rawValue,
         StepTypeID.waitForLevainPeak.rawValue,
     ]

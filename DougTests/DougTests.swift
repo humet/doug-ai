@@ -3,7 +3,7 @@ import Testing
 
 struct RecipeTests {
     @Test func allRecipesExist() {
-        #expect(RecipeBook.all.count == 8)
+        #expect(RecipeBook.all.count == 9)
     }
 
     @Test func recipeIDsAreUnique() {
