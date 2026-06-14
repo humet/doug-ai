@@ -3,7 +3,7 @@ import Foundation
 enum RecipeBook {
     static let all: [Recipe] = [
         countryLoaf, highHydrationArtisan, wholeWheatHoney, oliveRosemary,
-        sameDayCountry, focaccia, pizzaDough, softRolls,
+        sameDayCountry, focaccia, pizzaDough, softRolls, sandwichLoaf,
     ]
 
     static func recipe(for id: RecipeID) -> Recipe {
@@ -392,5 +392,49 @@ enum RecipeBook {
             baseCount: 8,
             countRange: 4 ... 16
         )
+    )
+
+    // MARK: - Sandwich Loaf
+
+    static let sandwichLoaf = Recipe(
+        id: .sandwichLoaf,
+        name: "Sandwich Loaf",
+        description: "A soft sourdough sandwich loaf baked in a tin. 70% hydration enriched with butter and honey for a tender, fine, even crumb that slices cleanly — no scoring, no dutch oven. Shape in the evening, cold retard overnight, and bake straight from the fridge. Makes one tin loaf.",
+        difficulty: .intermediate,
+        hydrationPercent: 70,
+        approximateTotalHours: 18 ... 26,
+        ingredients: Ingredients(
+            flourGrams: 500,
+            waterGrams: 350,
+            saltGrams: 10,
+            levainGrams: 100,
+            extras: [
+                ExtraIngredient("Butter", grams: 35, note: "softened"),
+                ExtraIngredient("Honey", grams: 20),
+            ]
+        ),
+        method: [
+            MethodStep(stepTypeID: .buildLevain, levainBuildRatio: (1, 5, 5)),
+            MethodStep(stepTypeID: .waitForLevainPeak),
+            MethodStep(stepTypeID: .autolyse),
+            MethodStep(stepTypeID: .mix),
+            MethodStep(
+                stepTypeID: .bulkFerment,
+                durationOverrideMinutes: 210,
+                foldCount: 3,
+                degreeHourTarget: 70,
+                foldSpacingFraction: 0.67
+            ),
+            MethodStep(stepTypeID: .tinShape),
+            MethodStep(
+                stepTypeID: .coldRetard,
+                flexRangeOverride: 480 ... 1080
+            ),
+            MethodStep(stepTypeID: .preheat),
+            MethodStep(stepTypeID: .bakeTin, durationOverrideMinutes: 40),
+        ],
+        bakeTemperatureCelsius: 200,
+        degreeHourTarget: 70,
+        referenceTemperatureCelsius: 24.0
     )
 }

@@ -15,7 +15,9 @@ enum StepTypeID: String, CaseIterable, Codable {
     case temper
     case finalProof
     case panShape
+    case tinShape
     case bakeSheet
+    case bakeTin
     case preheat
     case bake
     case bakeCovered

@@ -1407,6 +1407,7 @@ final class ScheduleViewModel {
                         StepTypeID.bulkFerment.rawValue,
                         StepTypeID.preheat.rawValue,
                         StepTypeID.bakeSheet.rawValue,
+                        StepTypeID.bakeTin.rawValue,
                     ]
                     if manualSteps.contains(step.stepTypeID) {
                         advanceSubSteps(in: schedule, now: now)
