@@ -67,7 +67,13 @@ struct NowStepHero: View {
                         if let fold = foldToComplete {
                             viewModel.markFoldDone(fold)
                         } else if let tempStep = stepRequiringTemp, tempStep.parentStep == nil {
-                            viewModel.finishStepEarly(tempStep, modelContext: modelContext)
+                            // Complete via the same path as the plain "Done"
+                            // button. `finishStepEarly` no-ops once the step is
+                            // overdue (its `guard delta < 0`), which a short
+                            // hands-on step like Mix almost always is by the
+                            // time a temp is logged — leaving the step active
+                            // and its notifications firing.
+                            completeCurrent()
                         }
                         viewModel.handleNewTemperatureReading(schedule: schedule)
                         foldToComplete = nil

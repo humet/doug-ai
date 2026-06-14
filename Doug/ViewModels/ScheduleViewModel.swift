@@ -1507,12 +1507,20 @@ final class ScheduleViewModel {
 
     // MARK: - Finish Early / Start Now / Extend / Shorten
 
-    func finishStepEarly(_ step: ScheduleStep, modelContext _: ModelContext) {
+    func finishStepEarly(_ step: ScheduleStep, modelContext: ModelContext) {
         guard let schedule = activeSchedule else { return }
         let now = Date()
         let oldEnd = step.computedEndTime
         let delta = now.timeIntervalSince(oldEnd)
-        guard delta < 0 else { return }
+        // Not actually early — the step is at or past its scheduled end. There's
+        // nothing to pull forward, and silently returning would leave the step
+        // active with its notifications still pending (the Mix-temp bug). Hand
+        // off to the normal completion path, which cancels notifications,
+        // promotes the next step, and applies side effects.
+        guard delta < 0 else {
+            markStepDone(step, modelContext: modelContext)
+            return
+        }
 
         step.stepStatus = .done
         step.actualEndTime = now

@@ -129,6 +129,30 @@ struct ScheduleAdjustmentsTests {
         #expect(steps[1].computedStartTime < originalMixStart)
     }
 
+    /// Reproduces the Mix-temp bug: a short hands-on step (Mix, 5 min) is active
+    /// but already past its computed end by the time a temperature is logged.
+    /// `finishStepEarly` used to no-op here (its `guard delta < 0`), leaving the
+    /// step active and its notifications firing. It must now complete the step
+    /// and promote the next one.
+    @Test func finishStepEarlyOnOverdueStepStillCompletesAndPromotes() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // Anchor so the mix step (anchor+45m … anchor+50m) ended a minute ago.
+        let anchor = Date().addingTimeInterval(-51 * 60)
+        let (schedule, steps) = makeSchedule(anchor: anchor, context: context)
+        steps[0].stepStatus = .done
+        steps[0].actualEndTime = steps[0].computedEndTime
+        steps[1].stepStatus = .active
+        let vm = makeViewModel(with: schedule)
+
+        vm.finishStepEarly(steps[1], modelContext: context)
+
+        #expect(steps[1].stepStatus == .done)
+        #expect(steps[1].actualEndTime != nil)
+        // Bulk (next step) promoted to active so the bake can progress.
+        #expect(steps[2].stepStatus == .active)
+    }
+
     // MARK: - Start Now
 
     @Test func startStepNowShiftsDownstream() throws {
