@@ -413,7 +413,8 @@ final class ScheduleViewModel {
                             )
                         },
                         requiresTempReading: step.requiresTempReading,
-                        levainElapsedMinutes: step.levainElapsedMinutes
+                        levainElapsedMinutes: step.levainElapsedMinutes,
+                        levainBuildRatio: step.levainBuildRatio
                     )
                 }
             }
@@ -849,7 +850,9 @@ final class ScheduleViewModel {
 
         let activateEnd = activateStart.addingTimeInterval(activateDuration * 60)
         let waitForPeakStart = activateEnd
-        let waitForPeakEnd = levainStart
+        // The starter peaks after its true rise time — never stretched to reach the
+        // levain build. Any remaining gap is shown honestly as a hold (below).
+        let waitForPeakEnd = waitForPeakStart.addingTimeInterval(peakDuration * 60)
 
         var steps: [ScheduledStep] = []
 
@@ -876,16 +879,28 @@ final class ScheduleViewModel {
             durationMinutes: activateDuration
         ))
 
-        let waitDuration = waitForPeakEnd.timeIntervalSince(waitForPeakStart) / 60.0
-        if waitDuration > 0 {
+        steps.append(ScheduledStep(
+            methodStepID: UUID(),
+            stepTypeID: .waitForPeak,
+            label: "Wait for Peak",
+            classification: .passiveFixed,
+            startTime: waitForPeakStart,
+            endTime: waitForPeakEnd,
+            durationMinutes: peakDuration
+        ))
+
+        // If the starter peaks before the levain build, chill it to hold at peak
+        // rather than leaving it out to over-ripen. Shown as an explicit step, not a
+        // fictionally long "Wait for Peak".
+        if waitForPeakEnd < levainStart {
             steps.append(ScheduledStep(
                 methodStepID: UUID(),
-                stepTypeID: .waitForPeak,
-                label: "Wait for Peak",
+                stepTypeID: .holdStarter,
+                label: "Chill Starter",
                 classification: .passiveFixed,
-                startTime: waitForPeakStart,
-                endTime: waitForPeakEnd,
-                durationMinutes: waitDuration
+                startTime: waitForPeakEnd,
+                endTime: levainStart,
+                durationMinutes: levainStart.timeIntervalSince(waitForPeakEnd) / 60.0
             ))
         }
 
@@ -990,6 +1005,7 @@ final class ScheduleViewModel {
                 computedEndTime: step.endTime,
                 computedDurationMinutes: step.durationMinutes
             )
+            scheduleStep.levainBuildRatio = step.levainBuildRatio?.rawValue
             scheduleStep.schedule = schedule
             persistedSteps.append(scheduleStep)
 

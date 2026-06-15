@@ -1,6 +1,26 @@
 import Foundation
 
 extension ScheduleBuilder {
+    /// Duration of a method step for viable-range accounting. For the levain peak
+    /// wait, `fastLevain` substitutes the fastest inoculation (1:1:1) — a baker can
+    /// choose a fast build to bake sooner, so the *earliest* bakeable time is bounded
+    /// by it, not the standard 1:5:5 wait. All other steps use their normal duration.
+    private static func viableRangeDuration(
+        for step: MethodStep,
+        kitchenTemp: Double,
+        peakProfile: StarterPeakProfile?,
+        fastLevain: Bool
+    ) -> Double {
+        if fastLevain, step.stepTypeID == .waitForLevainPeak {
+            return LevainBuildPlanner.peakMinutes(
+                ratio: .oneToOne, kitchenTemp: kitchenTemp, profile: peakProfile
+            )
+        }
+        return TemperatureCalculator.effectiveDuration(
+            for: step, kitchenTemp: kitchenTemp, peakProfile: peakProfile
+        )
+    }
+
     static func viableRange(
         recipe: Recipe,
         kitchenTemperatureCelsius: Double,
@@ -65,12 +85,16 @@ extension ScheduleBuilder {
             )
         }
 
+        // The earliest bound assumes the baker can pick a fast levain (1:1:1) to
+        // bake sooner; the cold retard governs the late bound, so the levain ratio
+        // doesn't enter there.
         let preColdRetardSteps = method[..<coldRetardIndex]
         let preColdRetardMinutes = preColdRetardSteps.reduce(0.0) { total, step in
-            total + TemperatureCalculator.effectiveDuration(
+            total + viableRangeDuration(
                 for: step,
                 kitchenTemp: kitchenTemperatureCelsius,
-                peakProfile: peakProfile
+                peakProfile: peakProfile,
+                fastLevain: true
             )
         }
 
@@ -156,13 +180,20 @@ extension ScheduleBuilder {
                 totalMinMinutes += flexRange.lowerBound
                 totalMaxMinutes += flexRange.upperBound
             } else {
-                let duration = TemperatureCalculator.effectiveDuration(
+                // Earliest bound: fastest levain (bake sooner). Latest bound: the
+                // standard build, so the levain doesn't inflate the late end.
+                totalMinMinutes += viableRangeDuration(
                     for: step,
                     kitchenTemp: kitchenTemperatureCelsius,
-                    peakProfile: peakProfile
+                    peakProfile: peakProfile,
+                    fastLevain: true
                 )
-                totalMinMinutes += duration
-                totalMaxMinutes += duration
+                totalMaxMinutes += viableRangeDuration(
+                    for: step,
+                    kitchenTemp: kitchenTemperatureCelsius,
+                    peakProfile: peakProfile,
+                    fastLevain: false
+                )
             }
         }
 

@@ -19,6 +19,26 @@ enum FeedRatioBucket: String, CaseIterable {
         default: return nil
         }
     }
+
+    /// The starter:flour:water parts for building a levain at this ratio.
+    var buildRatio: (starter: Int, flour: Int, water: Int) {
+        switch self {
+        case .oneToOne: (1, 1, 1)
+        case .oneToTwo: (1, 2, 2)
+        case .oneToFive: (1, 5, 5)
+        case .oneToTen: (1, 10, 10)
+        }
+    }
+
+    /// Short baker-facing label for an adaptively-chosen build, relative to the
+    /// standard 1:5:5. nil for the standard ratio (shown without embellishment).
+    var adaptiveBuildLabel: String? {
+        switch self {
+        case .oneToOne, .oneToTwo: "Quick levain"
+        case .oneToFive: nil
+        case .oneToTen: "Overnight levain"
+        }
+    }
 }
 
 enum TemperatureBracket: String, CaseIterable {

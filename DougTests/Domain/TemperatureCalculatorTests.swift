@@ -201,4 +201,51 @@ struct TemperatureCalculatorTests {
         )
         #expect(abs(water - 23.6) < 0.01)
     }
+
+    // MARK: - Ratio-Aware Levain Peak
+
+    @Test func oneToFivePeakEqualsLegacyBuildMinutes() {
+        // The standard ratio must be numerically identical to the legacy curve so
+        // existing schedule behaviour is unchanged.
+        for temp in [18.0, 22.0, 24.0, 27.0] {
+            #expect(
+                TemperatureCalculator.levainPeakMinutes(ratio: .oneToFive, kitchenTemp: temp)
+                    == TemperatureCalculator.levainBuildMinutes(kitchenTemp: temp)
+            )
+        }
+    }
+
+    @Test func lowerInoculationTakesLongerToPeak() {
+        // At a fixed temperature, less starter per part (1:10:10) peaks slower than
+        // more (1:1:1) — the lever for an overnight build.
+        let oneToOne = TemperatureCalculator.levainPeakMinutes(ratio: .oneToOne, kitchenTemp: 24)
+        let oneToTwo = TemperatureCalculator.levainPeakMinutes(ratio: .oneToTwo, kitchenTemp: 24)
+        let oneToFive = TemperatureCalculator.levainPeakMinutes(ratio: .oneToFive, kitchenTemp: 24)
+        let oneToTen = TemperatureCalculator.levainPeakMinutes(ratio: .oneToTen, kitchenTemp: 24)
+        #expect(oneToOne < oneToTwo)
+        #expect(oneToTwo < oneToFive)
+        #expect(oneToFive < oneToTen)
+    }
+
+    @Test func overnightRatioLandsInOvernightRange() {
+        // 1:10:10 at moderate temp should be a genuine overnight build (~8–12h).
+        let minutes = TemperatureCalculator.levainPeakMinutes(ratio: .oneToTen, kitchenTemp: 24)
+        #expect(minutes >= 8 * 60 && minutes <= 12 * 60)
+    }
+
+    @Test func fastRatioShortensMinimumChain() {
+        // 1:1:1 is meaningfully faster than the standard build — what lets the app
+        // offer earlier bread-ready times.
+        let fast = TemperatureCalculator.levainPeakMinutes(ratio: .oneToOne, kitchenTemp: 24)
+        #expect(fast < TemperatureCalculator.levainBuildMinutes(kitchenTemp: 24))
+        #expect(fast <= 3 * 60 + 1)
+    }
+
+    @Test func coolerKitchenSlowsEveryRatio() {
+        for ratio in FeedRatioBucket.allCases {
+            let cool = TemperatureCalculator.levainPeakMinutes(ratio: ratio, kitchenTemp: 18)
+            let warm = TemperatureCalculator.levainPeakMinutes(ratio: ratio, kitchenTemp: 27)
+            #expect(cool > warm)
+        }
+    }
 }
