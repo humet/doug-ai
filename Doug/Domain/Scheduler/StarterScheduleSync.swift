@@ -137,22 +137,30 @@ enum StarterScheduleSync {
         }
     }
 
-    /// Expected minutes from an activation feed to peak. Single home for the
-    /// fallback chain: observed bucket average → profile's activation average →
-    /// temperature-derived default.
+    /// Expected minutes from a feed to peak, for a given inoculation ratio. Single
+    /// home for the fallback chain: observed bucket average → profile's activation
+    /// average → ratio-aware temperature-derived default.
+    ///
+    /// `ratio` defaults to `.oneToFive` (the standard build) so existing callers —
+    /// starter activation, where the feed ratio is fixed — are unchanged. The
+    /// levain side passes the adaptively-chosen ratio.
     static func expectedPeakMinutes(
         peakProfile: StarterPeakProfile?,
         activePeakAverageMinutes: Double?,
-        kitchenTempCelsius: Double
+        kitchenTempCelsius: Double,
+        ratio: FeedRatioBucket = .oneToFive
     ) -> Double {
         let bracket = TemperatureBracket.bracket(celsius: kitchenTempCelsius)
         if let profile = peakProfile,
-           let observed = profile.averageMinutes(ratio: .oneToFive, tempBracket: bracket)
+           let observed = profile.averageMinutes(ratio: ratio, tempBracket: bracket)
         {
             return observed
         }
-        return activePeakAverageMinutes
-            ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTempCelsius)
+        // The profile activation average is only meaningful for the standard ratio.
+        if ratio == .oneToFive, let activePeakAverageMinutes {
+            return activePeakAverageMinutes
+        }
+        return TemperatureCalculator.levainPeakMinutes(ratio: ratio, kitchenTemp: kitchenTempCelsius)
     }
 
     // MARK: - Matching

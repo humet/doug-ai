@@ -386,6 +386,12 @@ private struct PreviewStepRow: View {
         compression != nil
     }
 
+    /// Baker-facing tag when the scheduler sized the levain build adaptively
+    /// (e.g. a slow overnight build to ripen into a morning mix).
+    private var adaptiveLevainLabel: String? {
+        step.stepTypeID == .buildLevain ? step.levainBuildRatio?.adaptiveBuildLabel : nil
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -399,6 +405,14 @@ private struct PreviewStepRow: View {
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(.green, in: .capsule)
+                    }
+                    if let levainLabel = adaptiveLevainLabel {
+                        Text(levainLabel)
+                            .font(.caption2)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(.purple, in: .capsule)
                     }
                     if isCompressed {
                         Text("shortened")

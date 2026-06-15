@@ -49,6 +49,10 @@ struct ScheduledStep: Identifiable {
     let subSteps: [ScheduledStep]
     let requiresTempReading: Bool
     let levainElapsedMinutes: Double?
+    /// The adaptively-chosen inoculation ratio for a `buildLevain` step, when the
+    /// scheduler sized the build to fit its ripening window (e.g. a slow overnight
+    /// levain). nil for non-levain steps and when the standard build is used.
+    let levainBuildRatio: FeedRatioBucket?
 
     init(
         methodStepID: UUID,
@@ -60,7 +64,8 @@ struct ScheduledStep: Identifiable {
         durationMinutes: Double,
         subSteps: [ScheduledStep] = [],
         requiresTempReading: Bool = false,
-        levainElapsedMinutes: Double? = nil
+        levainElapsedMinutes: Double? = nil,
+        levainBuildRatio: FeedRatioBucket? = nil
     ) {
         id = UUID()
         self.methodStepID = methodStepID
@@ -73,6 +78,7 @@ struct ScheduledStep: Identifiable {
         self.subSteps = subSteps
         self.requiresTempReading = requiresTempReading
         self.levainElapsedMinutes = levainElapsedMinutes
+        self.levainBuildRatio = levainBuildRatio
     }
 }
 
@@ -644,6 +650,90 @@ enum ScheduleBuilder {
                 requiresTempReading: mix.requiresTempReading,
                 levainElapsedMinutes: mix.levainElapsedMinutes
             )
+        }
+
+        // Fresh-levain adaptive sizing (no levain built yet — dormant starter).
+        //
+        // resolveConflict can push the hands-on Build Levain earlier (past an
+        // unavailable block) while the passiveFixed Wait for Levain Peak stays put,
+        // and the re-glue above only repairs *in-progress* levains. For a fresh
+        // build that strands the levain past peak before the dough work begins.
+        //
+        // Instead, think like a baker: glue the wait to the build and size the build
+        // (inoculation ratio) so the levain ripens into the consumer's usable window
+        // — a slow overnight levain fills a long gap rather than a fast one collapsing
+        // in it. Slack at the back of the chain is still absorbed by the cold retard;
+        // this only reshapes the levain when a real front gap remains.
+        if input.levainContext == nil,
+           let waitIdx = result.firstIndex(where: { $0.stepTypeID == .waitForLevainPeak }),
+           waitIdx > 0,
+           waitIdx + 1 < result.count,
+           result[waitIdx - 1].stepTypeID == .buildLevain
+        {
+            let buildIdx = waitIdx - 1
+            let consumerIdx = waitIdx + 1
+            let build = result[buildIdx]
+            let consumerStart = result[consumerIdx].startTime
+            let buildEnd = build.startTime.addingTimeInterval(build.durationMinutes * 60)
+            let windowMinutes = consumerStart.timeIntervalSince(buildEnd) / 60.0
+
+            if windowMinutes > 0 {
+                switch LevainBuildPlanner.selectBuild(
+                    windowMinutes: windowMinutes,
+                    kitchenTemp: input.kitchenTemperatureCelsius,
+                    profile: input.peakProfile
+                ) {
+                case let .build(choice):
+                    // Glue the wait to the build, sized to the chosen peak.
+                    let waitStart = buildEnd
+                    let waitEnd = waitStart.addingTimeInterval(choice.peakMinutes * 60)
+                    let oldWait = result[waitIdx]
+                    result[waitIdx] = ScheduledStep(
+                        methodStepID: oldWait.methodStepID,
+                        stepTypeID: oldWait.stepTypeID,
+                        label: oldWait.label,
+                        classification: oldWait.classification,
+                        startTime: waitStart,
+                        endTime: waitEnd,
+                        durationMinutes: choice.peakMinutes,
+                        subSteps: oldWait.subSteps,
+                        requiresTempReading: oldWait.requiresTempReading
+                    )
+                    // Tag the build with the chosen ratio so the UI can show it.
+                    result[buildIdx] = ScheduledStep(
+                        methodStepID: build.methodStepID,
+                        stepTypeID: build.stepTypeID,
+                        label: build.label,
+                        classification: build.classification,
+                        startTime: build.startTime,
+                        endTime: buildEnd,
+                        durationMinutes: build.durationMinutes,
+                        subSteps: build.subSteps,
+                        requiresTempReading: build.requiresTempReading,
+                        levainBuildRatio: choice.ratio
+                    )
+                    // A gap beyond even a slow build's plateau (very long overnight)
+                    // is bridged by chilling the levain, not leaving it to collapse.
+                    if choice.holdMinutes > 0, waitEnd < consumerStart {
+                        result.insert(ScheduledStep(
+                            methodStepID: UUID(),
+                            stepTypeID: .holdStarter,
+                            label: "Chill Levain",
+                            classification: .passiveFixed,
+                            startTime: waitEnd,
+                            endTime: consumerStart,
+                            durationMinutes: consumerStart.timeIntervalSince(waitEnd) / 60.0
+                        ), at: consumerIdx)
+                    }
+                case .tooSoon:
+                    return .conflict(ScheduleConflict(
+                        conflictingStepLabel: build.label,
+                        conflictingWindowName: "schedule constraint",
+                        message: "This bread-ready time is too soon to build a fresh levain in your available hours. Try a later time.",
+                        suggestedAlternativeTime: nil
+                    ))
+                }
+            }
         }
 
         // Validate all flexible steps stay within their flex range

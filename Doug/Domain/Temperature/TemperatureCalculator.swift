@@ -33,6 +33,9 @@ enum TemperatureCalculator {
 
     /// Estimates levain build time based on kitchen temperature.
     ///
+    /// Calibrated for the standard 1:5:5 build. For other inoculation ratios use
+    /// `levainPeakMinutes(ratio:kitchenTemp:)`, which scales off this curve.
+    ///
     /// - Parameter kitchenTemp: Kitchen temperature in °C.
     /// - Returns: Estimated levain build time in minutes.
     static func levainBuildMinutes(kitchenTemp: Double) -> Double {
@@ -42,6 +45,32 @@ enum TemperatureCalculator {
         default: 360 // 6 hours
         }
     }
+
+    /// Time-to-peak multiplier per inoculation ratio, relative to the standard
+    /// 1:5:5 build. Lower inoculation (more flour/water per part of starter) takes
+    /// longer to peak — the lever a baker uses to time an overnight levain. The
+    /// 1:5:5 entry is exactly 1.0 so `levainPeakMinutes(.oneToFive, …)` equals
+    /// `levainBuildMinutes(…)` and existing behaviour is unchanged.
+    static func levainRatioPeakMultiplier(_ ratio: FeedRatioBucket) -> Double {
+        switch ratio {
+        case .oneToOne: 0.6 // high inoculation → fast (~3h at 24°C)
+        case .oneToTwo: 0.85 // (~4.25h at 24°C)
+        case .oneToFive: 1.0 // standard anchor (~5h at 24°C)
+        case .oneToTen: 2.0 // low inoculation → overnight (~10h at 24°C)
+        }
+    }
+
+    /// Estimates time-to-peak for a levain build as a function of inoculation
+    /// ratio and kitchen temperature. Scales the temperature-aware 1:5:5 curve
+    /// (`levainBuildMinutes`) by the ratio multiplier.
+    static func levainPeakMinutes(ratio: FeedRatioBucket, kitchenTemp: Double) -> Double {
+        levainBuildMinutes(kitchenTemp: kitchenTemp) * levainRatioPeakMultiplier(ratio)
+    }
+
+    /// How long a peaked levain stays usable past peak (minutes). A ripe levain
+    /// isn't a knife-edge — it holds at and just past peak before degrading. The
+    /// mix should land within `[peak, peak + levainPlateauMinutes]`.
+    static let levainPlateauMinutes: Double = 90
 
     static func fridgeWarmUpMinutes(kitchenTempCelsius: Double) -> Double {
         switch kitchenTempCelsius {

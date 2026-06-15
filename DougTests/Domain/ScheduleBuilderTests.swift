@@ -342,6 +342,69 @@ struct ScheduleBuilderTests {
         #expect(abs(wait.durationMinutes - 300) < 1)
     }
 
+    // MARK: - Adaptive levain build (fresh / dormant)
+
+    /// Standard same-day-style schedules are unchanged: a contiguous levain keeps
+    /// the standard 1:5:5 build and is ripe at the consumer.
+    @Test func freshLevainKeepsStandardBuildWhenContiguous() throws {
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(hour: 9, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: Self.defaultAvailability
+        )
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+        let build = try #require(steps.first(where: { $0.stepTypeID == .buildLevain }))
+        let wait = try #require(steps.first(where: { $0.stepTypeID == .waitForLevainPeak }))
+        #expect(build.levainBuildRatio == .oneToFive)
+        #expect(abs(build.endTime.timeIntervalSince(wait.startTime)) < 1)
+        #expect(abs(wait.durationMinutes - 300) < 1) // 1:5:5 at 24°C
+    }
+
+    /// The screenshot regression: a dormant starter whose morning is unavailable
+    /// forces the hands-on Build Levain into the previous evening. The old code
+    /// stranded a fast levain overnight; now the build is sized to an overnight
+    /// ratio that ripens into the mix window — no idle strand.
+    @Test func freshLevainOvernightGapPicksSlowBuildNoStrand() throws {
+        // Available 11:00–21:00 only: the natural morning build slot is unavailable,
+        // so Build Levain is pushed into the prior evening — a long overnight window.
+        let input = ScheduleBuilderInput(
+            recipe: RecipeBook.countryLoaf,
+            targetBreadReadyTime: Self.targetTime(day: 20, hour: 16, minute: 0),
+            kitchenTemperatureCelsius: 24.0,
+            availability: AvailabilityInput(
+                startHour: 11, startMinute: 0, endHour: 21, endMinute: 0
+            )
+        )
+        guard case let .success(steps) = ScheduleBuilder.build(input) else {
+            Issue.record("Expected success, got conflict")
+            return
+        }
+
+        let build = try #require(steps.first(where: { $0.stepTypeID == .buildLevain }))
+        let waitIdx = try #require(steps.firstIndex(where: { $0.stepTypeID == .waitForLevainPeak }))
+        let wait = steps[waitIdx]
+        let after = steps[waitIdx + 1]
+
+        // Build and wait stay contiguous — the levain rises the instant it's built.
+        #expect(abs(build.endTime.timeIntervalSince(wait.startTime)) < 1)
+
+        // A slow (overnight) build was chosen, not a stranded fast one.
+        #expect(build.levainBuildRatio == .oneToTen)
+
+        // No idle gap past the plateau: either the consumer starts within the
+        // plateau of the peak, or a Chill Levain hold bridges it contiguously.
+        if after.stepTypeID == .holdStarter {
+            #expect(abs(after.startTime.timeIntervalSince(wait.endTime)) < 1)
+        } else {
+            let gap = after.startTime.timeIntervalSince(wait.endTime)
+            #expect(gap <= TemperatureCalculator.levainPlateauMinutes * 60 + 60)
+        }
+    }
+
     @Test func conflictWhenColdRetardExceedsFlexRange() {
         let input = ScheduleBuilderInput(
             recipe: RecipeBook.countryLoaf,
@@ -688,6 +751,49 @@ struct ScheduleBuilderTests {
         )!
         #expect(range.upperBound > tomorrowSleep, "72h retard upper bound should reach past tomorrow")
         #expect(range.lowerBound < range.upperBound)
+    }
+
+    /// A fast levain (1:1:1) shortens the minimum chain, so the earliest viable
+    /// bread-ready time is earlier than the standard 1:5:5 build would allow.
+    @Test func viableRangeEarliestUsesFastLevain() throws {
+        let kitchenTemp = 24.0
+        let reference = Self.targetTime(hour: 12, minute: 0)
+        let allDay = AvailabilityInput(startHour: 0, startMinute: 0, endHour: 23, endMinute: 59)
+
+        let range = try #require(ScheduleBuilder.viableRange(
+            recipe: RecipeBook.sameDayCountry,
+            kitchenTemperatureCelsius: kitchenTemp,
+            availability: allDay,
+            referenceDate: reference
+        ))
+
+        // Minimum chain length with the standard vs fast levain peak.
+        func minMinutes(levainPeak: Double) -> Double {
+            RecipeBook.sameDayCountry.method.reduce(0.0) { total, step in
+                if step.stepType.classification == .passiveFlexible,
+                   let flex = step.effectiveFlexRange {
+                    return total + flex.lowerBound
+                }
+                if step.stepTypeID == .waitForLevainPeak { return total + levainPeak }
+                return total + TemperatureCalculator.effectiveDuration(
+                    for: step, kitchenTemp: kitchenTemp, peakProfile: nil
+                )
+            }
+        }
+        let standardMin = minMinutes(
+            levainPeak: TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemp)
+        )
+        let fastMin = minMinutes(
+            levainPeak: TemperatureCalculator.levainPeakMinutes(ratio: .oneToOne, kitchenTemp: kitchenTemp)
+        )
+        #expect(fastMin < standardMin)
+
+        // The earliest bound should track the fast levain, landing earlier than the
+        // standard build would by roughly the ratio difference.
+        let calendar = Calendar.current
+        let wakeUp = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: reference)!)
+        #expect(abs(range.lowerBound.timeIntervalSince(wakeUp) / 60 - fastMin) < 2)
+        #expect(range.lowerBound < wakeUp.addingTimeInterval(standardMin * 60))
     }
 
     // MARK: - Pizza (Cold Retard Balls + Temper)

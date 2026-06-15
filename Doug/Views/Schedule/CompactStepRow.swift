@@ -70,13 +70,20 @@ struct CompactStepRow: View {
         guard stepTypeIDEnum == .buildLevain,
               step.stepStatus == .upcoming,
               let schedule = step.schedule else { return nil }
+        // Prefer the scheduler's adaptively-chosen ratio (e.g. a slow overnight
+        // build) over the recipe's fixed default.
+        let adaptive = step.levainRatioBucket
         let build = LevainBuildCalculator.calculate(.init(
             levainGramsNeeded: schedule.scaledIngredients.levainGrams,
-            baseRatio: schedule.recipe.levainBuildRatio,
+            baseRatio: adaptive?.buildRatio ?? schedule.recipe.levainBuildRatio,
             referenceTemp: schedule.recipe.referenceTemperatureCelsius,
             kitchenTemp: schedule.kitchenTemperatureCelsius
         ))
-        return "\(Int(build.starterGrams))g starter + \(Int(build.flourGrams))g flour + \(Int(build.waterGrams))g water"
+        let amounts = "\(Int(build.starterGrams))g starter + \(Int(build.flourGrams))g flour + \(Int(build.waterGrams))g water"
+        if let label = adaptive?.adaptiveBuildLabel {
+            return "\(label) · \(amounts)"
+        }
+        return amounts
     }
 
     private var statusDot: some View {
