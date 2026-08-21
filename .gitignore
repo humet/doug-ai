@@ -17,8 +17,9 @@ Secrets.xcconfig
 
 # Node (doug-coach backend)
 node_modules/
-.env
-.env.local
+.env*
+!.env.example
 
 # Claude Code
 .claude/settings.local.json
+.claude/memory/
