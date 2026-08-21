@@ -6,16 +6,15 @@ Instead of treating a recipe as a fixed timeline, Doug models the bake as a sche
 
 ## Why I built it
 
-Bread recipes often tell you to do something like “bulk ferment for four hours,” but fermentation does not care about your calendar. Temperature, starter activity, delays, recipe composition, and when you actually need the bread all change the plan.
+I started baking sourdough during lockdown and have kept at it ever since. I’ve used some very good baking apps along the way, but they tend to make the same assumption: that the baker is available whenever the recipe says they should be.
 
-Doug explores a different approach:
+Real life does not work like that.
 
-1. model the baking domain deterministically
-2. build a schedule backwards from the target ready time
-3. continuously update that schedule as reality diverges from the plan
-4. give an AI coach the same structured context rather than asking it to guess
+A stretch and fold might land during the school run. A meeting might overrun. Dinner plans change. The dough might ferment faster than expected. Most baking apps can tell you what should happen next, but they are much less useful when the human’s schedule changes.
 
-That separation is important: **the model advises; the application owns the state and maths.**
+Doug started as an attempt to solve that problem. Instead of treating a bake as a fixed sequence of timers, it models the process alongside the baker’s availability and adapts the schedule when reality changes.
+
+The AI coach sits on top of that model to help explain the options and trade-offs, but the underlying timings, fermentation state and baking calculations remain deterministic.
 
 ## What it models
 
