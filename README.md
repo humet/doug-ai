@@ -4,6 +4,32 @@ Doug is a native iOS baking companion for planning and adapting sourdough bread 
 
 Instead of treating a recipe as a fixed timeline, Doug models the bake as a schedule with fermentation state, temperatures, starter/levain readiness, flexible steps, ingredient timing, and the baker's actual availability. An AI coach sits on top of that structured state so its advice is grounded in what is really happening to the dough rather than a generic recipe prompt.
 
+## Product
+
+### Plan around real life
+
+Doug combines the target bake time, kitchen temperature, and the baker's unavailable windows before building the schedule.
+
+<p align="center">
+  <img src="docs/screenshots/bake-planning-availability.PNG" alt="Planning a sourdough bake around kitchen temperature and real-world availability" width="520">
+</p>
+
+### Choose the bake
+
+Recipes carry their own hydration, method, difficulty, and timing rules into the deterministic scheduler.
+
+<p align="center">
+  <img src="docs/screenshots/schedule-recipes.PNG" alt="Doug recipe and bake schedule selection screen" width="520">
+</p>
+
+### Keep the starter ready
+
+Starter state, maintenance feeds, and revival plans are tracked as part of the same baking system rather than as a separate timer.
+
+<p align="center">
+  <img src="docs/screenshots/starter-health.PNG" alt="Doug starter health, maintenance feed, and revival planning screen" width="520">
+</p>
+
 ## Why I built it
 
 I started baking sourdough during lockdown and have kept at it ever since. I’ve used some very good baking apps along the way, but they tend to make the same assumption: that the baker is available whenever the recipe says they should be.
