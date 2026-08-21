@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  domain-tests:
+    name: Swift domain tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run deterministic domain tests
+        run: swift test
+
+  coach-typecheck:
+    name: Coach typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: doug-coach
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: doug-coach/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck coach backend
+        run: npm run typecheck
