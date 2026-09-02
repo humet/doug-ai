@@ -2,12 +2,6 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-## Planned Work
-
-See `AI_COACH_PLAN.md` for the AI baking coach feature — Vercel AI SDK 6 backend with Gemini 3 Flash, in-app chat with contextual buttons, structured action proposals with user confirmation.
-
-When building the `doug-coach/` backend, use the `/ai-sdk` skill (installed at `.claude/skills/ai-sdk`) for AI SDK 6 API reference — covers `ToolLoopAgent`, `generateText`, `streamText`, structured output, tool definitions, and provider configuration.
-
 ## Running on the Simulator
 
 The `doug-simulator` skill (`.claude/skills/doug-simulator/`) builds, runs, inspects, and UI-drives Doug on the simulator with zero external dependencies (first-party `simctl`/`xcodebuild` + XCUITest). Use it to verify a change in the running app: screenshots (`scripts/shot.sh`), live SwiftData/UserDefaults inspection (`scripts/state.sh`), device state (`scripts/device.sh`), and accessibility-driven UI flows (`scripts/drive.sh`, backed by `DougUITests/DougDriverUITests.swift`). See its SKILL.md for the command reference.
@@ -51,14 +45,14 @@ Config files: `.swiftlint.yml` and `.swiftformat` in the project root.
 
 ## Architecture
 
-MVVM + Domain Services. Five layers under `Doug/`:
+MVVM + Domain Services. The main areas under `Doug/` are:
 
 - **Models/SwiftData/** — `@Model` types for persistence (Schedule, ScheduleStep, StarterFeedLog, UserAvailability, etc.)
 - **Models/Static/** — Plain Swift structs and enums for recipes and step types (not persisted — read-only data compiled into the app)
 - **Domain/** — Pure Swift business logic. **No SwiftUI or SwiftData imports.** Contains the schedule builder algorithm, temperature calculations, degree-hour tracking, hydration calculator, and starter health assessment. All independently testable without a simulator.
 - **ViewModels/** — `@Observable` `@MainActor` state managers bridging Domain and Views. Injected via `.environment()`.
 - **Views/** — SwiftUI views organized by tab (Schedule, Starter, Calculator) plus Components, Settings, and Onboarding.
-- **Services/** — External integrations (Anthropic Claude API, local notifications).
+- **Services/** — External/app integrations including the coach API client, Live Activities, and local notifications.
 - **Theme/** — Colors, typography constants.
 
 ## Data Flow
@@ -89,14 +83,40 @@ Step classifications:
 
 ## Schedule Builder Algorithm
 
-Works backwards from target bread-ready time. Iterates method steps in reverse, subtracting durations and checking hands-on steps against availability. Flexible steps (autolyse, cold retard) absorb conflicts by compressing/expanding within their range. When local resolution fails, packages conflict data for LLM resolution.
+Works backwards from target bread-ready time. Iterates method steps in reverse, subtracting durations and checking hands-on steps against availability. Flexible steps (autolyse, cold retard) absorb conflicts by compressing/expanding within their range. Schedule changes are applied by deterministic domain logic rather than by the language model.
 
-## API Keys
+## AI Coach
 
-Anthropic API key via xcconfig pattern:
-- `Secrets.xcconfig` (gitignored) holds `ANTHROPIC_API_KEY`
-- `Config.swift` reads from `Bundle.main.infoDictionary`
-- Copy `Secrets.example.xcconfig` to `Secrets.xcconfig` and fill in real values
+The coach is deliberately layered above the deterministic baking model:
+
+- `CoachService.swift` sends structured bake, starter, availability, and conversation context to the backend over HTTP/SSE.
+- `doug-coach/` validates that payload with Zod and builds the coach prompt from the structured state.
+- The backend uses the Vercel AI SDK and Vercel AI Gateway, currently routing to Gemini 3 Flash.
+- Model tool calls are returned to the iOS app as proposals; the model does not directly mutate schedule state or own baking calculations.
+- Conversation state is held by the app rather than server-side.
+
+The important boundary is: **domain code computes facts; AI provides explanation, judgment, and proposed actions.**
+
+## Coach Configuration
+
+The iOS app reads coach configuration through `Doug/App/Config.swift`:
+
+- In debug builds, `COACH_API_URL` can override the local default (`http://localhost:3000/api/chat`).
+- Production uses the deployed Vercel coach endpoint.
+- `COACH_API_TOKEN` is optional and is read from the app configuration, typically via `Secrets.xcconfig`.
+- Copy `Secrets.example.xcconfig` to `Secrets.xcconfig` for local secrets; `Secrets.xcconfig` is gitignored.
+- AI Gateway/provider credentials belong on the backend/deployment side and should never be embedded in the iOS app.
+
+For the backend:
+
+```bash
+cd doug-coach
+npm install
+npm run typecheck
+npm run dev
+```
+
+Use `doug-coach/.env.example` as the source of truth for local backend environment variables.
 
 ## Testing
 

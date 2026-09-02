@@ -28,11 +28,6 @@ export default async function handler(
   }
 
   const { messages, currentTime, timeZone, context, starterContext, availabilityContext } = parsed.data;
-  console.log("\n--- INCOMING REQUEST ---");
-  console.log("currentTime:", currentTime);
-  console.log("timeZone:", timeZone);
-  console.log("context:", JSON.stringify(context, null, 2));
-  console.log("--- END REQUEST ---\n");
   const systemPrompt = buildSystemPrompt(currentTime, context, starterContext, availabilityContext, timeZone);
 
   res.writeHead(200, {
