@@ -50,7 +50,9 @@ enum FeedScheduler {
         case .activating:
             return nil
 
-        case .reviving:
+        case .reviving, .establishing:
+            // Both are driven by their own plan's feed schedule, not by the
+            // maintenance rhythm.
             return nil
 
         case .dormant:

@@ -161,4 +161,49 @@ struct StarterStateMachineTests {
     @Test func markPeakConfirmedFromRevivingIsNil() {
         #expect(StarterStateMachine.markPeakConfirmed(currentState: .reviving) == nil)
     }
+
+    // MARK: - Establishing a New Starter
+
+    @Test func establishingCanStartFromDormant() {
+        let result = StarterStateMachine.startEstablishing(currentState: .dormant)
+        #expect(result?.newState == .establishing)
+    }
+
+    @Test func establishingCanStartEvenFromAnActiveStarter() {
+        // A starter can die while the app still thinks it's fine — the user
+        // must always be able to declare it dead and start over.
+        for state in [StarterLifecycleState.active, .activating, .reviving] {
+            #expect(StarterStateMachine.startEstablishing(currentState: state)?.newState == .establishing)
+        }
+    }
+
+    @Test func establishingDoesNotRestartItself() {
+        #expect(StarterStateMachine.startEstablishing(currentState: .establishing) == nil)
+    }
+
+    @Test func completingEstablishmentLandsOnActive() {
+        // A new starter that just passed its confirming feeds is on the counter
+        // and freshly peaked — ready to bake with, not merely activating.
+        let result = StarterStateMachine.completeEstablishing(currentState: .establishing)
+        #expect(result?.newState == .active)
+    }
+
+    @Test func establishmentOnlyCompletesFromEstablishing() {
+        for state in [StarterLifecycleState.dormant, .activating, .active, .reviving] {
+            #expect(StarterStateMachine.completeEstablishing(currentState: state) == nil)
+        }
+    }
+
+    @Test func cancellingEstablishmentReturnsToDormant() {
+        #expect(StarterStateMachine.cancelEstablishing(currentState: .establishing)?.newState == .dormant)
+        #expect(StarterStateMachine.cancelEstablishing(currentState: .dormant) == nil)
+    }
+
+    @Test func establishingBlocksTheOrdinaryActivationTransitions() {
+        // While a plan is running, the plan owns the starter.
+        #expect(StarterStateMachine.activate(currentState: .establishing) == nil)
+        #expect(StarterStateMachine.refrigerate(currentState: .establishing) == nil)
+        #expect(StarterStateMachine.startRevival(currentState: .establishing) == nil)
+        #expect(StarterStateMachine.markPeakConfirmed(currentState: .establishing) == nil)
+    }
 }

@@ -32,6 +32,7 @@ extension StarterProfileInput {
         averageTimeToPeakMinutes = model.averageTimeToPeakMinutes
         lifecycleState = model.starterLifecycleState
         activePeakAverageMinutes = model.activePeakAverageMinutes
+        hasStarter = model.hasStarter
     }
 }
 
@@ -46,5 +47,6 @@ extension FeedLogInput {
         timeToPeakMinutes = model.timeToPeakMinutes
         starterGrams = model.starterGrams
         feedIntent = model.starterFeedIntent
+        starterGeneration = model.starterGeneration
     }
 }

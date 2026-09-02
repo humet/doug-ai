@@ -16,7 +16,7 @@ enum StarterStateMachine {
             TransitionResult(newState: .activating, reason: "Starter taken out of the fridge to activate")
         case .activating, .active:
             nil
-        case .reviving:
+        case .reviving, .establishing:
             nil
         }
     }
@@ -31,7 +31,7 @@ enum StarterStateMachine {
             TransitionResult(newState: .dormant, reason: "Starter fed and returned to fridge")
         case .dormant:
             nil
-        case .reviving:
+        case .reviving, .establishing:
             nil
         }
     }
@@ -58,6 +58,41 @@ enum StarterStateMachine {
     ) -> TransitionResult? {
         guard currentState == .reviving else { return nil }
         return TransitionResult(newState: .dormant, reason: "Revival cancelled")
+    }
+
+    // MARK: - Establishing a New Starter
+
+    /// Begins a plan that creates a starter from scratch or from another culture.
+    ///
+    /// Allowed from any state: a user whose starter has just died needs this
+    /// even while the app still thinks that starter is active or reviving.
+    static func startEstablishing(
+        currentState: StarterLifecycleState
+    ) -> TransitionResult? {
+        guard currentState != .establishing else { return nil }
+        return TransitionResult(
+            newState: .establishing,
+            reason: "Starting a new starter"
+        )
+    }
+
+    /// A new starter has passed its confirming feeds. It is on the counter and
+    /// freshly peaked, so it is ready to bake with — not merely activating.
+    static func completeEstablishing(
+        currentState: StarterLifecycleState
+    ) -> TransitionResult? {
+        guard currentState == .establishing else { return nil }
+        return TransitionResult(
+            newState: .active,
+            reason: "New starter is established and ready to bake"
+        )
+    }
+
+    static func cancelEstablishing(
+        currentState: StarterLifecycleState
+    ) -> TransitionResult? {
+        guard currentState == .establishing else { return nil }
+        return TransitionResult(newState: .dormant, reason: "New starter cancelled")
     }
 
     static func markPeakConfirmed(
@@ -94,7 +129,7 @@ enum StarterStateMachine {
                 )
             }
             return nil
-        case .dormant, .reviving:
+        case .dormant, .reviving, .establishing:
             return nil
         }
     }

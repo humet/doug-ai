@@ -1,11 +1,38 @@
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
+
+private extension BakeActivityAttributes.ContentState {
+    /// The complete-this-phase intent, when the current sub-step offers one
+    /// ("Lid Removed" / "Bread Out") and the bake isn't paused.
+    var phaseDoneIntent: (label: String, intent: CompleteBakePhaseIntent)? {
+        guard !isPaused,
+              let label = nextFoldActionLabel,
+              let stepTypeID = nextFoldStepTypeID,
+              let sequenceIndex = nextFoldSequenceIndex
+        else { return nil }
+        return (label, CompleteBakePhaseIntent(stepTypeID: stepTypeID, sequenceIndex: sequenceIndex))
+    }
+
+    /// Shown when the content goes stale — the timer target passed without
+    /// the app updating the activity (it was backgrounded the whole time).
+    var staleMessage: String {
+        if let foldLabel = nextFoldLabel {
+            return nextFoldIsRunning ? "\(foldLabel) done" : "\(foldLabel) due"
+        }
+        return "\(currentStepLabel) done"
+    }
+
+    var staleCompactMessage: String {
+        nextFoldLabel != nil && !nextFoldIsRunning ? "Due" : "Done"
+    }
+}
 
 struct BakeLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: BakeActivityAttributes.self) { context in
-            BakeLockScreenView(state: context.state)
+            BakeLockScreenView(state: context.state, isStale: context.isStale)
                 .activityBackgroundTint(LiveActivityColors.sourdoughBrown.opacity(0.9))
         } dynamicIsland: { context in
             DynamicIsland {
@@ -24,25 +51,49 @@ struct BakeLiveActivity: Widget {
                         Text("Paused")
                             .font(.caption.bold())
                             .foregroundStyle(.yellow)
+                    } else if context.isStale {
+                        Text(context.state.staleCompactMessage)
+                            .font(.headline)
+                            .foregroundStyle(.red)
                     } else {
-                        Text(context.state.stepEndTime, style: .timer)
-                            .font(.headline.monospacedDigit())
-                            .foregroundStyle(context.state.isOverdue ? .red : LiveActivityColors.crustGold)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(timerInterval: context.state.timerInterval, countsDown: true)
+                                .font(.headline.monospacedDigit())
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(context.state.isOverdue ? .red : LiveActivityColors.crustGold)
+                            if let foldLabel = context.state.nextFoldLabel {
+                                Text(foldLabel)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack {
-                        if let nextLabel = context.state.nextStepLabel,
-                           let nextTime = context.state.nextStepStartTime
-                        {
-                            Text("Next: \(nextLabel) at \(nextTime, format: .dateTime.hour().minute())")
-                                .font(.caption)
+                    VStack(spacing: 8) {
+                        if let action = context.state.phaseDoneIntent {
+                            Button(intent: action.intent) {
+                                Label(action.label, systemImage: "checkmark.circle.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(LiveActivityColors.crustGold)
+                            .foregroundStyle(LiveActivityColors.sourdoughBrown)
+                        }
+                        HStack {
+                            if let nextLabel = context.state.nextStepLabel,
+                               let nextTime = context.state.nextStepStartTime
+                            {
+                                Text("Next: \(nextLabel) at \(nextTime, format: .dateTime.hour().minute())")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("\(context.state.completedStepCount)/\(context.state.totalStepCount) steps")
+                                .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
-                        Spacer()
-                        Text("\(context.state.completedStepCount)/\(context.state.totalStepCount) steps")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
                     }
                 }
             } compactLeading: {
@@ -71,8 +122,12 @@ struct BakeLiveActivity: Widget {
                     Text("Paused")
                         .font(.caption2)
                         .foregroundStyle(.yellow)
+                } else if context.isStale {
+                    Text(context.state.staleCompactMessage)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.red)
                 } else {
-                    Text(context.state.stepEndTime, style: .timer)
+                    Text(timerInterval: context.state.timerInterval, countsDown: true)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(context.state.isOverdue ? .red : LiveActivityColors.crustGold)
                 }
@@ -87,6 +142,7 @@ struct BakeLiveActivity: Widget {
 
 private struct BakeLockScreenView: View {
     let state: BakeActivityAttributes.ContentState
+    let isStale: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -114,12 +170,29 @@ private struct BakeLockScreenView: View {
                         Text("Open Doug to resume")
                             .font(.caption)
                             .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
+                    } else if isStale {
+                        Text("\(state.staleMessage) — open Doug")
+                            .font(.caption.bold())
+                            .foregroundStyle(.red)
                     } else if state.isOverdue {
                         Text("Overdue")
                             .font(.caption.bold())
                             .foregroundStyle(.red)
+                    } else if let foldLabel = state.nextFoldLabel {
+                        Group {
+                            if state.nextFoldIsRunning {
+                                Text("\(foldLabel) — ")
+                                    + Text(timerInterval: state.timerInterval, countsDown: true)
+                                    + Text(" left")
+                            } else {
+                                Text("\(foldLabel) in ")
+                                    + Text(timerInterval: state.timerInterval, countsDown: true)
+                            }
+                        }
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(LiveActivityColors.crustGold)
                     } else {
-                        Text(state.stepEndTime, style: .timer)
+                        Text(timerInterval: state.timerInterval, countsDown: true)
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
                     }
@@ -128,6 +201,18 @@ private struct BakeLockScreenView: View {
                 Text("\(state.completedStepCount) of \(state.totalStepCount)")
                     .font(.caption2)
                     .foregroundStyle(LiveActivityColors.warmParchment.opacity(0.7))
+            }
+
+            if let action = state.phaseDoneIntent {
+                Button(intent: action.intent) {
+                    Label(action.label, systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 2)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(LiveActivityColors.crustGold)
+                .foregroundStyle(LiveActivityColors.sourdoughBrown)
             }
 
             if !state.isPaused {

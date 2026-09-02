@@ -149,17 +149,17 @@ struct StepDetailSheet: View {
 
     @ViewBuilder
     private var contextualIngredients: some View {
-        if let ing = step.schedule?.recipe.ingredients {
+        if let ing = step.schedule?.scaledIngredients {
             let items: [(String, Double)] = switch stepTypeIDEnum {
             case .buildLevain: levainBuildWeights(ingredients: ing)
             case .autolyse: ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [("Water", ing.waterGrams)]
             // Flour and water are already in the dough from autolyse; the Mix
             // step only adds levain, salt, and any mix-time extras.
             case .mix: ((step.schedule?.recipe.hydratesFlourBeforeMix ?? false)
-                ? []
-                : ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [("Water", ing.waterGrams)])
-                + [("Levain", ing.levainGrams), ("Salt", ing.saltGrams)]
-                + ing.extras.filter { $0.incorporation == .mix }.map { ($0.name, $0.grams) }
+                    ? []
+                    : ing.flourBreakdownRows.map { ($0.name, $0.grams) } + [("Water", ing.waterGrams)])
+                    + [("Levain", ing.levainGrams), ("Salt", ing.saltGrams)]
+                    + ing.extras.filter { $0.incorporation == .mix }.map { ($0.name, $0.grams) }
             case .addInclusions: ing.extras.filter { $0.incorporation == .fold }.map { ($0.name, $0.grams) }
             default: []
             }
@@ -214,6 +214,19 @@ struct StepDetailSheet: View {
                 referenceDoughTemp: schedule.recipe.referenceTemperatureCelsius,
                 kitchenTemp: schedule.kitchenTemperatureCelsius
             )
+        case .activateStarter:
+            let kitchenTemp = schedule.kitchenTemperatureCelsius
+            let usesFormState = step.stepStatus == .active && viewModel.feedInitialized
+            return TemperatureCalculator.desiredActivationWaterTemperature(
+                referenceDoughTemp: schedule.recipe.referenceTemperatureCelsius,
+                kitchenTemp: kitchenTemp,
+                starterTempCelsius: starterProfile?.starterStorageType == .counter
+                    ? kitchenTemp
+                    : TemperatureCalculator.fridgeStarterTempCelsius,
+                ratioStarter: usesFormState ? viewModel.feedRatioStarter : 1,
+                ratioFlour: usesFormState ? viewModel.feedRatioFlour : 5,
+                ratioWater: usesFormState ? viewModel.feedRatioWater : 5
+            )
         default:
             return nil
         }
@@ -240,13 +253,23 @@ struct StepDetailSheet: View {
 
     private var markDoneButton: some View {
         Button {
-            viewModel.markStepDone(step, modelContext: modelContext)
+            // Starter steps must carry the feed values edited in this sheet,
+            // or the auto-logged feed falls back to defaults.
+            viewModel.markStepDone(
+                step,
+                feedDetails: isStarterRelatedStep ? viewModel.feedDetails : nil,
+                starterProfile: starterProfile,
+                modelContext: modelContext
+            )
             dismiss()
         } label: {
-            Label("Done", systemImage: "checkmark.circle.fill")
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
+            Label(
+                StepTypeRegistry.completionLabel(for: stepTypeIDEnum) ?? "Done",
+                systemImage: "checkmark.circle.fill"
+            )
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding()
         }
         .adaptiveGlassButtonStyle(prominent: true)
     }

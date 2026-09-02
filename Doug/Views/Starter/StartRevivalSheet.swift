@@ -128,7 +128,7 @@ struct StartRevivalSheet: View {
     }
 
     private var unsafeCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Label("Don't revive this one", systemImage: "exclamationmark.triangle.fill")
                 .font(.headline)
                 .foregroundStyle(.red)
@@ -137,6 +137,18 @@ struct StartRevivalSheet: View {
                 Text(reason)
                     .font(.callout)
             }
+
+            // Telling someone to bin their starter without offering a way
+            // forward is a dead end — this is the way forward.
+            Button {
+                viewModel.markStarterDead(profile: profile)
+                dismiss()
+                viewModel.showStartNewStarter = true
+            } label: {
+                Text("Start a New Starter")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
         }
         .padding(.vertical, 4)
     }
@@ -223,8 +235,10 @@ struct StartRevivalSheet: View {
                     HStack(spacing: 6) {
                         Image(systemName: "moon.zzz")
                             .foregroundStyle(.orange)
-                        Text("Peak will land at \(peakNow, format: .dateTime.hour().minute()) — while you'd usually be asleep.")
-                            .font(.footnote)
+                        Text(
+                            "Peak will land at \(peakNow, format: .dateTime.hour().minute()) — while you'd usually be asleep."
+                        )
+                        .font(.footnote)
                     }
                 }
                 .padding(.vertical, 2)
@@ -233,8 +247,10 @@ struct StartRevivalSheet: View {
                     Text("Feed now").tag(StartMode.now)
                     if let suggested {
                         let suggestedPeak = suggested.addingTimeInterval(peakMinutes * 60)
-                        Text("Start at \(suggested, format: .dateTime.weekday(.abbreviated).hour().minute()) (peak at \(suggestedPeak, format: .dateTime.hour().minute()))")
-                            .tag(StartMode.delayed(suggested))
+                        Text(
+                            "Start at \(suggested, format: .dateTime.weekday(.abbreviated).hour().minute()) (peak at \(suggestedPeak, format: .dateTime.hour().minute()))"
+                        )
+                        .tag(StartMode.delayed(suggested))
                     }
                 }
                 .pickerStyle(.inline)
@@ -242,17 +258,18 @@ struct StartRevivalSheet: View {
             } header: {
                 Text("Timing")
             } footer: {
-                Text("If you feed now, you can mark peak whenever you wake up — the rest of the plan will shift to fit your day.")
+                Text(
+                    "If you feed now, you can mark peak whenever you wake up — the rest of the plan will shift to fit your day."
+                )
             }
         }
     }
 
     private var firstFeedPeakMinutes: Double {
-        let neglect: StarterNeglectLevel
-        if case let .safeToRevive(level) = viewModel.revivalSafetyVerdict {
-            neglect = level
+        let neglect: StarterNeglectLevel = if case let .safeToRevive(level) = viewModel.revivalSafetyVerdict {
+            level
         } else {
-            neglect = .moderate
+            .moderate
         }
         return RevivalPlanGenerator.expectedPeakMinutes(
             for: neglect,

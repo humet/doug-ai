@@ -11,10 +11,13 @@ enum StepTypeIcon {
         case .stretchAndFold: "hand.raised.fingers.spread"
         case .addInclusions: "leaf"
         case .shape: "circle.circle"
-        case .coldRetard: "snowflake"
+        case .coldRetard, .coldRetardBalls: "snowflake"
+        case .temper: "thermometer.medium"
         case .finalProof: "sun.max"
         case .panShape: "hand.raised"
+        case .tinShape: "rectangle.portrait"
         case .bakeSheet: "flame"
+        case .bakeTin: "oven"
         case .preheat: "flame"
         case .bake: "oven"
         case .bakeCovered: "oven"
@@ -33,13 +36,13 @@ enum StepTypeIcon {
             DougTheme.sourdoughBrown
         case .autolyse, .bulkFerment:
             DougTheme.crustGold
-        case .coldRetard, .fridgeRest, .holdStarter:
+        case .coldRetard, .coldRetardBalls, .fridgeRest, .holdStarter:
             .blue
-        case .finalProof:
+        case .finalProof, .temper:
             DougTheme.crustGold
-        case .panShape:
+        case .panShape, .tinShape:
             DougTheme.sourdoughBrown
-        case .preheat, .bake, .bakeCovered, .bakeUncovered, .bakeSheet:
+        case .preheat, .bake, .bakeCovered, .bakeUncovered, .bakeSheet, .bakeTin:
             .orange
         case .activateStarter, .waitForPeak, .waitForLevainPeak:
             .green

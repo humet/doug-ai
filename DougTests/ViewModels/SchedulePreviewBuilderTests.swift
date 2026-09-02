@@ -242,6 +242,45 @@ struct SchedulePreviewBuilderTests {
         #expect(peakIdx < levainIdx, "Wait for Peak should come before Build Levain")
     }
 
+    /// Part 4: the dormant preamble must show the starter's *true* peak time and
+    /// represent any idle before the levain build as an explicit Chill Starter hold
+    /// — never a fictionally long, stretched "Wait for Peak".
+    @Test func dormantWaitForPeakIsTruePeakNotStretched() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let avail = setupAvailability(context: ctx)
+        let profile = setupStarterProfile(context: ctx, state: .dormant)
+
+        let vm = ScheduleViewModel()
+        vm.selectedRecipeID = .countryLoaf
+        vm.kitchenTemperature = 22
+        vm.targetDate = targetDayAfterTomorrow(hour: 9)
+
+        vm.buildPreview(availability: avail, windows: [], feedLogs: [], starterProfile: profile)
+
+        guard let wait = vm.previewSteps.first(where: { $0.stepTypeID == .waitForPeak }),
+              let build = vm.previewSteps.first(where: { $0.stepTypeID == .buildLevain })
+        else {
+            Issue.record("Missing waitForPeak / buildLevain")
+            return
+        }
+
+        // True 1:5:5 starter peak at 22°C is ~300 min — not stretched to the build.
+        #expect(abs(wait.durationMinutes - 300) < 60)
+
+        // The preamble (everything before Build Levain) meets the build with no idle
+        // gap — any slack is an explicit hold, not a stretched wait.
+        let preambleTypes: Set<StepTypeID> = [.fridgeRest, .activateStarter, .waitForPeak, .holdStarter]
+        let lastPreamble = vm.previewSteps.prefix(while: { preambleTypes.contains($0.stepTypeID) }).last
+        #expect(lastPreamble != nil)
+        #expect(abs((lastPreamble?.endTime ?? .distantPast).timeIntervalSince(build.startTime)) < 1)
+
+        // If the starter peaks before the build, a Chill Starter hold bridges it.
+        if wait.endTime < build.startTime {
+            #expect(vm.previewSteps.contains { $0.stepTypeID == .holdStarter })
+        }
+    }
+
     // MARK: - Active Starter
 
     @Test func activeStarterNoPreamble() throws {

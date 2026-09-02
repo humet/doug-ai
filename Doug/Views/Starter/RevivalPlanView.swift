@@ -11,18 +11,19 @@ struct RevivalPlanView: View {
     @Bindable var plan: RevivalPlan
 
     @Environment(\.modelContext) private var modelContext
-    @Query private var availabilities: [UserAvailability]
-    @Query private var windows: [UnavailableWindow]
-    @Query private var profiles: [StarterProfile]
+    @Query var availabilities: [UserAvailability]
+    @Query var windows: [UnavailableWindow]
+    @Query var profiles: [StarterProfile]
     @Query(sort: \StarterFeedLog.timestamp, order: .reverse)
     private var feedLogs: [StarterFeedLog]
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var viewModel = StarterViewModel()
+    @State var viewModel = StarterViewModel()
     @State private var isReminderPending = false
     @State private var bakeReady: Bool?
     @State private var showCoachChat = false
+    @State var checkInStep: RevivalFeedStep?
 
     var body: some View {
         List {
@@ -47,17 +48,23 @@ struct RevivalPlanView: View {
 
             if plan.revivalStatus == .active {
                 Section {
-                    Button("Cancel Revival", role: .destructive) {
-                        NotificationService.shared.cancelAllRevivalReminders(
-                            planID: notificationPlanID,
-                            stepCount: sortedSteps.count
-                        )
-                        plan.revivalStatus = .cancelled
+                    if plan.isEstablishingNewStarter {
+                        Button("Cancel New Starter", role: .destructive) {
+                            viewModel.cancelNewStarter(plan: plan, profile: profiles.first)
+                        }
+                    } else {
+                        Button("Cancel Revival", role: .destructive) {
+                            NotificationService.shared.cancelAllRevivalReminders(
+                                planID: notificationPlanID,
+                                stepCount: sortedSteps.count
+                            )
+                            plan.revivalStatus = .cancelled
+                        }
                     }
                 }
             }
         }
-        .navigationTitle("Revival")
+        .navigationTitle(plan.isEstablishingNewStarter ? "New Starter" : "Revival")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -66,6 +73,20 @@ struct RevivalPlanView: View {
                     Image(systemName: "bubble.left.and.text.bubble.right")
                 }
                 .accessibilityLabel("Coach")
+            }
+        }
+        // Presented by a Bool, not by `.sheet(item:)`. A newly inserted model's
+        // persistentModelID changes when SwiftData saves, and item-based
+        // presentation keys off that id — an autosave mid-form would recreate
+        // the sheet and silently wipe the user's answers.
+        .sheet(isPresented: Binding(
+            get: { checkInStep != nil },
+            set: { if !$0 { checkInStep = nil } }
+        )) {
+            if let step = checkInStep {
+                StarterCheckInSheet(step: step) { signals in
+                    handleCheckIn(signals, step: step)
+                }
             }
         }
         .sheet(isPresented: $showCoachChat) {
@@ -88,27 +109,17 @@ struct RevivalPlanView: View {
     // MARK: - Sections
 
     @ViewBuilder
-    private var completedStepsSection: some View {
-        let completed = sortedSteps.filter { $0.feedStatus == .completed }
-        if !completed.isEmpty {
+    private var headerSection: some View {
+        if plan.isEstablishingNewStarter {
             Section {
-                ForEach(completed) { step in
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text(step.instructionTitle ?? "Feed \(step.sequenceIndex + 1)")
-                            .font(.subheadline)
-                        Spacer()
-                        Text(peakDurationLabel(step))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                newStarterHeader
             }
+        } else {
+            revivalHeaderSection
         }
     }
 
-    private var headerSection: some View {
+    private var revivalHeaderSection: some View {
         Section {
             HStack {
                 Text("Step \(plan.currentStepIndex + 1) of \(sortedSteps.count)")
@@ -132,6 +143,10 @@ struct RevivalPlanView: View {
     private func currentStepSection(_ step: RevivalFeedStep) -> some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
+                if plan.isEstablishingNewStarter, plan.establishNotice != nil {
+                    outcomeCard
+                }
+
                 if let title = step.instructionTitle, !title.isEmpty {
                     Text(title)
                         .font(.title3.bold())
@@ -304,7 +319,7 @@ struct RevivalPlanView: View {
         }
     }
 
-    private func formattedDuration(_ minutes: Double?) -> String {
+    func formattedDuration(_ minutes: Double?) -> String {
         guard let minutes else { return "—" }
         let totalMinutes = Int(minutes.rounded())
         let hours = totalMinutes / 60
@@ -325,7 +340,9 @@ struct RevivalPlanView: View {
         .tint(.green)
         .disabled(true)
 
-        if let nextStep = nextStep(after: step) {
+        if plan.isEstablishingNewStarter {
+            establishCheckInPrompt(step)
+        } else if let nextStep = nextStep(after: step) {
             if bakeReady == false {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "arrow.clockwise")
@@ -344,7 +361,9 @@ struct RevivalPlanView: View {
             doublingQuestion(step)
         }
 
-        if let nextStep = nextStep(after: step) {
+        // A new-starter plan hides the next step until the check-in is in,
+        // so the user can't skip past the question that moves the plan on.
+        if !plan.isEstablishingNewStarter, let nextStep = nextStep(after: step) {
             Divider()
                 .padding(.vertical, 4)
 
@@ -481,15 +500,20 @@ struct RevivalPlanView: View {
         }
     }
 
+    @ViewBuilder
     private func nextStepActionButton(_ step: RevivalFeedStep) -> some View {
-        mixFeedButton(step)
+        if plan.isEstablishingNewStarter, !step.expectsPeak {
+            establishFeedButton(step)
+        } else {
+            mixFeedButton(step)
+        }
     }
 
     private func nextStep(after step: RevivalFeedStep) -> RevivalFeedStep? {
         sortedSteps.first(where: { $0.sequenceIndex == step.sequenceIndex + 1 })
     }
 
-    private func peakDurationLabel(_ step: RevivalFeedStep) -> String {
+    func peakDurationLabel(_ step: RevivalFeedStep) -> String {
         "Peaked in \(formattedDuration(step.timeToPeakMinutes))"
     }
 
@@ -692,13 +716,15 @@ struct RevivalPlanView: View {
 
     private func gramsPanel(_ step: RevivalFeedStep) -> some View {
         HStack(spacing: 14) {
-            if let retain = step.retainStarterGrams {
+            // Zero-weight columns are noise: a rehydration step adds no flour,
+            // and the first from-scratch mix has no starter to retain.
+            if let retain = step.retainStarterGrams, retain > 0 {
                 gramsColumn(label: "Retain", grams: retain)
             }
-            if let flour = step.addFlourGrams {
+            if let flour = step.addFlourGrams, flour > 0 {
                 gramsColumn(label: "+ Flour", grams: flour)
             }
-            if let water = step.addWaterGrams {
+            if let water = step.addWaterGrams, water > 0 {
                 gramsColumn(label: "+ Water", grams: water)
             }
             if let total = totalGrams(step) {
@@ -736,8 +762,13 @@ struct RevivalPlanView: View {
         return retain + flour + water
     }
 
+    @ViewBuilder
     private func actionButton(for step: RevivalFeedStep) -> some View {
-        mixFeedButton(step)
+        if plan.isEstablishingNewStarter, !step.expectsPeak {
+            establishFeedButton(step)
+        } else {
+            mixFeedButton(step)
+        }
     }
 
     private func mixFeedButton(_ step: RevivalFeedStep) -> some View {
@@ -761,55 +792,6 @@ struct RevivalPlanView: View {
         .controlSize(.large)
     }
 
-    @ViewBuilder
-    private var upcomingStepsSection: some View {
-        let skipThrough = currentStep?.feedStatus == .peaked
-            ? plan.currentStepIndex + 1
-            : plan.currentStepIndex
-        let pending = sortedSteps.filter { $0.sequenceIndex > skipThrough }
-        if !pending.isEmpty, plan.revivalStatus == .active {
-            Section {
-                ForEach(pending) { step in
-                    upcomingRow(step)
-                }
-            } header: {
-                Text("Upcoming")
-            }
-        }
-    }
-
-    private func upcomingRow(_ step: RevivalFeedStep) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text("Feed \(step.sequenceIndex + 1)")
-                    .font(.subheadline.bold())
-                Spacer()
-                Text(step.scheduledTime, format: .dateTime.weekday(.abbreviated).hour().minute())
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let original = step.originalScheduledTime,
-               abs(original.timeIntervalSince(step.scheduledTime)) > 60
-            {
-                Text("Shifted from \(original, format: .dateTime.hour().minute())")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-            }
-
-            if let retain = step.retainStarterGrams,
-               let flour = step.addFlourGrams,
-               let water = step.addWaterGrams
-            {
-                Text(
-                    "Retain \(Int(retain.rounded())) g · +\(Int(flour.rounded())) g flour · +\(Int(water.rounded())) g water"
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-        }
-    }
-
     private var revivalCoachPrefill: String {
         let stepNum = plan.currentStepIndex + 1
         let total = sortedSteps.count
@@ -823,17 +805,17 @@ struct RevivalPlanView: View {
 
     // MARK: - Helpers
 
-    private var sortedSteps: [RevivalFeedStep] {
+    var sortedSteps: [RevivalFeedStep] {
         plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
     }
 
-    private var currentStep: RevivalFeedStep? {
+    var currentStep: RevivalFeedStep? {
         sortedSteps.first(where: { $0.sequenceIndex == plan.currentStepIndex })
             ?? sortedSteps.last
     }
 
     @ViewBuilder
-    private var statusBadge: some View {
+    var statusBadge: some View {
         switch plan.revivalStatus {
         case .active:
             Text("Active")
@@ -873,7 +855,7 @@ struct RevivalPlanView: View {
         isReminderPending = true
     }
 
-    private func cancelMixReminder(for step: RevivalFeedStep) {
+    func cancelMixReminder(for step: RevivalFeedStep) {
         NotificationService.shared.cancelRevivalMixReminder(
             planID: notificationPlanID,
             stepIndex: step.sequenceIndex

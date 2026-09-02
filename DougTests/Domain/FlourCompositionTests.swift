@@ -1,5 +1,9 @@
+#if canImport(DougDomain)
+    @testable import DougDomain
+#else
+    @testable import Doug
+#endif
 import Testing
-@testable import DougDomain
 
 /// Verifies that recipes with a flour blend expose the correct per-flour gram
 /// weights, and that single-flour recipes collapse to one "Flour" row.

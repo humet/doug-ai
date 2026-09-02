@@ -47,7 +47,6 @@ struct NowStepHero: View {
 
             activeFoldCallout
             bakePhaseCallout
-            inlineFeedEntry
             primaryActions
             secondaryActions
             subStepsList
@@ -68,7 +67,13 @@ struct NowStepHero: View {
                         if let fold = foldToComplete {
                             viewModel.markFoldDone(fold)
                         } else if let tempStep = stepRequiringTemp, tempStep.parentStep == nil {
-                            viewModel.finishStepEarly(tempStep, modelContext: modelContext)
+                            // Complete via the same path as the plain "Done"
+                            // button. `finishStepEarly` no-ops once the step is
+                            // overdue (its `guard delta < 0`), which a short
+                            // hands-on step like Mix almost always is by the
+                            // time a temp is logged — leaving the step active
+                            // and its notifications firing.
+                            completeCurrent()
                         }
                         viewModel.handleNewTemperatureReading(schedule: schedule)
                         foldToComplete = nil
@@ -285,6 +290,8 @@ struct NowStepHero: View {
                         "Move On"
                     } else if let label = manualCompletionLabel {
                         label
+                    } else if let label = StepTypeRegistry.completionLabel(for: stepTypeIDEnum) {
+                        label
                     } else if isPassive {
                         "Finish Early"
                     } else {
@@ -309,7 +316,8 @@ struct NowStepHero: View {
                             .padding(.vertical, 10)
                     }
                     .adaptiveGlassButtonStyle(
-                        prominent: isWaitForPeakStep || isLevainAwaitingPeak || isOverdueFlexible || isManualReady || !isPassive
+                        prominent: isWaitForPeakStep || isLevainAwaitingPeak || isOverdueFlexible || isManualReady ||
+                            !isPassive
                     )
                 }
             }
@@ -411,17 +419,61 @@ struct NowStepHero: View {
             switch stepTypeIDEnum {
             case .buildLevain:
                 VStack(alignment: .leading, spacing: 6) {
-                    if let grams = Double(viewModel.feedStarterGrams), grams > 0 {
-                        let flourGrams = grams * Double(viewModel.feedRatioFlour) / Double(max(viewModel.feedRatioStarter, 1))
-                        let waterGrams = grams * Double(viewModel.feedRatioWater) / Double(max(viewModel.feedRatioStarter, 1))
+                    // Prefer the editable form values once the step is live (the
+                    // user may have adjusted ratio/grams in the detail sheet);
+                    // otherwise fall back to the calculator so an upcoming step
+                    // still shows the full breakdown, not a lone levain total.
+                    if step.stepStatus == .active, viewModel.feedInitialized,
+                       let grams = Double(viewModel.feedStarterGrams), grams > 0
+                    {
+                        let flourGrams = grams * Double(viewModel.feedRatioFlour) / Double(max(
+                            viewModel.feedRatioStarter,
+                            1
+                        ))
+                        let waterGrams = grams * Double(viewModel.feedRatioWater) / Double(max(
+                            viewModel.feedRatioStarter,
+                            1
+                        ))
                         measurementChips([
                             ("Starter", grams),
                             ("Flour", flourGrams),
                             ("Water", waterGrams),
                         ])
+                        levainRatioCaption(
+                            ratio: (viewModel.feedRatioStarter, viewModel.feedRatioFlour, viewModel.feedRatioWater),
+                            peakHours: levainBuildFallback?.estimatedPeakHours
+                        )
+                    } else if let build = levainBuildFallback {
+                        measurementChips([
+                            ("Starter", build.starterGrams),
+                            ("Flour", build.flourGrams),
+                            ("Water", build.waterGrams),
+                        ])
+                        levainRatioCaption(
+                            ratio: (build.ratio.starter, build.ratio.flour, build.ratio.water),
+                            peakHours: build.estimatedPeakHours
+                        )
                     } else {
                         measurementChips([("Levain", ing.levainGrams)])
                     }
+                    waterTemperatureCallout
+                }
+            case .activateStarter:
+                // Concrete feed amounts, so "feed your starter" is actionable
+                // without opening the detail panel. Falls back to the standard
+                // 1:5:5 of 10g until the editable form state takes over.
+                VStack(alignment: .leading, spacing: 6) {
+                    let usesFormState = step.stepStatus == .active && viewModel.feedInitialized
+                    let starterGrams = (usesFormState ? Double(viewModel.feedStarterGrams) : nil) ?? 10
+                    let ratio = usesFormState
+                        ? (viewModel.feedRatioStarter, viewModel.feedRatioFlour, viewModel.feedRatioWater)
+                        : (1, 5, 5)
+                    measurementChips([
+                        ("Starter", starterGrams),
+                        ("Flour", starterGrams * Double(ratio.1) / Double(max(ratio.0, 1))),
+                        ("Water", starterGrams * Double(ratio.2) / Double(max(ratio.0, 1))),
+                    ])
+                    levainRatioCaption(ratio: ratio, peakHours: nil)
                     waterTemperatureCallout
                 }
             case .autolyse:
@@ -462,6 +514,13 @@ struct NowStepHero: View {
             .padding(.vertical, 5)
             .background(.blue.opacity(0.1), in: .capsule)
         }
+    }
+
+    private func levainRatioCaption(ratio: (Int, Int, Int), peakHours: Double?) -> some View {
+        let peak = peakHours.map { " · ~\(String(format: "%.0f", $0))h to peak" } ?? ""
+        return Text("\(ratio.0):\(ratio.1):\(ratio.2)\(peak)")
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 
     private func measurementChips(_ items: [(String, Double)]) -> some View {
@@ -527,7 +586,8 @@ struct NowStepHero: View {
            let covered = step.subSteps.first(where: {
                $0.stepTypeID == StepTypeID.bakeCovered.rawValue && $0.stepStatus == .active
            }),
-           covered.computedEndTime <= referenceDate {
+           covered.computedEndTime <= referenceDate
+        {
             VStack(alignment: .leading, spacing: 6) {
                 Label("Remove the Lid", systemImage: "flame.fill")
                     .font(.subheadline.weight(.semibold))
@@ -599,12 +659,25 @@ struct NowStepHero: View {
     }
 
     private var ovenTemperature: Int? {
-        guard [.preheat, .bake, .bakeCovered, .bakeUncovered].contains(stepTypeIDEnum) else { return nil }
+        guard [.preheat, .bake, .bakeCovered, .bakeUncovered, .bakeTin].contains(stepTypeIDEnum) else { return nil }
         return step.schedule?.recipe.bakeTemperature(for: stepTypeIDEnum)
     }
 
     private var recipeIngredients: Ingredients? {
-        step.schedule?.recipe.ingredients
+        step.schedule?.scaledIngredients
+    }
+
+    /// Calculator-derived levain build, shown whenever the editable form state
+    /// isn't authoritative (upcoming step, fresh launch). Same inputs the
+    /// ViewModel uses to seed feed defaults.
+    private var levainBuildFallback: LevainBuildCalculator.Result? {
+        guard stepTypeIDEnum == .buildLevain, let schedule = step.schedule else { return nil }
+        return LevainBuildCalculator.calculate(.init(
+            levainGramsNeeded: schedule.scaledIngredients.levainGrams,
+            baseRatio: schedule.recipe.levainBuildRatio,
+            referenceTemp: schedule.recipe.referenceTemperatureCelsius,
+            kitchenTemp: schedule.kitchenTemperatureCelsius
+        ))
     }
 
     private var desiredWaterTemperature: Double? {
@@ -621,6 +694,19 @@ struct NowStepHero: View {
             return TemperatureCalculator.desiredLevainWaterTemperature(
                 referenceDoughTemp: schedule.recipe.referenceTemperatureCelsius,
                 kitchenTemp: schedule.kitchenTemperatureCelsius
+            )
+        case .activateStarter:
+            let kitchenTemp = schedule.kitchenTemperatureCelsius
+            let usesFormState = step.stepStatus == .active && viewModel.feedInitialized
+            return TemperatureCalculator.desiredActivationWaterTemperature(
+                referenceDoughTemp: schedule.recipe.referenceTemperatureCelsius,
+                kitchenTemp: kitchenTemp,
+                starterTempCelsius: starterProfile?.starterStorageType == .counter
+                    ? kitchenTemp
+                    : TemperatureCalculator.fridgeStarterTempCelsius,
+                ratioStarter: usesFormState ? viewModel.feedRatioStarter : 1,
+                ratioFlour: usesFormState ? viewModel.feedRatioFlour : 5,
+                ratioWater: usesFormState ? viewModel.feedRatioWater : 5
             )
         default:
             return nil
@@ -705,16 +791,8 @@ struct NowStepHero: View {
         switch stepTypeIDEnum {
         case .bulkFerment: return "Bulk Done"
         case .preheat: return "Dough Loaded"
-        case .bakeSheet: return "Bread Out"
+        case .bakeSheet, .bakeTin: return "Bread Out"
         default: return nil
-        }
-    }
-
-    @ViewBuilder
-    private var inlineFeedEntry: some View {
-        if isStarterRelatedStep, step.stepStatus == .active {
-            EmptyView()
-                .onAppear { viewModel.initializeFeedDefaults(for: step) }
         }
     }
 
@@ -743,11 +821,21 @@ private struct FoldChecklistRow: View {
     let referenceDate: Date
     let onFoldDone: () -> Void
 
-    private var isDone: Bool { fold.stepStatus == .done }
-    private var isMissed: Bool { fold.stepStatus == .skipped }
-    private var isSettled: Bool { isDone || isMissed }
+    private var isDone: Bool {
+        fold.stepStatus == .done
+    }
 
-    private var isDue: Bool { fold.computedStartTime <= referenceDate }
+    private var isMissed: Bool {
+        fold.stepStatus == .skipped
+    }
+
+    private var isSettled: Bool {
+        isDone || isMissed
+    }
+
+    private var isDue: Bool {
+        fold.computedStartTime <= referenceDate
+    }
 
     private var timeLabel: String {
         if isDone, let actual = fold.actualEndTime {
@@ -767,7 +855,8 @@ private struct FoldChecklistRow: View {
         HStack(spacing: 12) {
             Image(systemName: isDone ? "checkmark.circle.fill" : (isMissed ? "minus.circle.fill" : "circle"))
                 .font(.title3)
-                .foregroundStyle(isDone ? DougTheme.stepDone : (isMissed ? DougTheme.stepSkipped : (isDue ? .orange : .secondary)))
+                .foregroundStyle(isDone ? DougTheme
+                    .stepDone : (isMissed ? DougTheme.stepSkipped : (isDue ? .orange : .secondary)))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(fold.stepType.label)

@@ -30,7 +30,11 @@ struct FlexStepSliderView: View {
     }
 
     private var isColdRetard: Bool {
-        stepTypeID == .coldRetard
+        stepTypeID?.isColdRetard == true
+    }
+
+    private var isBallRetard: Bool {
+        stepTypeID == .coldRetardBalls
     }
 
     private var durationHours: Double {
@@ -46,7 +50,9 @@ struct FlexStepSliderView: View {
     }
 
     private var sliderStep: Double {
-        isColdRetard ? 30 : 15
+        // A 12–72h ball retard at 30-min steps is 120 detents — too fine.
+        if isBallRetard { return 60 }
+        return isColdRetard ? 30 : 15
     }
 
     var body: some View {
@@ -145,6 +151,32 @@ struct FlexStepSliderView: View {
 
     @ViewBuilder
     private var coldRetardNote: some View {
+        if isBallRetard {
+            ballRetardNote
+        } else {
+            loafRetardNote
+        }
+    }
+
+    @ViewBuilder
+    private var ballRetardNote: some View {
+        if durationHours < 24 {
+            Label("Shorter retard — milder flavour, slightly less extensible dough.", systemImage: "leaf")
+                .font(.subheadline)
+        } else if durationHours <= 48 {
+            Label("The sweet spot — balanced tang, relaxed and easy to stretch.", systemImage: "leaf.fill")
+                .font(.subheadline)
+        } else {
+            Label(
+                "Very long retard — pronounced sour flavour. Check the balls haven't over-proofed and flattened.",
+                systemImage: "flame"
+            )
+            .font(.subheadline)
+        }
+    }
+
+    @ViewBuilder
+    private var loafRetardNote: some View {
         if durationHours < 10 {
             Label("Shorter retard — milder, less sour flavour.", systemImage: "leaf")
                 .font(.subheadline)
@@ -160,14 +192,20 @@ struct FlexStepSliderView: View {
     @ViewBuilder
     private var finalProofNote: some View {
         if durationMinutes < 75 {
-            Label("Short proof — may be slightly under-proofed. Watch the poke test.", systemImage: "exclamationmark.triangle")
-                .font(.subheadline)
+            Label(
+                "Short proof — may be slightly under-proofed. Watch the poke test.",
+                systemImage: "exclamationmark.triangle"
+            )
+            .font(.subheadline)
         } else if durationMinutes <= 120 {
             Label("Good proof window — expect a well-risen, airy crumb.", systemImage: "leaf.fill")
                 .font(.subheadline)
         } else {
-            Label("Long proof — risk of over-proofing in a warm kitchen. Bake promptly.", systemImage: "exclamationmark.triangle")
-                .font(.subheadline)
+            Label(
+                "Long proof — risk of over-proofing in a warm kitchen. Bake promptly.",
+                systemImage: "exclamationmark.triangle"
+            )
+            .font(.subheadline)
         }
     }
 }

@@ -163,6 +163,44 @@ enum StepTypeRegistry {
             )
         ),
 
+        .coldRetardBalls: StepType(
+            id: .coldRetardBalls,
+            label: "Cold Retard",
+            classification: .passiveFlexible,
+            baseDurationMinutes: 1440,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: 720 ... 4320,
+            requiresTempReading: false,
+            instructionText: "Place the covered dough balls in the fridge. They'll slowly ferment and develop flavour — 24–48 hours is the sweet spot, and up to 72 hours works.",
+            notificationText: "Balls into the fridge — the cold retard builds flavour. You can adjust the duration any time.",
+            successSignal: "Balls are cold, slightly puffed, and still hold their shape in the container.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 45,
+                warning: "Your dough balls have been sitting at room temperature — they're proofing fast and will lose structure the longer they wait.",
+                salvageAdvice: "Get them in the fridge now if they still hold their shape. If they've flattened, skip the retard and plan to stretch and bake within a few hours instead."
+            )
+        ),
+
+        .temper: StepType(
+            id: .temper,
+            label: "Temper",
+            classification: .passiveFlexible,
+            baseDurationMinutes: 90,
+            isTemperatureAdjusted: true,
+            referenceTemperatureCelsius: 24.0,
+            flexRange: 60 ... 120,
+            requiresTempReading: false,
+            instructionText: "Take the dough balls out of the fridge, keep them covered, and let them come to room temperature. Cold dough fights the stretch.",
+            notificationText: "Take your dough balls out of the fridge — they need 1–2 hours at room temperature before stretching.",
+            successSignal: "Balls are relaxed, slightly puffy, and no longer fridge-cold to the touch — they stretch without snapping back.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 60,
+                warning: "The balls have been out longer than planned and are over-relaxing — they'll get harder to handle and may tear when stretched.",
+                salvageAdvice: "Stretch and bake now. If a ball has flattened, gently re-round it and rest it 15 minutes before stretching."
+            )
+        ),
+
         .finalProof: StepType(
             id: .finalProof,
             label: "Final Proof",
@@ -196,6 +234,25 @@ enum StepTypeRegistry {
             successSignal: "Dough fills most of the pan evenly, with a dimpled surface glistening with olive oil."
         ),
 
+        .tinShape: StepType(
+            id: .tinShape,
+            label: "Shape & Pan",
+            classification: .handsOn,
+            baseDurationMinutes: 15,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            instructionText: "Grease a loaf tin. Pre-shape the dough into a round and rest 10 minutes, then shape into a tight log the length of the tin: flatten gently, fold the sides in, and roll up snugly to build surface tension. Place it seam-side down in the tin.",
+            notificationText: "Time to shape — pre-shape, bench rest, then shape into a log and drop it seam-down into a greased loaf tin.",
+            successSignal: "The log fills the tin corner to corner, sits seam-side down, and has a taut, smooth top.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 60,
+                warning: "The dough has been bulk fermenting longer than planned. It may be over-proofed — slack and sticky, with little tension left to build.",
+                salvageAdvice: "Shape it gently and get it into the tin — the pan will support a slacker dough. Expect a slightly denser, more open crumb."
+            )
+        ),
+
         .bakeSheet: StepType(
             id: .bakeSheet,
             label: "Bake",
@@ -213,6 +270,26 @@ enum StepTypeRegistry {
                 thresholdMinutes: 30,
                 warning: "Your oven has been at temperature for a long time — wasting energy, but the dough on the counter is still fine.",
                 salvageAdvice: "Turn the oven off and try again when you're ready."
+            )
+        ),
+
+        .bakeTin: StepType(
+            id: .bakeTin,
+            label: "Bake",
+            classification: .passiveFixed,
+            baseDurationMinutes: 40,
+            isTemperatureAdjusted: false,
+            referenceTemperatureCelsius: nil,
+            flexRange: nil,
+            requiresTempReading: false,
+            requiresPresence: true,
+            instructionText: "Place the tin in the preheated oven and bake until deep golden. Tip the loaf out of the tin for the last few minutes to firm up the sides. It's done when the bottom sounds hollow and the internal temperature reads 93–96°C. Cool completely on a rack before slicing.",
+            notificationText: "Time to bake — get the tin in the oven.",
+            successSignal: "Crust is deep golden, the loaf sounds hollow when tapped underneath, and the internal temperature reads 93–96°C.",
+            staleness: StalenessInfo(
+                thresholdMinutes: 30,
+                warning: "Your oven has been at temperature for a long time — wasting energy, but the dough in the fridge is fine. No harm to the bread.",
+                salvageAdvice: "Turn the oven off and try again when you're ready. The dough will keep in the fridge."
             )
         ),
 
@@ -392,6 +469,9 @@ enum StepTypeRegistry {
             let items = joinedList(["levain", "salt"] + extras)
             return "Add the \(items) to the autolysed dough. Pinch and fold until fully incorporated. Take a dough temperature reading."
         }
+        if id == .shape, shapesIntoBalls(recipe) {
+            return "Divide the dough into equal portions and shape each into a tight ball. Place the balls in lightly oiled, covered containers — they go to the fridge next."
+        }
         return instructionText(for: id, storage: storage)
     }
 
@@ -403,7 +483,42 @@ enum StepTypeRegistry {
             let items = joinedList(["levain", "salt"] + extras)
             return "Time to mix — add the \(items), pinch and fold until incorporated. Take a dough temp reading."
         }
+        if id == .shape, shapesIntoBalls(recipe) {
+            return "Time to shape — divide into balls and get them into covered containers for the fridge."
+        }
         return type(for: id).notificationText
+    }
+
+    /// True when the recipe's shape step divides into balls headed for a cold
+    /// retard (pizza), where the loaf-and-banneton copy would mislead.
+    private static func shapesIntoBalls(_ recipe: Recipe?) -> Bool {
+        recipe?.method.contains { $0.stepTypeID == .coldRetardBalls } == true
+    }
+
+    /// Notification body for a gate step's check-in, which fires when the
+    /// predicted timer elapses — the moment to judge the dough, not a status
+    /// update. Steps whose `notificationText` is already check-phrased (the
+    /// levain gates) fall through to it.
+    static func gateCheckNotificationText(for id: StepTypeID) -> String {
+        switch id {
+        case .bulkFerment:
+            "Check your dough — bulk ferment may be done. Look for a 50–75% rise, an airy feel, and bubbles on the surface and sides."
+        default:
+            type(for: id).notificationText
+        }
+    }
+
+    /// Completion-button copy for steps whose tap confirms a specific physical
+    /// act with feed-logging side effects — naming the act beats a generic
+    /// "Done" (matches the "Bulk Done" / "Bread Out" pattern elsewhere).
+    /// Nil → caller falls back to its generic label.
+    static func completionLabel(for id: StepTypeID) -> String? {
+        switch id {
+        case .activateStarter: "Starter Fed"
+        case .buildLevain: "Levain Mixed"
+        case .refeedAndRefrigerate: "Fed & Refrigerated"
+        default: nil
+        }
     }
 
     /// Lower-cased names of the extras a recipe works in during the Mix step.

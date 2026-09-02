@@ -21,6 +21,8 @@ enum StarterHealthAssessor {
             assessActivating(feedLogs: feedLogs, profile: profile)
         case .reviving:
             .needsRevival
+        case .establishing:
+            .establishing
         case .dormant:
             assessDormant(feedLogs: feedLogs, profile: profile, now: now)
         }
@@ -32,7 +34,10 @@ enum StarterHealthAssessor {
         now: Date
     ) -> StarterHealthStatus {
         guard let lastFeed = feedLogs.first else {
-            return .needsRevival
+            // No feeds on record. If the user has told us they don't have a
+            // starter yet, they need to make one — not revive one they've
+            // never owned.
+            return profile.hasStarter ? .needsRevival : .establishing
         }
 
         let daysSinceLastFeed = now.timeIntervalSince(lastFeed.timestamp) / 86400.0
@@ -98,6 +103,8 @@ struct StarterProfileInput {
     let averageTimeToPeakMinutes: Double?
     var lifecycleState: StarterLifecycleState = .dormant
     var activePeakAverageMinutes: Double?
+    /// False when the user has no starter yet.
+    var hasStarter: Bool = true
 }
 
 struct FeedLogInput {
@@ -110,5 +117,8 @@ struct FeedLogInput {
     let timeToPeakMinutes: Double?
     var starterGrams: Double? = nil
     var feedIntent: FeedIntent = .maintenance
+    /// Which starter generation this feed belongs to. Readings from a retired
+    /// starter must never influence the current one's averages.
+    var starterGeneration: Int = 1
 }
 

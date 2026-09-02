@@ -140,6 +140,11 @@ struct BakeContextPayload {
     let steps: [StepPayload]
     let temperatureReadings: [TempReadingPayload]
     let degreeHourTarget: Double
+    /// Degree-hours extrapolated to now (or to bulk's end once it's done).
+    /// The per-reading snapshots freeze at the last logged temperature, which
+    /// lands around the final fold — without this the coach under-reads
+    /// fermentation for the whole back half of bulk. Nil when no readings exist.
+    let currentDegreeHours: Double?
     let delays: [DelayPayload]
 
     struct RecipeMethodPayload {
@@ -190,7 +195,7 @@ struct BakeContextPayload {
 
     func toDictionary() -> [String: Any] {
         let formatter = CoachService.makeLocalDateFormatter()
-        return [
+        var dict: [String: Any] = [
             "recipeId": recipeId,
             "recipeName": recipeName,
             "hydrationPercent": hydrationPercent,
@@ -256,6 +261,10 @@ struct BakeContextPayload {
                 ["stepLabel": $0.stepLabel, "delayMinutes": $0.delayMinutes] as [String: Any]
             },
         ]
+        if let currentDegreeHours {
+            dict["currentDegreeHours"] = currentDegreeHours
+        }
+        return dict
     }
 }
 

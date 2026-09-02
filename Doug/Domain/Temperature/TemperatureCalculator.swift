@@ -33,6 +33,9 @@ enum TemperatureCalculator {
 
     /// Estimates levain build time based on kitchen temperature.
     ///
+    /// Calibrated for the standard 1:5:5 build. For other inoculation ratios use
+    /// `levainPeakMinutes(ratio:kitchenTemp:)`, which scales off this curve.
+    ///
     /// - Parameter kitchenTemp: Kitchen temperature in °C.
     /// - Returns: Estimated levain build time in minutes.
     static func levainBuildMinutes(kitchenTemp: Double) -> Double {
@@ -42,6 +45,32 @@ enum TemperatureCalculator {
         default: 360 // 6 hours
         }
     }
+
+    /// Time-to-peak multiplier per inoculation ratio, relative to the standard
+    /// 1:5:5 build. Lower inoculation (more flour/water per part of starter) takes
+    /// longer to peak — the lever a baker uses to time an overnight levain. The
+    /// 1:5:5 entry is exactly 1.0 so `levainPeakMinutes(.oneToFive, …)` equals
+    /// `levainBuildMinutes(…)` and existing behaviour is unchanged.
+    static func levainRatioPeakMultiplier(_ ratio: FeedRatioBucket) -> Double {
+        switch ratio {
+        case .oneToOne: 0.6 // high inoculation → fast (~3h at 24°C)
+        case .oneToTwo: 0.85 // (~4.25h at 24°C)
+        case .oneToFive: 1.0 // standard anchor (~5h at 24°C)
+        case .oneToTen: 2.0 // low inoculation → overnight (~10h at 24°C)
+        }
+    }
+
+    /// Estimates time-to-peak for a levain build as a function of inoculation
+    /// ratio and kitchen temperature. Scales the temperature-aware 1:5:5 curve
+    /// (`levainBuildMinutes`) by the ratio multiplier.
+    static func levainPeakMinutes(ratio: FeedRatioBucket, kitchenTemp: Double) -> Double {
+        levainBuildMinutes(kitchenTemp: kitchenTemp) * levainRatioPeakMultiplier(ratio)
+    }
+
+    /// How long a peaked levain stays usable past peak (minutes). A ripe levain
+    /// isn't a knife-edge — it holds at and just past peak before degrading. The
+    /// mix should land within `[peak, peak + levainPlateauMinutes]`.
+    static let levainPlateauMinutes: Double = 90
 
     static func fridgeWarmUpMinutes(kitchenTempCelsius: Double) -> Double {
         switch kitchenTempCelsius {
@@ -124,6 +153,50 @@ enum TemperatureCalculator {
             restMinutes: 0,
             includeLevain: true // starter + flour + water = 3 components
         )
+    }
+
+    /// Assumed temperature of a starter coming straight from the fridge (°C).
+    static let fridgeStarterTempCelsius = 4.0
+
+    /// Ceiling for activation feed water. Water is ~5/11ths of a small culture's
+    /// mass, so unlike dough water (clamped at 45°C) anything past the high 30s
+    /// risks stressing the yeast rather than waking it.
+    static let activationWaterMaxCelsius = 38.0
+
+    /// Recommended water temperature for an activation feed.
+    ///
+    /// Unlike `desiredWaterTemperature`'s equal-weights factor method (calibrated
+    /// for dough), this is mass-weighted by the actual feed ratio — in a 1:5:5
+    /// feed the starter is only 1/11th of the mass, so a fridge-cold starter
+    /// needs warm-not-scalding water, not the 50°C+ the equal-weights formula
+    /// would demand. Flour is assumed to be at kitchen temperature.
+    ///
+    /// Targets `referenceDoughTemp + levainTargetOffsetCelsius`, same as a
+    /// levain build: the small culture should sit slightly warm to stay in the
+    /// active fermentation zone through its rise.
+    ///
+    /// - Parameters:
+    ///   - referenceDoughTemp: The recipe's reference/target dough temperature (°C).
+    ///   - kitchenTemp: Current kitchen temperature (°C), used for the flour.
+    ///   - starterTempCelsius: The starter's current temperature — fridge-cold
+    ///     (`fridgeStarterTempCelsius`) or kitchen temperature when on the counter.
+    ///   - ratioStarter/ratioFlour/ratioWater: The feed ratio by mass.
+    /// - Returns: Recommended water temperature in °C, clamped to 2...38.
+    static func desiredActivationWaterTemperature(
+        referenceDoughTemp: Double,
+        kitchenTemp: Double,
+        starterTempCelsius: Double,
+        ratioStarter: Int,
+        ratioFlour: Int,
+        ratioWater: Int
+    ) -> Double {
+        let target = referenceDoughTemp + levainTargetOffsetCelsius
+        let starter = Double(max(ratioStarter, 1))
+        let flour = Double(max(ratioFlour, 0))
+        let water = Double(max(ratioWater, 1))
+        let total = starter + flour + water
+        let raw = (total * target - starter * starterTempCelsius - flour * kitchenTemp) / water
+        return min(max(raw, 2.0), activationWaterMaxCelsius)
     }
 
     /// Computes the effective duration of a method step, applying temperature

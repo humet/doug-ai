@@ -1,7 +1,7 @@
 import Foundation
 
 /// The kind of feed being described, used to pick the right instruction template.
-enum FeedStepKind {
+enum FeedStepKind: Equatable {
     case revivalFirst
     case revivalMiddle
     case revivalFinal
@@ -9,6 +9,13 @@ enum FeedStepKind {
     case activation
     case levain
     case postBake
+    // Building a new starter — see FeedInstructions+NewStarter.swift.
+    case initialMix
+    case rehydrate
+    case activateGift
+    case dailyFeed
+    case twiceDailyFeed
+    case readinessTest
 }
 
 /// Everything the instruction renderer needs to produce human-readable copy.
@@ -22,6 +29,10 @@ struct FeedInstructionInput {
     let kind: FeedStepKind
     let hadHooch: Bool
     let neglect: StarterNeglectLevel?
+    /// Set for new-starter plans — routes the copy to the right wording.
+    var origin: StarterOrigin?
+    /// Day of the plan, so day-specific warnings land on the right feed.
+    var dayNumber: Int?
 }
 
 /// Human-readable instructions for a single feed.
@@ -54,6 +65,8 @@ enum FeedInstructions {
             levain(input)
         case .postBake:
             postBake(input)
+        case .initialMix, .rehydrate, .activateGift, .dailyFeed, .twiceDailyFeed, .readinessTest:
+            newStarter(input)
         }
     }
 
@@ -199,16 +212,16 @@ enum FeedInstructions {
 
     // MARK: - Formatters
 
-    private static func gramString(_ grams: Double) -> String {
+    static func gramString(_ grams: Double) -> String {
         let rounded = Int(grams.rounded())
         return "\(rounded) g"
     }
 
-    private static func tempString(_ celsius: Double) -> String {
+    static func tempString(_ celsius: Double) -> String {
         "\(Int(celsius.rounded()))°C"
     }
 
-    private static func waitString(_ minutes: Double) -> String {
+    static func waitString(_ minutes: Double) -> String {
         if minutes < 90 {
             return "~\(Int(minutes.rounded())) min"
         }

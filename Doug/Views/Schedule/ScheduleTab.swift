@@ -2,10 +2,19 @@ import SwiftData
 import SwiftUI
 
 struct ScheduleTab: View {
-    @State private var viewModel = ScheduleViewModel()
+    @State private var viewModel: ScheduleViewModel = {
+        let viewModel = ScheduleViewModel()
+        // Only the tab-owned instance reacts to Starter-tab events; see
+        // startObservingStarterEvents for why this isn't in init.
+        viewModel.startObservingStarterEvents()
+        return viewModel
+    }()
+
+    @State private var router = NotificationRouter.shared
     @State private var showConfig = false
     @State private var detailStep: ScheduleStep?
     @State private var showCancelConfirm = false
+    @State private var showFinishSheet = false
     @State private var showCoachChat = false
     @State private var coachPrefill: String?
 
@@ -73,6 +82,23 @@ struct ScheduleTab: View {
                             }
                             showConfig = false
                         }
+                    }
+                }
+                .sheet(isPresented: $showFinishSheet) {
+                    if let schedule = viewModel.activeSchedule {
+                        FinishBakeSheet(
+                            recipeName: schedule.recipe.name,
+                            onSave: { reflection in
+                                withAnimation(.smooth) {
+                                    viewModel.finishBake(reflection: reflection, modelContext: modelContext)
+                                }
+                            },
+                            onFinishWithoutSaving: {
+                                withAnimation(.smooth) {
+                                    viewModel.finishBake(reflection: nil, modelContext: modelContext)
+                                }
+                            }
+                        )
                     }
                 }
                 .sheet(isPresented: $viewModel.showConflictSheet) {
@@ -200,7 +226,11 @@ struct ScheduleTab: View {
                 ) {
                     Button("OK") { viewModel.starterHealthBlock = nil }
                 } message: {
-                    if viewModel.starterHealthBlock == .needsRevival {
+                    if viewModel.starterHealthBlock == .establishing {
+                        Text(
+                            "Your new starter isn't established yet. Finish its plan on the Starter tab and you'll be able to bake with it."
+                        )
+                    } else if viewModel.starterHealthBlock == .needsRevival {
                         Text("Your starter needs revival before baking. Check the Starter tab for a revival plan.")
                     } else {
                         Text(
@@ -210,6 +240,9 @@ struct ScheduleTab: View {
                 }
                 .task {
                     viewModel.restoreActiveSchedule(modelContext: modelContext)
+                    // A notification tap can set the pending detail before this
+                    // view exists (cold launch) — onChange alone would miss it.
+                    consumePendingStepDetail()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
@@ -217,17 +250,29 @@ struct ScheduleTab: View {
                         viewModel.advanceIfReady(now: Date(), modelContext: modelContext)
                     }
                 }
-                .onChange(of: viewModel.pendingStepDetail) { _, newValue in
-                    guard let detail = newValue,
-                          let schedule = viewModel.activeSchedule,
-                          let step = schedule.steps.first(where: {
-                              $0.stepTypeID == detail.stepTypeID
-                                  && $0.sequenceIndex == detail.sequenceIndex
-                          }) else { return }
-                    detailStep = step
-                    viewModel.pendingStepDetail = nil
+                .onChange(of: router.pendingPlanRecipeID) { _, newValue in
+                    guard let recipeID = newValue else { return }
+                    router.pendingPlanRecipeID = nil
+                    // Can't plan a new bake while one is active; the user lands on
+                    // the active bake instead.
+                    guard viewModel.activeSchedule == nil else { return }
+                    planBake(for: recipeID)
+                }
+                .onChange(of: viewModel.pendingStepDetail) { _, _ in
+                    consumePendingStepDetail()
                 }
         }
+    }
+
+    private func consumePendingStepDetail() {
+        guard let detail = viewModel.pendingStepDetail,
+              let schedule = viewModel.activeSchedule,
+              let step = schedule.steps.first(where: {
+                  $0.stepTypeID == detail.stepTypeID
+                      && $0.sequenceIndex == detail.sequenceIndex
+              }) else { return }
+        detailStep = step
+        viewModel.pendingStepDetail = nil
     }
 
     // MARK: - Main content
@@ -265,7 +310,10 @@ struct ScheduleTab: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     activeHeader(schedule: schedule)
-                    IngredientsDisclosure(ingredients: schedule.recipe.ingredients)
+                    IngredientsDisclosure(
+                        ingredients: schedule.scaledIngredients,
+                        yieldSummary: schedule.yieldSummary
+                    )
 
                     if let pausedAt = schedule.pausedAt {
                         PausedBanner(
@@ -311,7 +359,8 @@ struct ScheduleTab: View {
                     if !schedule.temperatureReadings.isEmpty {
                         DegreeHoursChartView(
                             readings: schedule.temperatureReadings,
-                            targetDegreeHours: schedule.recipe.degreeHourTarget
+                            targetDegreeHours: schedule.effectiveDegreeHourTarget,
+                            asOf: minuteBucketed(schedule.degreeHourCutoff(now: now))
                         )
 
                         if isBulkFermentActive(in: schedule) {
@@ -334,10 +383,13 @@ struct ScheduleTab: View {
                         Button {
                             viewModel.showFlexStepSlider = true
                         } label: {
-                            Label("Adjust \(StepTypeRegistry.type(for: stepID).label)", systemImage: "clock.arrow.2.circlepath")
-                                .font(.subheadline)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
+                            Label(
+                                "Adjust \(StepTypeRegistry.type(for: stepID).label)",
+                                systemImage: "clock.arrow.2.circlepath"
+                            )
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
                         }
                         .adaptiveGlassButtonStyle()
                     }
@@ -347,6 +399,9 @@ struct ScheduleTab: View {
                 .padding()
             }
             .task(id: effectiveTickBucket(now: now)) {
+                // Refresh first so the Bulk Done affordance reflects this tick's
+                // state before any step promotion.
+                viewModel.refreshBulkFermentTarget(now: now)
                 viewModel.advanceIfReady(now: now, modelContext: modelContext)
             }
         }
@@ -397,7 +452,10 @@ struct ScheduleTab: View {
             }
             let restArray = Array(rest)
             ForEach(Array(restArray.enumerated()), id: \.element.id) { index, step in
-                if index > 0, !Calendar.current.isDate(restArray[index - 1].computedStartTime, inSameDayAs: step.computedStartTime) {
+                if index > 0, !Calendar.current.isDate(
+                    restArray[index - 1].computedStartTime,
+                    inSameDayAs: step.computedStartTime
+                ) {
                     OvernightDivider(from: restArray[index - 1].computedStartTime, to: step.computedStartTime)
                 }
 
@@ -427,9 +485,7 @@ struct ScheduleTab: View {
         Menu {
             if let schedule = viewModel.activeSchedule, canFinishBake(in: schedule) {
                 Button {
-                    withAnimation(.smooth) {
-                        viewModel.finishBake(modelContext: modelContext)
-                    }
+                    showFinishSheet = true
                 } label: {
                     Label("Finish bake", systemImage: "checkmark.seal")
                 }
@@ -488,6 +544,13 @@ struct ScheduleTab: View {
     /// `advanceIfReady` without thrashing.
     private func effectiveTickBucket(now: Date) -> Int {
         Int(now.timeIntervalSince1970)
+    }
+
+    /// Floor a date to the minute. The degree-hour chart sits inside a per-second
+    /// TimelineView; a per-second `asOf` would force a Chart relayout every tick
+    /// for under 0.2% of progress movement per minute.
+    private func minuteBucketed(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 60).rounded(.down) * 60)
     }
 
     private func planBake(for recipeID: RecipeID) {
@@ -583,6 +646,7 @@ private struct RecipeCardButtonStyle: ButtonStyle {
 
 private struct IngredientsDisclosure: View {
     let ingredients: Ingredients
+    var yieldSummary: String?
     @State private var expanded = false
 
     var body: some View {
@@ -597,6 +661,12 @@ private struct IngredientsDisclosure: View {
                         .foregroundStyle(.secondary)
                     Text("Ingredients")
                         .font(.subheadline.weight(.semibold))
+                    if let yieldSummary {
+                        Text(yieldSummary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                     Spacer()
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))

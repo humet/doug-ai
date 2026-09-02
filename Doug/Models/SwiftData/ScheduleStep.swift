@@ -12,6 +12,10 @@ final class ScheduleStep {
     var status: String
     var notificationIdentifier: String?
     var actualEndTime: Date?
+    /// For a `buildLevain` step, the adaptively-chosen inoculation ratio (raw value
+    /// of `FeedRatioBucket`) when the scheduler sized the build to its window.
+    /// nil for non-levain steps and standard builds.
+    var levainBuildRatio: String?
 
     var parentStep: ScheduleStep?
     @Relationship(deleteRule: .cascade, inverse: \ScheduleStep.parentStep)
@@ -40,11 +44,9 @@ final class ScheduleStep {
     var stepType: StepType {
         StepTypeRegistry.type(for: StepTypeID(rawValue: stepTypeID)!)
     }
-}
 
-enum StepStatus: String, Codable {
-    case upcoming
-    case active
-    case done
-    case skipped
+    /// The adaptively-chosen levain inoculation ratio, if any.
+    var levainRatioBucket: FeedRatioBucket? {
+        levainBuildRatio.flatMap(FeedRatioBucket.init(rawValue:))
+    }
 }

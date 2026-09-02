@@ -2,6 +2,20 @@ import Foundation
 import Observation
 import SwiftData
 
+/// The one thing the starter hero card asks the user to do next, derived from
+/// lifecycle state and bake context.
+enum StarterPrimaryAction: Equatable {
+    case activateAndFeed
+    case logActivationFeed
+    case markPeak
+    case buildLevain
+    case feedAndRefrigerate
+    case waitForBake
+    case followRevival
+    case followStarterPlan
+    case startNewStarter
+}
+
 @Observable
 @MainActor
 final class StarterViewModel {
@@ -9,6 +23,11 @@ final class StarterViewModel {
     var showStartRevival = false
     var showPostBake = false
     var editingFeedLog: StarterFeedLog?
+    /// Feed log the Mark Peak sheet is targeting.
+    var markPeakTarget: StarterFeedLog?
+    /// When set, the Log Feed sheet locks to this intent (e.g. the merged
+    /// "Activate & Feed" flow) instead of offering the feed-type picker.
+    var logFeedLockedIntent: FeedIntent?
 
     // Feed entry form state
     var feedRatioStarter = 1
@@ -38,6 +57,10 @@ final class StarterViewModel {
     var revivalFlourType = "white"
     var revivalKitchenTemp = 22.0
     var revivalIsPreparing = false
+
+    // MARK: - New Starter Form
+
+    var showStartNewStarter = false
 
     func healthStatus(
         profile: StarterProfile?,
@@ -94,9 +117,9 @@ final class StarterViewModel {
         await NotificationService.shared.scheduleStarterFeedReminder(at: nextFeed, context: context)
     }
 
-    func prepareLevainBuild(for recipe: Recipe, kitchenTemp: Double) {
+    func prepareLevainBuild(for recipe: Recipe, kitchenTemp: Double, levainGramsNeeded: Double? = nil) {
         let result = LevainBuildCalculator.calculate(.init(
-            levainGramsNeeded: recipe.ingredients.levainGrams,
+            levainGramsNeeded: levainGramsNeeded ?? recipe.ingredients.levainGrams,
             baseRatio: recipe.levainBuildRatio,
             referenceTemp: recipe.referenceTemperatureCelsius,
             kitchenTemp: kitchenTemp
@@ -122,7 +145,9 @@ final class StarterViewModel {
             flourType: feedFlourType,
             kitchenTemperatureCelsius: feedKitchenTemp,
             starterGrams: grams,
-            feedIntent: resolvedIntent
+            feedIntent: resolvedIntent,
+            // A feed always belongs to the starter that's alive right now.
+            starterGeneration: profile?.starterGeneration ?? 1
         )
         modelContext.insert(log)
 
@@ -141,6 +166,15 @@ final class StarterViewModel {
             }
         }
 
+        switch resolvedIntent {
+        case .activation:
+            post(.activationFeedLogged(at: log.timestamp))
+        case .levain:
+            post(.levainFeedLogged(at: log.timestamp))
+        case .maintenance, .postBake:
+            break
+        }
+
         feedRatioStarter = 1
         feedRatioFlour = 2
         feedRatioWater = 2
@@ -148,10 +182,15 @@ final class StarterViewModel {
         feedTimestamp = Date()
         logFeedStarterGrams = ""
         feedIntent = .maintenance
+        logFeedLockedIntent = nil
         pendingLevainBuild = nil
         pendingLevainRecipeName = nil
 
         showLogFeed = false
+
+        // A feed is precious user data — persist now rather than waiting for
+        // autosave, which an abrupt termination can beat.
+        try? modelContext.save()
     }
 
     private func inferFeedIntent(profile: StarterProfile?) -> FeedIntent {
@@ -172,34 +211,126 @@ final class StarterViewModel {
         modelContext.delete(log)
         let remaining = feedLogs.filter { $0.persistentModelID != log.persistentModelID }
         updateProfileAverages(profile: profile, feedLogs: remaining)
+        try? modelContext.save()
     }
 
-    static let peakMarkedNotification = Notification.Name("StarterPeakMarked")
+    /// Cross-ViewModel channel: the Schedule tab observes these to keep a live
+    /// schedule's activation preamble in step with Starter-tab actions. The
+    /// notification's `object` is the `StarterTabEvent`.
+    static let starterEventNotification = Notification.Name("StarterTabEvent")
 
-    func markPeak(for log: StarterFeedLog, profile: StarterProfile?, allLogs: [StarterFeedLog]) {
-        log.markPeak(at: Date())
+    private func post(_ event: StarterTabEvent) {
+        NotificationCenter.default.post(name: Self.starterEventNotification, object: event)
+    }
+
+    /// Marks a feed's peak at an explicit (possibly backdated) time. With
+    /// `estimated: true` the peak timestamp is recorded but the duration is
+    /// deliberately dropped, so a guess never feeds the scheduler's averages.
+    func markPeak(
+        for log: StarterFeedLog,
+        at peakDate: Date = Date(),
+        estimated: Bool = false,
+        profile: StarterProfile?,
+        allLogs: [StarterFeedLog]
+    ) {
+        if estimated {
+            log.markEstimatedPeak(at: peakDate)
+        } else {
+            log.markPeak(at: peakDate)
+        }
         updateProfileAverages(profile: profile, feedLogs: allLogs)
 
-        if log.starterFeedIntent == .activation, let profile {
-            evaluateLifecycle(profile: profile, feedLogs: allLogs)
+        // The user explicitly confirmed the peak, so always advance
+        // activating → active. The auto-transition path can't be used here: it
+        // requires a plausible timeToPeakMinutes and would strand estimated or
+        // badly-backdated peaks in `.activating`.
+        if log.starterFeedIntent == .activation, let profile,
+           let result = StarterStateMachine.markPeakConfirmed(currentState: profile.starterLifecycleState)
+        {
+            profile.starterLifecycleState = result.newState
+            profile.starterStorageType = .counter
         }
 
-        NotificationCenter.default.post(name: Self.peakMarkedNotification, object: nil)
+        post(.peakMarked(at: peakDate, intent: log.starterFeedIntent))
+
+        try? log.modelContext?.save()
+    }
+
+    /// Best estimate of when an unobserved feed peaked, for the "it peaked
+    /// while I slept" flow.
+    func estimatedPeakDate(for log: StarterFeedLog, profile: StarterProfile?) -> Date {
+        StarterPeakEstimator.estimatedPeakDate(
+            feedTimestamp: log.timestamp,
+            activePeakAverageMinutes: profile?.activePeakAverageMinutes,
+            averageTimeToPeakMinutes: profile?.averageTimeToPeakMinutes,
+            kitchenTempCelsius: log.kitchenTemperatureCelsius
+        )
+    }
+
+    /// When a currently-rising feed is expected to peak, for the hero card's
+    /// "expect peak ~13:40" line.
+    func expectedPeakDate(
+        for log: StarterFeedLog,
+        profile: StarterProfile?,
+        allLogs: [StarterFeedLog]
+    ) -> Date {
+        let minutes: Double = if log.starterFeedIntent == .activation {
+            StarterScheduleSync.expectedPeakMinutes(
+                peakProfile: StarterPeakProfile(
+                    feedLogs: allLogs.map { FeedLogInput(from: $0) },
+                    intentFilter: .activation
+                ),
+                activePeakAverageMinutes: profile?.activePeakAverageMinutes,
+                kitchenTempCelsius: log.kitchenTemperatureCelsius
+            )
+        } else {
+            TemperatureCalculator.levainBuildMinutes(kitchenTemp: log.kitchenTemperatureCelsius)
+        }
+        return log.timestamp.addingTimeInterval(minutes * 60)
+    }
+
+    /// The single next action the hero card should offer.
+    func primaryAction(
+        lifecycleState: StarterLifecycleState,
+        hasRisingFeed: Bool,
+        hasUpcomingRecipe: Bool,
+        hasRecentLevainFeed: Bool,
+        bakeAwaitingLevainMix: Bool,
+        hasStarter: Bool = true
+    ) -> StarterPrimaryAction {
+        switch lifecycleState {
+        case .establishing:
+            return .followStarterPlan
+        case .reviving:
+            return .followRevival
+        case .dormant:
+            // Nothing to feed yet — the only sensible next step is to make one.
+            guard hasStarter else { return .startNewStarter }
+            // Always offer activation — even when health says "needs revival"
+            // (which is also a fresh install's state, with zero feed history).
+            // The revival section below carries its own call to action.
+            return .activateAndFeed
+        case .activating:
+            return hasRisingFeed ? .markPeak : .logActivationFeed
+        case .active:
+            if bakeAwaitingLevainMix { return .waitForBake }
+            if hasUpcomingRecipe, !hasRecentLevainFeed { return .buildLevain }
+            return .feedAndRefrigerate
+        }
     }
 
     func updateProfileAverages(profile: StarterProfile?, feedLogs: [StarterFeedLog]) {
         guard let profile else { return }
 
-        let allPeakTimes = feedLogs.compactMap(\.timeToPeakMinutes)
-        if !allPeakTimes.isEmpty {
-            profile.averageTimeToPeakMinutes = allPeakTimes.reduce(0, +) / Double(allPeakTimes.count)
+        // Exclude implausible readings (e.g. a peak marked days late) so one bad
+        // entry can't corrupt the averages the scheduler relies on — shared with
+        // the schedule's step side effects via StarterAverages.
+        let averages = StarterAverages.recompute(feedLogs: feedLogs.map { FeedLogInput(from: $0) })
+        if let allAverage = averages.averageTimeToPeakMinutes {
+            profile.averageTimeToPeakMinutes = allAverage
         }
-
-        let activationPeakTimes = feedLogs
-            .filter { $0.starterFeedIntent == .activation }
-            .compactMap(\.timeToPeakMinutes)
-        if !activationPeakTimes.isEmpty {
-            profile.activePeakAverageMinutes = activationPeakTimes.reduce(0, +) / Double(activationPeakTimes.count)
+        if let activationAverage = averages.activePeakAverageMinutes {
+            profile.activePeakAverageMinutes = activationAverage
         }
 
         profile.starterHealthStatus = healthStatus(profile: profile, feedLogs: feedLogs)
@@ -212,6 +343,7 @@ final class StarterViewModel {
         if let result = StarterStateMachine.activate(currentState: profile.starterLifecycleState) {
             profile.starterLifecycleState = result.newState
             profile.starterStorageType = .counter
+            post(.activated(at: Date()))
         }
     }
 
@@ -529,7 +661,7 @@ final class StarterViewModel {
 
     // MARK: - Private
 
-    private func applyRevivalDelta(
+    func applyRevivalDelta(
         _ delta: TimeInterval,
         fromIndex startIndex: Int,
         plan: RevivalPlan,
@@ -554,12 +686,14 @@ final class StarterViewModel {
             let stepIndex = step.sequenceIndex
             let title = step.instructionTitle ?? "Feed \(stepIndex + 1)"
             let newTime = snapped
+            let isNewStarter = plan.isEstablishingNewStarter
             Task {
                 await NotificationService.shared.rescheduleRevivalMixReminderIfPending(
                     at: newTime,
                     planID: planID,
                     stepIndex: stepIndex,
-                    title: title
+                    title: title,
+                    isNewStarter: isNewStarter
                 )
             }
         }
@@ -611,7 +745,7 @@ final class StarterViewModel {
 
     // MARK: - Revival Notifications
 
-    private func scheduleNextRevivalReminder(plan: RevivalPlan) {
+    func scheduleNextRevivalReminder(plan: RevivalPlan) {
         let steps = plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
         guard let next = steps.first(where: { $0.feedStatus == .pending }),
               next.scheduledTime > Date()
@@ -621,19 +755,21 @@ final class StarterViewModel {
         let stepIndex = next.sequenceIndex
         let title = next.instructionTitle ?? "Feed \(stepIndex + 1)"
         let date = next.scheduledTime
+        let isNewStarter = plan.isEstablishingNewStarter
         Task {
             await NotificationService.shared.scheduleRevivalMixReminder(
                 at: date,
                 planID: planID,
                 stepIndex: stepIndex,
-                title: title
+                title: title,
+                isNewStarter: isNewStarter
             )
         }
     }
 
     // MARK: - Live Activity
 
-    private func syncRevivalActivity(plan: RevivalPlan) {
+    func syncRevivalActivity(plan: RevivalPlan) {
         guard plan.revivalStatus == .active else {
             LiveActivityService.shared.endRevivalActivity()
             return

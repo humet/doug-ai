@@ -10,7 +10,22 @@ struct DougApp: App {
     init() {
         let container = Self.makeContainer()
         sharedModelContainer = container
-        _notificationHandler = State(initialValue: NotificationActionHandler(modelContainer: container))
+        let handler = NotificationActionHandler(modelContainer: container)
+        _notificationHandler = State(initialValue: handler)
+        // The delegate must be live before launch finishes: notification
+        // actions (e.g. snooze) background-launch the app and deliver the
+        // response immediately — a .task-assigned delegate would miss them.
+        UNUserNotificationCenter.current().delegate = handler
+        NotificationService.shared.registerCategories()
+        // Live Activity buttons perform in the app process — possibly a
+        // background launch where no view (and no view model) exists yet.
+        LiveActivityIntentRunner.modelContainer = container
+        CompleteBakePhaseIntent.performHandler = { stepTypeID, sequenceIndex in
+            LiveActivityIntentRunner.completeBakePhase(
+                stepTypeID: stepTypeID,
+                sequenceIndex: sequenceIndex
+            )
+        }
     }
 
     private static func makeContainer() -> ModelContainer {
@@ -19,6 +34,7 @@ struct DougApp: App {
             ScheduleStep.self,
             DoughTemperatureReading.self,
             BakeFermentationProfile.self,
+            BakePhoto.self,
             StarterFeedLog.self,
             StarterProfile.self,
             RevivalPlan.self,
@@ -39,8 +55,6 @@ struct DougApp: App {
         WindowGroup {
             ContentView()
                 .task {
-                    NotificationService.shared.registerCategories()
-                    UNUserNotificationCenter.current().delegate = notificationHandler
                     reconcileLiveActivities()
                 }
         }

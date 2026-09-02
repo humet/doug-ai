@@ -10,6 +10,7 @@ struct OnboardingView: View {
     @State private var endMinute = 0
     @State private var kitchenTemp = 22.0
     @State private var starterStorage: StarterStorageType = .fridge
+    @State private var hasStarter = true
 
     let onComplete: () -> Void
 
@@ -70,12 +71,25 @@ struct OnboardingView: View {
                 }
 
                 Section {
-                    Picker("Starter storage", selection: $starterStorage) {
-                        Text("Fridge").tag(StarterStorageType.fridge)
-                        Text("Counter").tag(StarterStorageType.counter)
+                    Picker("Do you have a starter?", selection: $hasStarter) {
+                        Text("Yes").tag(true)
+                        Text("Not yet").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+
+                    if hasStarter {
+                        Picker("Starter storage", selection: $starterStorage) {
+                            Text("Fridge").tag(StarterStorageType.fridge)
+                            Text("Counter").tag(StarterStorageType.counter)
+                        }
                     }
                 } header: {
                     Text("Starter")
+                } footer: {
+                    Text(hasStarter
+                        ? "Doug tracks your feeds and works your bakes around your starter's rhythm."
+                        : "No problem — Doug will walk you through making one, whether you're starting "
+                        + "with just flour and water or with a culture from someone else.")
                 }
 
                 Section {
@@ -103,9 +117,12 @@ struct OnboardingView: View {
         modelContext.insert(availability)
 
         let profile = StarterProfile(
-            storageType: starterStorage,
+            storageType: hasStarter ? starterStorage : .counter,
             maintenanceCycleDays: starterStorage == .fridge ? 6 : 1
         )
+        // Without this, a first-time user is offered a revival plan for a
+        // starter they've never owned.
+        profile.hasStarter = hasStarter
         modelContext.insert(profile)
 
         onComplete()

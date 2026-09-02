@@ -40,7 +40,46 @@ struct TimeSlot: Identifiable {
 @Observable
 @MainActor
 final class ScheduleViewModel {
-    var selectedRecipeID: RecipeID = .countryLoaf
+    var selectedRecipeID: RecipeID = .countryLoaf {
+        didSet {
+            guard oldValue != selectedRecipeID else { return }
+            yieldCount = nil
+            yieldUnitGrams = nil
+            nudgeTargetDateForMultiDayRecipe()
+        }
+    }
+
+    /// A recipe with a multi-day retard (pizza balls, 12–72h) can't finish by
+    /// the default tomorrow-morning target — move it to dinner on the earliest
+    /// feasible day so the config sheet opens on viable slots, not conflicts.
+    private func nudgeTargetDateForMultiDayRecipe() {
+        let method = selectedRecipe.method
+        guard let retard = method.first(where: { $0.stepTypeID.isColdRetard }),
+              let flex = retard.effectiveFlexRange,
+              flex.upperBound > 1440 else { return }
+        let earliest = Date().addingTimeInterval(
+            Double(selectedRecipe.approximateTotalHours.lowerBound) * 3600
+        )
+        guard targetDate < earliest else { return }
+        let dinner = Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: earliest) ?? earliest
+        targetDate = max(dinner, earliest)
+    }
+
+    // Plan-time yield selection. Nil means the recipe's written quantities;
+    // the factor scales ingredients only — never step durations.
+    var yieldCount: Int?
+    var yieldUnitGrams: Double?
+
+    var yieldScaleFactor: Double {
+        guard yieldCount != nil || yieldUnitGrams != nil else { return 1 }
+        return RecipeScaler.factor(
+            count: yieldCount ?? selectedRecipe.yield.baseCount,
+            unitGrams: yieldUnitGrams,
+            yield: selectedRecipe.yield,
+            baseIngredients: selectedRecipe.ingredients
+        )
+    }
+
     var targetDate: Date = {
         let calendar = Calendar.current
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
@@ -66,6 +105,9 @@ final class ScheduleViewModel {
     var starterHealthBlock: StarterHealthStatus?
     var pendingFoldEntry: PendingFoldEntry?
     var pendingStepDetail: PendingStepDetail?
+    /// A bake-phase "Done" notification action waiting for the active schedule
+    /// to be available (cold launch delivers the action before restore runs).
+    var pendingBakeDone: PendingStepDetail?
     var bulkFermentTargetReached = false
     var lastScheduleAdjustment: ScheduleAdjustment?
 
@@ -97,11 +139,14 @@ final class ScheduleViewModel {
         switch stepTypeID {
         case .activateStarter:
             feedRatioStarter = 1; feedRatioFlour = 5; feedRatioWater = 5
+            // Same default the Starter tab's feed sheet uses, so the hero's
+            // measurement chips and the logged feed agree.
+            feedStarterGrams = "10"
         case .buildLevain:
             if let recipe = step.schedule?.recipe {
                 let kitchenTemp = step.schedule?.kitchenTemperatureCelsius ?? temp
                 let build = LevainBuildCalculator.calculate(.init(
-                    levainGramsNeeded: recipe.ingredients.levainGrams,
+                    levainGramsNeeded: (step.schedule?.scaledIngredients ?? recipe.ingredients).levainGrams,
                     baseRatio: recipe.levainBuildRatio,
                     referenceTemp: recipe.referenceTemperatureCelsius,
                     kitchenTemp: kitchenTemp
@@ -140,14 +185,34 @@ final class ScheduleViewModel {
 
     init() {
         NotificationRouter.shared.registerScheduleViewModel(self)
-        NotificationCenter.default.addObserver(
-            forName: StarterViewModel.peakMarkedNotification,
+    }
+
+    // nonisolated(unsafe): written once on the main actor, read in deinit;
+    // NotificationCenter.removeObserver is thread-safe.
+    private nonisolated(unsafe) var starterEventObserver: NSObjectProtocol?
+
+    /// Called by the hosting tab, not from init: only the app's live, tab-owned
+    /// ViewModel should react to Starter-tab events. Registering in init made
+    /// every test-created instance an observer, and events posted by one test
+    /// suite reached stale ViewModels from other suites whose in-memory
+    /// containers were already gone — SIGTRAP.
+    func startObservingStarterEvents() {
+        guard starterEventObserver == nil else { return }
+        starterEventObserver = NotificationCenter.default.addObserver(
+            forName: StarterViewModel.starterEventNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
+            guard let event = notification.object as? StarterTabEvent else { return }
             Task { @MainActor in
-                self?.advancePeakStepIfActive()
+                self?.handleStarterEvent(event)
             }
+        }
+    }
+
+    deinit {
+        if let starterEventObserver {
+            NotificationCenter.default.removeObserver(starterEventObserver)
         }
     }
 
@@ -169,9 +234,28 @@ final class ScheduleViewModel {
         )
         activeSchedule = try? modelContext.fetch(descriptor).first
         if let schedule = activeSchedule {
+            // Re-seed feed defaults for an already-active starter step after a
+            // relaunch, so the hero card's measurements survive app restarts.
+            if let active = orderedTopLevelSteps(in: schedule).first(where: { $0.stepStatus == .active }) {
+                initializeFeedDefaults(for: active)
+            }
+            consumePendingBakeDone()
             syncLiveActivity()
             validateConflicts(in: schedule)
         }
+    }
+
+    /// Applies a buffered bake-phase "Done" notification action once the active
+    /// schedule is available. Searches sub-steps too — bake phases live under
+    /// the bake step.
+    func consumePendingBakeDone() {
+        guard let entry = pendingBakeDone, let schedule = activeSchedule else { return }
+        let allSteps = schedule.steps + schedule.steps.flatMap(\.subSteps)
+        guard let step = allSteps.first(where: {
+            $0.stepTypeID == entry.stepTypeID && $0.sequenceIndex == entry.sequenceIndex
+        }), let context = step.modelContext else { return }
+        pendingBakeDone = nil
+        markStepDone(step, modelContext: context)
     }
 
     private func cleanupStaleSchedules(modelContext: ModelContext) {
@@ -209,17 +293,23 @@ final class ScheduleViewModel {
         detectActiveLevain(feedLogs: feedLogs, peakProfile: peakProfile)
 
         let starterState = starterProfile?.starterLifecycleState ?? .dormant
-        if detectedLevain == nil, (starterState == .activating || starterState == .active) {
+        if detectedLevain == nil, starterState == .activating || starterState == .active {
             detectActivationAsLevain(feedLogs: feedLogs, peakProfile: peakProfile)
         }
 
-        print("[starter] state=\(starterState.rawValue) storage=\(starterProfile?.starterStorageType.rawValue ?? "nil") health=\(starterProfile?.starterHealthStatus.rawValue ?? "nil")")
+        print(
+            "[starter] state=\(starterState.rawValue) storage=\(starterProfile?.starterStorageType.rawValue ?? "nil") health=\(starterProfile?.starterHealthStatus.rawValue ?? "nil")"
+        )
         if let feed = feedLogs.first {
             let ago = Date().timeIntervalSince(feed.timestamp) / 60
-            print("[starter] latestFeed: \(feed.starterFeedIntent.rawValue) \(feed.ratioStarter):\(feed.ratioFlour):\(feed.ratioWater) \(Int(ago))min ago peaked=\(feed.peakTimestamp != nil)")
+            print(
+                "[starter] latestFeed: \(feed.starterFeedIntent.rawValue) \(feed.ratioStarter):\(feed.ratioFlour):\(feed.ratioWater) \(Int(ago))min ago peaked=\(feed.peakTimestamp != nil)"
+            )
         }
         if let ctx = detectedLevain {
-            print("[starter] levainContext: fedAt=\(ctx.fedAt) elapsed=\(Int(ctx.elapsedMinutes()))min remaining=\(Int(ctx.remainingMinutes()))min expected=\(Int(ctx.expectedPeakMinutes))min")
+            print(
+                "[starter] levainContext: fedAt=\(ctx.fedAt) elapsed=\(Int(ctx.elapsedMinutes()))min remaining=\(Int(ctx.remainingMinutes()))min expected=\(Int(ctx.expectedPeakMinutes))min"
+            )
         } else {
             print("[starter] levainContext: none")
         }
@@ -246,13 +336,19 @@ final class ScheduleViewModel {
             availability: avail,
             unavailableWindows: windowInputs,
             peakProfile: peakProfile,
-            levainContext: (useActiveLevain || starterState == .activating || starterState == .active) ? detectedLevain : nil,
+            levainContext: (useActiveLevain || starterState == .activating || starterState == .active) ?
+                detectedLevain :
+                nil,
             earliestStartTime: earliestStart
         )
 
         print("[buildPreview] recipe=\(selectedRecipe.name) target=\(targetDate) temp=\(kitchenTemperature)°C")
-        print("[buildPreview] starterState=\(starterProfile?.starterLifecycleState.rawValue ?? "nil") earliestStart=\(earliestStart)")
-        print("[buildPreview] viableRange=\(viableBreadReadyRange.map { "\($0.lowerBound) ... \($0.upperBound)" } ?? "nil")")
+        print(
+            "[buildPreview] starterState=\(starterProfile?.starterLifecycleState.rawValue ?? "nil") earliestStart=\(earliestStart)"
+        )
+        print(
+            "[buildPreview] viableRange=\(viableBreadReadyRange.map { "\($0.lowerBound) ... \($0.upperBound)" } ?? "nil")"
+        )
 
         let result = ScheduleBuilder.build(input)
 
@@ -317,7 +413,8 @@ final class ScheduleViewModel {
                             )
                         },
                         requiresTempReading: step.requiresTempReading,
-                        levainElapsedMinutes: step.levainElapsedMinutes
+                        levainElapsedMinutes: step.levainElapsedMinutes,
+                        levainBuildRatio: step.levainBuildRatio
                     )
                 }
             }
@@ -329,7 +426,9 @@ final class ScheduleViewModel {
             })
             let pastThreshold = Date().addingTimeInterval(-60)
             if let firstStart = firstActionable?.startTime, firstStart < pastThreshold {
-                print("[buildPreview] REJECTED — \(firstActionable?.label ?? "") at \(firstStart) before \(pastThreshold)")
+                print(
+                    "[buildPreview] REJECTED — \(firstActionable?.label ?? "") at \(firstStart) before \(pastThreshold)"
+                )
                 hasActivationPreamble = false
                 previewSteps = []
                 conflict = ScheduleConflict(
@@ -390,11 +489,13 @@ final class ScheduleViewModel {
             of: selectedDay
         ) ?? selectedDay
 
-        let effectiveScanStart: Date
-        if let range = viableBreadReadyRange, calendar.isDate(range.lowerBound, inSameDayAs: selectedDay) {
-            effectiveScanStart = range.lowerBound
+        let effectiveScanStart: Date = if let range = viableBreadReadyRange, calendar.isDate(
+            range.lowerBound,
+            inSameDayAs: selectedDay
+        ) {
+            range.lowerBound
         } else {
-            effectiveScanStart = scanStart
+            scanStart
         }
 
         guard effectiveScanStart < scanEnd else {
@@ -432,7 +533,10 @@ final class ScheduleViewModel {
             let viability: SlotViability
             switch result {
             case let .success(steps):
-                let firstActionable = steps.first { !Self.nonActionableFillerStepTypes.contains($0.stepTypeID) && $0.levainElapsedMinutes == nil }
+                let firstActionable = steps
+                    .first {
+                        !Self.nonActionableFillerStepTypes.contains($0.stepTypeID) && $0.levainElapsedMinutes == nil
+                    }
                 if let firstStart = firstActionable?.startTime, firstStart < Date().addingTimeInterval(-60) {
                     viability = .conflict(ScheduleConflict(
                         conflictingStepLabel: firstActionable?.label ?? "Schedule",
@@ -579,15 +683,11 @@ final class ScheduleViewModel {
             let lastActivation = feedLogs.first(where: { $0.starterFeedIntent == .activation })
             if lastActivation?.peakTimestamp != nil { return now }
 
-            let bracket = TemperatureBracket.bracket(celsius: kitchenTemperature)
-            let peakDuration: Double = if let pp = peakProfile,
-                                          let observed = pp.averageMinutes(ratio: .oneToFive, tempBracket: bracket)
-            {
-                observed
-            } else {
-                profile.activePeakAverageMinutes
-                    ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemperature)
-            }
+            let peakDuration = StarterScheduleSync.expectedPeakMinutes(
+                peakProfile: peakProfile,
+                activePeakAverageMinutes: profile.activePeakAverageMinutes,
+                kitchenTempCelsius: kitchenTemperature
+            )
 
             if let activationTime = lastActivation?.timestamp {
                 let peakExpected = activationTime.addingTimeInterval(peakDuration * 60)
@@ -596,20 +696,18 @@ final class ScheduleViewModel {
             return now
         case .dormant:
             let activateDuration = 10.0
-            let bracket = TemperatureBracket.bracket(celsius: kitchenTemperature)
-            let peakDuration: Double = if let pp = peakProfile,
-                                          let observed = pp.averageMinutes(ratio: .oneToFive, tempBracket: bracket)
-            {
-                observed
-            } else {
-                profile.activePeakAverageMinutes
-                    ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemperature)
-            }
+            let peakDuration = StarterScheduleSync.expectedPeakMinutes(
+                peakProfile: peakProfile,
+                activePeakAverageMinutes: profile.activePeakAverageMinutes,
+                kitchenTempCelsius: kitchenTemperature
+            )
             let warmUp = profile.starterStorageType == .fridge
                 ? TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: kitchenTemperature)
                 : 0.0
             return now.addingTimeInterval((activateDuration + peakDuration + warmUp) * 60)
-        case .reviving:
+        case .reviving, .establishing:
+            // Mid-plan, so the real answer is however many feeds remain. A day
+            // is a placeholder floor — the pre-bake check blocks the bake anyway.
             return now.addingTimeInterval(24 * 3600)
         }
     }
@@ -650,7 +748,7 @@ final class ScheduleViewModel {
         feedLogs: [StarterFeedLog],
         peakProfile: StarterPeakProfile?,
         starterProfile: StarterProfile?,
-        availability: AvailabilityInput,
+        availability _: AvailabilityInput,
         unavailableBlocks: [UnavailableBlock]
     ) -> [ScheduledStep] {
         let onCounter = starterProfile?.starterStorageType == .counter
@@ -659,7 +757,7 @@ final class ScheduleViewModel {
             // A ready starter left on the counter degrades while it waits. If the
             // levain build is far off, recommend chilling it to hold at peak.
             return onCounter ? (buildChillStarterPreamble(recipeSteps: recipeSteps) ?? []) : []
-        case .reviving:
+        case .reviving, .establishing:
             return []
         case .activating:
             let activating = buildActivatingPreamble(
@@ -689,22 +787,18 @@ final class ScheduleViewModel {
         peakProfile: StarterPeakProfile?,
         starterProfile: StarterProfile?,
         kitchenTemp: Double,
-        recipeSteps: [ScheduledStep]
+        recipeSteps _: [ScheduledStep]
     ) -> [ScheduledStep] {
         let lastActivation = feedLogs.first(where: { $0.starterFeedIntent == .activation })
         let hasPeaked = lastActivation?.peakTimestamp != nil
 
         if hasPeaked { return [] }
 
-        let bracket = TemperatureBracket.bracket(celsius: kitchenTemp)
-        let peakDuration: Double = if let profile = peakProfile,
-                                      let observed = profile.averageMinutes(ratio: .oneToFive, tempBracket: bracket)
-        {
-            observed
-        } else {
-            starterProfile?.activePeakAverageMinutes
-                ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemp)
-        }
+        let peakDuration = StarterScheduleSync.expectedPeakMinutes(
+            peakProfile: peakProfile,
+            activePeakAverageMinutes: starterProfile?.activePeakAverageMinutes,
+            kitchenTempCelsius: kitchenTemp
+        )
 
         var remainingPeakMinutes = peakDuration
         if let activationTime = lastActivation?.timestamp {
@@ -738,15 +832,11 @@ final class ScheduleViewModel {
     ) -> [ScheduledStep] {
         guard let levainStart = recipeSteps.first?.startTime else { return [] }
 
-        let bracket = TemperatureBracket.bracket(celsius: kitchenTemp)
-        let peakDuration: Double = if let profile = peakProfile,
-                                      let observed = profile.averageMinutes(ratio: .oneToFive, tempBracket: bracket)
-        {
-            observed
-        } else {
-            starterProfile?.activePeakAverageMinutes
-                ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTemp)
-        }
+        let peakDuration = StarterScheduleSync.expectedPeakMinutes(
+            peakProfile: peakProfile,
+            activePeakAverageMinutes: starterProfile?.activePeakAverageMinutes,
+            kitchenTempCelsius: kitchenTemp
+        )
 
         let activateDuration = 10.0
         var activateStart = levainStart.addingTimeInterval(-(peakDuration + activateDuration) * 60)
@@ -762,7 +852,9 @@ final class ScheduleViewModel {
 
         let activateEnd = activateStart.addingTimeInterval(activateDuration * 60)
         let waitForPeakStart = activateEnd
-        let waitForPeakEnd = levainStart
+        // The starter peaks after its true rise time — never stretched to reach the
+        // levain build. Any remaining gap is shown honestly as a hold (below).
+        let waitForPeakEnd = waitForPeakStart.addingTimeInterval(peakDuration * 60)
 
         var steps: [ScheduledStep] = []
 
@@ -789,16 +881,28 @@ final class ScheduleViewModel {
             durationMinutes: activateDuration
         ))
 
-        let waitDuration = waitForPeakEnd.timeIntervalSince(waitForPeakStart) / 60.0
-        if waitDuration > 0 {
+        steps.append(ScheduledStep(
+            methodStepID: UUID(),
+            stepTypeID: .waitForPeak,
+            label: "Wait for Peak",
+            classification: .passiveFixed,
+            startTime: waitForPeakStart,
+            endTime: waitForPeakEnd,
+            durationMinutes: peakDuration
+        ))
+
+        // If the starter peaks before the levain build, chill it to hold at peak
+        // rather than leaving it out to over-ripen. Shown as an explicit step, not a
+        // fictionally long "Wait for Peak".
+        if waitForPeakEnd < levainStart {
             steps.append(ScheduledStep(
                 methodStepID: UUID(),
-                stepTypeID: .waitForPeak,
-                label: "Wait for Peak",
+                stepTypeID: .holdStarter,
+                label: "Chill Starter",
                 classification: .passiveFixed,
-                startTime: waitForPeakStart,
-                endTime: waitForPeakEnd,
-                durationMinutes: waitDuration
+                startTime: waitForPeakEnd,
+                endTime: levainStart,
+                durationMinutes: levainStart.timeIntervalSince(waitForPeakEnd) / 60.0
             ))
         }
 
@@ -839,6 +943,8 @@ final class ScheduleViewModel {
             return .activating(lastFeed: lastActivation?.timestamp, peaked: lastActivation?.peakTimestamp != nil)
         case .reviving:
             return .blocked(.needsRevival)
+        case .establishing:
+            return .blocked(.establishing)
         case .dormant:
             let profileInput = StarterProfileInput(from: profile)
             let logInputs = feedLogs.map { FeedLogInput(from: $0) }
@@ -850,6 +956,8 @@ final class ScheduleViewModel {
                 return .needsActivation
             case .needsRevival:
                 return .blocked(.needsRevival)
+            case .establishing:
+                return .blocked(.establishing)
             }
         }
     }
@@ -888,6 +996,9 @@ final class ScheduleViewModel {
             kitchenTemperatureCelsius: kitchenTemperature
         )
         schedule.scheduleStatus = .active
+        schedule.yieldScaleFactor = yieldScaleFactor
+        schedule.yieldCount = yieldCount
+        schedule.yieldUnitGrams = yieldUnitGrams
         modelContext.insert(schedule)
 
         var persistedSteps: [ScheduleStep] = []
@@ -900,6 +1011,7 @@ final class ScheduleViewModel {
                 computedEndTime: step.endTime,
                 computedDurationMinutes: step.durationMinutes
             )
+            scheduleStep.levainBuildRatio = step.levainBuildRatio?.rawValue
             scheduleStep.schedule = schedule
             persistedSteps.append(scheduleStep)
 
@@ -917,7 +1029,13 @@ final class ScheduleViewModel {
             }
         }
 
+        calibrateDegreeHourTarget(for: schedule, modelContext: modelContext)
+
         activeSchedule = schedule
+        // Clear per-bake UI state left over from a previous bake on this
+        // ViewModel instance — neither is reset anywhere else.
+        bulkFermentTargetReached = false
+        lastScheduleAdjustment = nil
         promoteNextUpcoming(in: schedule)
 
         if let firstActive = orderedTopLevelSteps(in: schedule).first(where: { $0.stepStatus == .active }) {
@@ -967,6 +1085,58 @@ final class ScheduleViewModel {
 
     // MARK: - Degree-Hour Schedule Correction
 
+    /// Tick-driven: extrapolates degree-hours to `now` assuming the last logged
+    /// temperature holds, and latches `bulkFermentTargetReached` when within 15
+    /// minutes of target. Readings are only prompted through the fold window, so
+    /// without this the flag could never fire after the last fold. Never moves
+    /// the schedule — only new readings do that, via `handleNewTemperatureReading`.
+    /// Deliberately no `pausedAt` guard: fermentation continues while paused.
+    func refreshBulkFermentTarget(now: Date) {
+        guard !bulkFermentTargetReached,
+              let schedule = activeSchedule,
+              let bulk = schedule.bulkFermentStep, bulk.stepStatus == .active
+        else { return }
+
+        let readings = schedule.temperatureReadings.sorted { $0.timestamp < $1.timestamp }
+        guard let latest = readings.last else { return }
+
+        let pairs = readings.map {
+            (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
+        }
+        let currentDH = DegreeHourCalculator.accumulatedDegreeHours(readings: pairs, extrapolatedTo: now)
+
+        guard let remainingMinutes = DegreeHourCalculator.estimatedMinutesRemaining(
+            currentDegreeHours: currentDH,
+            targetDegreeHours: schedule.effectiveDegreeHourTarget,
+            latestTempCelsius: latest.temperatureCelsius
+        ) else { return }
+
+        if remainingMinutes < 15 {
+            bulkFermentTargetReached = true
+        }
+    }
+
+    /// Resolves a personalized degree-hour target from past good bakes of the
+    /// same recipe and pins it to the schedule for the duration of the bake.
+    /// Stays nil (recipe default applies) until enough history accumulates.
+    func calibrateDegreeHourTarget(for schedule: Schedule, modelContext: ModelContext) {
+        let profiles = (try? modelContext.fetch(FetchDescriptor<BakeFermentationProfile>())) ?? []
+        let inputs = profiles.compactMap { profile -> BakeProfileInput? in
+            guard let recipeID = RecipeID(rawValue: profile.recipeID) else { return nil }
+            return BakeProfileInput(
+                recipeID: recipeID,
+                finalDegreeHours: profile.finalDegreeHours,
+                completedAt: profile.completedAt,
+                rating: profile.rating,
+                outcomeNote: profile.outcomeNote
+            )
+        }
+        schedule.calibratedDegreeHourTarget = DegreeHourCalibrator.refinedTarget(
+            recipeID: RecipeID(rawValue: schedule.recipeID)!,
+            profiles: inputs
+        )
+    }
+
     func handleNewTemperatureReading(schedule: Schedule) {
         let readings = schedule.temperatureReadings.sorted { $0.timestamp < $1.timestamp }
         guard readings.count >= 2 else { return }
@@ -975,7 +1145,7 @@ final class ScheduleViewModel {
             (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
         }
         let currentDH = DegreeHourCalculator.accumulatedDegreeHours(readings: pairs)
-        let target = schedule.recipe.degreeHourTarget
+        let target = schedule.effectiveDegreeHourTarget
         let latestTemp = readings.last!.temperatureCelsius
 
         guard let remainingMinutes = DegreeHourCalculator.estimatedMinutesRemaining(
@@ -1064,6 +1234,7 @@ final class ScheduleViewModel {
         if let parent = fold.parentStep {
             rescheduleRemainingFolds(in: parent)
         }
+        syncLiveActivity()
     }
 
     private func rescheduleRemainingFolds(in parent: ScheduleStep) {
@@ -1098,14 +1269,23 @@ final class ScheduleViewModel {
         _ step: ScheduleStep,
         feedDetails: FeedDetails?,
         starterProfile: StarterProfile?,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        completedAt: Date? = nil,
+        applyStarterSideEffects: Bool = true
     ) {
         guard let schedule = activeSchedule else { return }
+        // Completing a starter-related step must always update the starter —
+        // even from paths that don't have the profile on hand (notification
+        // actions, the step detail sheet) — or the feed is left unpeaked and
+        // the lifecycle stuck in `.activating`.
+        let profile = starterProfile
+            ?? (try? modelContext.fetch(FetchDescriptor<StarterProfile>()).first)
         NotificationService.shared.cancelNotifications(for: [step])
         step.stepStatus = .done
         let now = Date()
+        let effectiveCompletion = completedAt ?? now
         if step.actualEndTime == nil {
-            step.actualEndTime = now
+            step.actualEndTime = effectiveCompletion
         }
         let oldEnd = step.computedEndTime
         if let actual = step.actualEndTime {
@@ -1128,26 +1308,74 @@ final class ScheduleViewModel {
             }
         }
 
-        applyStepSideEffects(
-            step, event: .completed, feedDetails: feedDetails,
-            profile: starterProfile, modelContext: modelContext
-        )
+        if applyStarterSideEffects {
+            applyStepSideEffects(
+                step, event: .completed, feedDetails: feedDetails,
+                profile: profile, modelContext: modelContext
+            )
+        }
 
-        glueLevainContinuation(after: step, in: schedule, now: now)
+        glueLevainContinuation(after: step, in: schedule, now: effectiveCompletion)
         promoteNextUpcoming(in: schedule)
 
-        if let next = nextStep(after: step, in: schedule), next.stepStatus == .active {
+        // A completed bake phase hands off to the next one right here — the
+        // tick that would otherwise promote it doesn't run while the app is
+        // backgrounded (notification "Done" action), and the Live Activity
+        // would count down to a start time that has already passed.
+        if step.parentStep != nil {
+            advanceSubSteps(in: schedule, now: now)
+        }
+
+        // The bake step is its phases: "Bread Out" on the last one means the
+        // bake is over. Left active until its scheduled end, the hero shows a
+        // whole-step "Finish Early" the user must tap a second time to move
+        // on. (Bulk ferment keeps fermenting after its last fold — only the
+        // bake step completes with its sub-steps.)
+        if let parent = step.parentStep,
+           parent.stepStatus == .active,
+           parent.stepTypeID == StepTypeID.bake.rawValue,
+           parent.subSteps.allSatisfy({ $0.stepStatus == .done || $0.stepStatus == .skipped })
+        {
+            markStepDone(
+                parent,
+                feedDetails: nil,
+                starterProfile: nil,
+                modelContext: modelContext,
+                completedAt: effectiveCompletion
+            )
+            return
+        }
+
+        unlockNotificationsAfterGate(step, in: schedule)
+
+        if applyStarterSideEffects,
+           let next = nextStep(after: step, in: schedule), next.stepStatus == .active
+        {
             let nextTypeID = StepTypeID(rawValue: next.stepTypeID)
             let skipAutoStart = nextTypeID == .buildLevain || nextTypeID == .activateStarter
             if !skipAutoStart {
                 applyStepSideEffects(
                     next, event: .started, feedDetails: nil,
-                    profile: starterProfile, modelContext: modelContext
+                    profile: profile, modelContext: modelContext
                 )
             }
         }
 
         syncLiveActivity()
+
+        // Step completions can log feeds and move starter state — persist now
+        // rather than waiting for autosave, which an abrupt termination can beat.
+        try? modelContext.save()
+    }
+
+    /// Completing a gate step unblocks the stretch of timeline behind it, whose
+    /// notifications were deliberately never scheduled (see `NotificationGate`).
+    /// The completion cascade usually reschedules, but only when the timeline moved.
+    private func unlockNotificationsAfterGate(_ step: ScheduleStep, in schedule: Schedule) {
+        guard schedule.pausedAt == nil,
+              NotificationGate.isGate(stepTypeID: step.stepTypeID) else { return }
+        let steps = allSteps(in: schedule)
+        Task { await NotificationService.shared.rescheduleNotifications(for: steps) }
     }
 
     /// Reverts the most-recently-completed step to active without moving any times.
@@ -1182,7 +1410,9 @@ final class ScheduleViewModel {
                     promoteNextUpcoming(in: schedule, now: now)
                     syncLiveActivity()
                 }
-                advanceSubSteps(in: schedule, now: now)
+                if advanceSubSteps(in: schedule, now: now) {
+                    syncLiveActivity()
+                }
                 return
             case .active:
                 if step.stepType.classification == .passiveFixed, step.computedEndTime <= now {
@@ -1199,6 +1429,7 @@ final class ScheduleViewModel {
                         StepTypeID.bulkFerment.rawValue,
                         StepTypeID.preheat.rawValue,
                         StepTypeID.bakeSheet.rawValue,
+                        StepTypeID.bakeTin.rawValue,
                     ]
                     if manualSteps.contains(step.stepTypeID) {
                         advanceSubSteps(in: schedule, now: now)
@@ -1215,7 +1446,9 @@ final class ScheduleViewModel {
                     promoteNextUpcoming(in: schedule, now: now)
                     syncLiveActivity()
                 }
-                advanceSubSteps(in: schedule, now: now)
+                if advanceSubSteps(in: schedule, now: now) {
+                    syncLiveActivity()
+                }
                 return
             }
         }
@@ -1225,10 +1458,13 @@ final class ScheduleViewModel {
         }
     }
 
-    private func advanceSubSteps(in schedule: Schedule, now: Date) {
+    /// Returns true when a sub-step's status changed — the Live Activity
+    /// countdown targets sub-steps, so a change needs a resync.
+    @discardableResult
+    private func advanceSubSteps(in schedule: Schedule, now: Date) -> Bool {
         let steps = orderedTopLevelSteps(in: schedule)
         guard let active = steps.first(where: { $0.stepStatus == .active }),
-              !active.subSteps.isEmpty else { return }
+              !active.subSteps.isEmpty else { return false }
 
         let subs = active.subSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
 
@@ -1236,26 +1472,30 @@ final class ScheduleViewModel {
             for sub in subs {
                 switch sub.stepStatus {
                 case .done, .skipped: continue
-                case .active: return
+                case .active: return false
                 case .upcoming:
                     if !subs.contains(where: { $0.stepStatus == .active }) {
                         sub.stepStatus = .active
+                        return true
                     }
-                    return
+                    return false
                 }
             }
-            return
+            return false
         }
 
         // Fold checklist: skip missed folds when the next fold's time has arrived.
+        var didChange = false
         let folds = subs.filter { $0.stepTypeID == StepTypeID.stretchAndFold.rawValue }
         for (index, fold) in folds.enumerated() where fold.stepStatus != .done && fold.stepStatus != .skipped {
             let nextDue = index + 1 < folds.count && folds[index + 1].computedStartTime <= now
             if nextDue {
                 fold.stepStatus = .skipped
                 NotificationService.shared.cancelNotifications(for: [fold])
+                didChange = true
             }
         }
+        return didChange
     }
 
     // MARK: - Pause / Resume
@@ -1290,12 +1530,20 @@ final class ScheduleViewModel {
 
     // MARK: - Finish Early / Start Now / Extend / Shorten
 
-    func finishStepEarly(_ step: ScheduleStep, modelContext _: ModelContext) {
+    func finishStepEarly(_ step: ScheduleStep, modelContext: ModelContext) {
         guard let schedule = activeSchedule else { return }
         let now = Date()
         let oldEnd = step.computedEndTime
         let delta = now.timeIntervalSince(oldEnd)
-        guard delta < 0 else { return }
+        // Not actually early — the step is at or past its scheduled end. There's
+        // nothing to pull forward, and silently returning would leave the step
+        // active with its notifications still pending (the Mix-temp bug). Hand
+        // off to the normal completion path, which cancels notifications,
+        // promotes the next step, and applies side effects.
+        guard delta < 0 else {
+            markStepDone(step, modelContext: modelContext)
+            return
+        }
 
         step.stepStatus = .done
         step.actualEndTime = now
@@ -1338,6 +1586,8 @@ final class ScheduleViewModel {
         step.computedStartTime = now
         step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
         step.stepStatus = .active
+        resetFeedState()
+        initializeFeedDefaults(for: step)
 
         for candidate in allSteps(in: schedule)
             where candidate !== step && candidate.stepStatus == .active
@@ -1368,6 +1618,8 @@ final class ScheduleViewModel {
         step.computedStartTime = startTime
         step.computedEndTime = step.computedEndTime.addingTimeInterval(delta)
         step.stepStatus = .active
+        resetFeedState()
+        initializeFeedDefaults(for: step)
 
         for candidate in allSteps(in: schedule)
             where candidate !== step && candidate.stepStatus == .active
@@ -1421,25 +1673,74 @@ final class ScheduleViewModel {
         syncLiveActivity()
     }
 
-    // MARK: - Peak Sync from Starter Tab
+    // MARK: - Starter Tab Sync
 
-    private func advancePeakStepIfActive() {
-        guard let schedule = activeSchedule else { return }
+    /// Reflects a Starter-tab action (activate, log feed, mark peak) into the
+    /// live schedule's preamble steps so the two surfaces never disagree.
+    /// Starter side effects are suppressed on the resulting completions — the
+    /// starter already changed; re-applying would double-log feeds.
+    /// Internal (not private) so tests can drive it without NotificationCenter.
+    func handleStarterEvent(_ event: StarterTabEvent) {
+        guard let schedule = activeSchedule, let context = schedule.modelContext else { return }
         let steps = orderedTopLevelSteps(in: schedule)
-        guard let active = steps.first(where: { $0.stepStatus == .active }) else { return }
+        let snapshots = steps.enumerated().compactMap { index, step -> ScheduleStepSnapshot? in
+            guard let typeID = StepTypeID(rawValue: step.stepTypeID) else { return nil }
+            return ScheduleStepSnapshot(
+                index: index,
+                stepTypeID: typeID,
+                status: step.stepStatus,
+                startTime: step.computedStartTime,
+                endTime: step.computedEndTime
+            )
+        }
 
-        let stepID = StepTypeID(rawValue: active.stepTypeID)
-        guard stepID == .waitForPeak || stepID == .waitForLevainPeak else { return }
-
-        guard let context = schedule.modelContext else { return }
-        let profiles = (try? context.fetch(FetchDescriptor<StarterProfile>())) ?? []
-
-        markStepDone(
-            active,
-            feedDetails: nil,
-            starterProfile: profiles.first,
-            modelContext: context
+        let feedLogs = (try? context.fetch(FetchDescriptor<StarterFeedLog>(
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        ))) ?? []
+        let profile = try? context.fetch(FetchDescriptor<StarterProfile>()).first
+        let expectedPeak = StarterScheduleSync.expectedPeakMinutes(
+            peakProfile: feedLogs.isEmpty
+                ? nil
+                : StarterPeakProfile(
+                    feedLogs: feedLogs.map { FeedLogInput(from: $0) },
+                    intentFilter: .activation
+                ),
+            activePeakAverageMinutes: profile?.activePeakAverageMinutes,
+            kitchenTempCelsius: schedule.kitchenTemperatureCelsius
         )
+
+        let effects = StarterScheduleSync.effects(
+            for: event,
+            steps: snapshots,
+            expectedPeakMinutes: expectedPeak
+        )
+        guard !effects.isEmpty else { return }
+
+        for effect in effects {
+            switch effect {
+            case let .completeStep(index, at):
+                markStepDone(
+                    steps[index],
+                    feedDetails: nil,
+                    starterProfile: profile,
+                    modelContext: context,
+                    completedAt: at,
+                    applyStarterSideEffects: false
+                )
+            case let .startStep(index, at):
+                startStepAt(steps[index], at: at, modelContext: context)
+            case let .retimeStepEnd(index, newEnd):
+                let step = steps[index]
+                let oldEnd = step.computedEndTime
+                step.computedEndTime = newEnd
+                step.computedDurationMinutes = max(1, newEnd.timeIntervalSince(step.computedStartTime) / 60)
+                cascade(afterEnd: oldEnd, delta: newEnd.timeIntervalSince(oldEnd), in: schedule, excluding: step)
+            }
+        }
+        syncLiveActivity()
+        // The user is on the Starter tab when this fires — without feedback
+        // the silent schedule advance looks like nothing happened.
+        ToastCenter.shared.show("Bake schedule updated")
     }
 
     // MARK: - Bake Coordinator Side Effects
@@ -1476,9 +1777,11 @@ final class ScheduleViewModel {
                     flourType: input.flourType,
                     kitchenTemperatureCelsius: input.kitchenTemperatureCelsius,
                     starterGrams: input.starterGrams,
-                    feedIntent: input.feedIntent
+                    feedIntent: input.feedIntent,
+                    starterGeneration: profile.starterGeneration
                 )
                 modelContext.insert(log)
+                ToastCenter.shared.show(Self.feedLoggedMessage(for: input.feedIntent))
             case let .markPeakOnLatestFeed(intent):
                 let descriptor = FetchDescriptor<StarterFeedLog>(
                     sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
@@ -1488,16 +1791,33 @@ final class ScheduleViewModel {
                         ?? logs.first(where: { $0.starterFeedIntent == .activation && $0.peakTimestamp == nil })
                     if let feed = target {
                         feed.markPeak(at: Date())
-                        if let avg = profile.activePeakAverageMinutes, let peak = feed.timeToPeakMinutes {
-                            profile.activePeakAverageMinutes = (avg + peak) / 2.0
-                        } else if let peak = feed.timeToPeakMinutes {
-                            profile.activePeakAverageMinutes = peak
+                        // Recompute from the full history — same calculation the
+                        // Starter tab uses — instead of a running average that
+                        // would drift between the two paths.
+                        let averages = StarterAverages.recompute(
+                            feedLogs: logs.map { FeedLogInput(from: $0) }
+                        )
+                        if let allAverage = averages.averageTimeToPeakMinutes {
+                            profile.averageTimeToPeakMinutes = allAverage
                         }
+                        if let activationAverage = averages.activePeakAverageMinutes {
+                            profile.activePeakAverageMinutes = activationAverage
+                        }
+                        ToastCenter.shared.show("Starter peak recorded")
                     }
                 }
             case let .updateStorageType(type):
                 profile.starterStorageType = type
             }
+        }
+    }
+
+    static func feedLoggedMessage(for intent: FeedIntent) -> String {
+        switch intent {
+        case .activation: "Starter feed logged"
+        case .levain: "Levain build logged"
+        case .postBake: "Post-bake feed logged"
+        case .maintenance: "Feed logged"
         }
     }
 
@@ -1543,7 +1863,49 @@ final class ScheduleViewModel {
 
     // MARK: - Finish / Cancel bake
 
-    func finishBake(modelContext: ModelContext) {
+    /// Finishes the active bake, optionally saving a reflection (rating, structured
+    /// tags, notes, photos) as a `BakeFermentationProfile` for the History tab.
+    /// A `nil` reflection still completes the bake — it just appears in History
+    /// without a reflection.
+    func finishBake(reflection: BakeReflection?, modelContext: ModelContext) {
+        guard let schedule = activeSchedule else { return }
+
+        if let reflection {
+            let readings = schedule.temperatureReadings.map {
+                (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
+            }
+            let summary = BakeRecordBuilder.summarize(
+                recipe: schedule.recipe,
+                kitchenTempCelsius: schedule.kitchenTemperatureCelsius,
+                readings: readings,
+                bulkEndTime: schedule.bulkFermentStep.map { $0.actualEndTime ?? $0.computedEndTime },
+                targetDegreeHours: schedule.effectiveDegreeHourTarget
+            )
+            let trimmedNote = reflection.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            let profile = BakeFermentationProfile(
+                recipeID: RecipeID(rawValue: schedule.recipeID)!,
+                recipeName: schedule.recipe.name,
+                initialMixTemp: summary.initialMixTemp,
+                finalDegreeHours: summary.finalDegreeHours,
+                targetDegreeHoursUsed: summary.targetDegreeHoursUsed,
+                kitchenTemperatureCelsius: summary.kitchenTemperatureCelsius,
+                outcomeNote: trimmedNote.isEmpty ? nil : trimmedNote,
+                rating: reflection.rating,
+                crumbOpenness: reflection.crumbOpenness,
+                crustColor: reflection.crustColor,
+                sourness: reflection.sourness,
+                ovenSpring: reflection.ovenSpring
+            )
+            modelContext.insert(profile)
+            for (index, data) in reflection.photoData.enumerated() {
+                let photo = BakePhoto(imageData: data, order: index)
+                modelContext.insert(photo)
+                profile.photos.append(photo)
+            }
+            schedule.fermentationProfile = profile
+        }
+
+        schedule.completedAt = Date()
         endBake(modelContext: modelContext)
     }
 
@@ -1554,6 +1916,8 @@ final class ScheduleViewModel {
         NotificationService.shared.cancelRefeedReminder()
         activeSchedule = nil
         activeConflicts = []
+        bulkFermentTargetReached = false
+        lastScheduleAdjustment = nil
         modelContext.delete(schedule)
         LiveActivityService.shared.endBakeActivity()
     }
@@ -1565,6 +1929,8 @@ final class ScheduleViewModel {
         schedule.scheduleStatus = .complete
         activeSchedule = nil
         activeConflicts = []
+        bulkFermentTargetReached = false
+        lastScheduleAdjustment = nil
         LiveActivityService.shared.endBakeActivity()
     }
 
@@ -1711,6 +2077,7 @@ final class ScheduleViewModel {
             next.stepStatus = .active
             lastPromotedStepTypeID = next.stepTypeID
             resetFeedState()
+            initializeFeedDefaults(for: next)
         }
     }
 
@@ -1726,48 +2093,12 @@ final class ScheduleViewModel {
 
     // MARK: - Live Activity
 
-    private static let liveActivitySteps: Set<String> = [
-        StepTypeID.autolyse.rawValue,
-        StepTypeID.bulkFerment.rawValue,
-        StepTypeID.coldRetard.rawValue,
-        StepTypeID.finalProof.rawValue,
-        StepTypeID.preheat.rawValue,
-        StepTypeID.bake.rawValue,
-        StepTypeID.bakeSheet.rawValue,
-        StepTypeID.waitForPeak.rawValue,
-        StepTypeID.waitForLevainPeak.rawValue,
-    ]
-
-    private static let liveActivityLongWaitSteps: Set<String> = [
-        StepTypeID.waitForPeak.rawValue,
-        StepTypeID.waitForLevainPeak.rawValue,
-        StepTypeID.coldRetard.rawValue,
-    ]
-
-    private static let liveActivityResumeThreshold: TimeInterval = 60 * 60
-
     private func syncLiveActivity() {
-        guard let schedule = activeSchedule, schedule.scheduleStatus == .active else {
+        guard let schedule = activeSchedule,
+              LiveActivityService.shouldShowBakeActivity(for: schedule)
+        else {
             LiveActivityService.shared.endBakeActivity()
             return
-        }
-
-        let steps = orderedTopLevelSteps(in: schedule)
-        let activeStep = steps.first { $0.stepStatus == .active }
-
-        if let active = activeStep {
-            if !Self.liveActivitySteps.contains(active.stepTypeID) {
-                LiveActivityService.shared.endBakeActivity()
-                return
-            }
-
-            if Self.liveActivityLongWaitSteps.contains(active.stepTypeID) {
-                let remaining = active.computedEndTime.timeIntervalSince(Date())
-                if remaining > Self.liveActivityResumeThreshold {
-                    LiveActivityService.shared.endBakeActivity()
-                    return
-                }
-            }
         }
 
         let state = LiveActivityService.buildBakeState(from: schedule)

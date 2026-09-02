@@ -1,11 +1,31 @@
 import Foundation
 
 extension ScheduleBuilder {
+    /// Duration of a method step for viable-range accounting. For the levain peak
+    /// wait, `fastLevain` substitutes the fastest inoculation (1:1:1) — a baker can
+    /// choose a fast build to bake sooner, so the *earliest* bakeable time is bounded
+    /// by it, not the standard 1:5:5 wait. All other steps use their normal duration.
+    private static func viableRangeDuration(
+        for step: MethodStep,
+        kitchenTemp: Double,
+        peakProfile: StarterPeakProfile?,
+        fastLevain: Bool
+    ) -> Double {
+        if fastLevain, step.stepTypeID == .waitForLevainPeak {
+            return LevainBuildPlanner.peakMinutes(
+                ratio: .oneToOne, kitchenTemp: kitchenTemp, profile: peakProfile
+            )
+        }
+        return TemperatureCalculator.effectiveDuration(
+            for: step, kitchenTemp: kitchenTemp, peakProfile: peakProfile
+        )
+    }
+
     static func viableRange(
         recipe: Recipe,
         kitchenTemperatureCelsius: Double,
         availability: AvailabilityInput,
-        windows: [WindowInput] = [],
+        windows _: [WindowInput] = [],
         earliestStartTime: Date? = nil,
         referenceDate: Date = Date(),
         calendar: Calendar = .current,
@@ -13,7 +33,7 @@ extension ScheduleBuilder {
     ) -> ClosedRange<Date>? {
         let effectiveStart = earliestStartTime ?? referenceDate
         let method = recipe.method
-        let hasColdRetard = method.contains { $0.stepTypeID == .coldRetard }
+        let hasColdRetard = method.contains { $0.stepTypeID.isColdRetard }
 
         if hasColdRetard {
             return overnightViableRange(
@@ -49,13 +69,13 @@ extension ScheduleBuilder {
         calendar: Calendar,
         peakProfile: StarterPeakProfile?
     ) -> ClosedRange<Date>? {
-        guard let coldRetardMethod = method.first(where: { $0.stepTypeID == .coldRetard }),
+        guard let coldRetardMethod = method.first(where: { $0.stepTypeID.isColdRetard }),
               let flexRange = coldRetardMethod.effectiveFlexRange
         else {
             return nil
         }
 
-        let coldRetardIndex = method.firstIndex(where: { $0.stepTypeID == .coldRetard })!
+        let coldRetardIndex = method.firstIndex(where: { $0.stepTypeID.isColdRetard })!
         let postColdRetardSteps = method[(coldRetardIndex + 1)...]
         let postColdRetardMinutes = postColdRetardSteps.reduce(0.0) { total, step in
             total + TemperatureCalculator.effectiveDuration(
@@ -65,12 +85,16 @@ extension ScheduleBuilder {
             )
         }
 
+        // The earliest bound assumes the baker can pick a fast levain (1:1:1) to
+        // bake sooner; the cold retard governs the late bound, so the levain ratio
+        // doesn't enter there.
         let preColdRetardSteps = method[..<coldRetardIndex]
         let preColdRetardMinutes = preColdRetardSteps.reduce(0.0) { total, step in
-            total + TemperatureCalculator.effectiveDuration(
+            total + viableRangeDuration(
                 for: step,
                 kitchenTemp: kitchenTemperatureCelsius,
-                peakProfile: peakProfile
+                peakProfile: peakProfile,
+                fastLevain: true
             )
         }
 
@@ -117,7 +141,18 @@ extension ScheduleBuilder {
             second: 0,
             of: tomorrowStart
         ) ?? tomorrowStart
-        let cappedLatest = min(latestBreadReady, nextSleep)
+        // Bread retards (≤18h) always finish by tomorrow night, but a multi-day
+        // retard (pizza balls, up to 72h) can legitimately end days out — cap at
+        // end-of-availability on the day the longest retard would finish, not
+        // at tomorrow's.
+        let lastDay = calendar.startOfDay(for: latestBreadReady)
+        let lastSleep = calendar.date(
+            bySettingHour: availability.endHour,
+            minute: availability.endMinute,
+            second: 0,
+            of: lastDay
+        ) ?? latestBreadReady
+        let cappedLatest = min(latestBreadReady, max(nextSleep, lastSleep))
 
         guard earliestBreadReady <= cappedLatest else { return nil }
 
@@ -145,13 +180,20 @@ extension ScheduleBuilder {
                 totalMinMinutes += flexRange.lowerBound
                 totalMaxMinutes += flexRange.upperBound
             } else {
-                let duration = TemperatureCalculator.effectiveDuration(
+                // Earliest bound: fastest levain (bake sooner). Latest bound: the
+                // standard build, so the levain doesn't inflate the late end.
+                totalMinMinutes += viableRangeDuration(
                     for: step,
                     kitchenTemp: kitchenTemperatureCelsius,
-                    peakProfile: peakProfile
+                    peakProfile: peakProfile,
+                    fastLevain: true
                 )
-                totalMinMinutes += duration
-                totalMaxMinutes += duration
+                totalMaxMinutes += viableRangeDuration(
+                    for: step,
+                    kitchenTemp: kitchenTemperatureCelsius,
+                    peakProfile: peakProfile,
+                    fastLevain: false
+                )
             }
         }
 

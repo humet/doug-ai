@@ -146,4 +146,106 @@ struct TemperatureCalculatorTests {
         )
         #expect(helper == direct)
     }
+
+    // MARK: - Activation Water Temperature
+
+    @Test func fridgeColdStarterGetsWarmNotScaldingWater() {
+        // 1:5:5 feed, 22°C kitchen, 4°C starter, targeting 24+2=26°C:
+        // water = (11×26 − 1×4 − 5×22) / 5 = 34.4°C — warm, well under the
+        // 50°C+ the equal-weights dough formula would demand here.
+        let water = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 24,
+            kitchenTemp: 22,
+            starterTempCelsius: TemperatureCalculator.fridgeStarterTempCelsius,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5
+        )
+        #expect(abs(water - 34.4) < 0.01)
+    }
+
+    @Test func counterStarterNeedsCoolerWaterThanFridgeStarter() {
+        let fridge = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: 22,
+            starterTempCelsius: TemperatureCalculator.fridgeStarterTempCelsius,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5
+        )
+        // On the counter the starter is already at kitchen temp:
+        // water = (11×26 − 1×22 − 5×22) / 5 = 30.8°C
+        let counter = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 24, kitchenTemp: 22,
+            starterTempCelsius: 22,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5
+        )
+        #expect(abs(counter - 30.8) < 0.01)
+        #expect(counter < fridge)
+    }
+
+    @Test func activationWaterIsClampedToYeastSafeCeiling() {
+        // A cold kitchen and a fast 1:2:2 ratio push the raw answer past the
+        // ceiling — the small water mass must never approach yeast-stress temps.
+        let water = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 26,
+            kitchenTemp: 16,
+            starterTempCelsius: TemperatureCalculator.fridgeStarterTempCelsius,
+            ratioStarter: 1, ratioFlour: 2, ratioWater: 2
+        )
+        #expect(water == TemperatureCalculator.activationWaterMaxCelsius)
+    }
+
+    @Test func warmKitchenWarmStarterStaysModerate() {
+        // 28°C kitchen, counter starter: water = (11×26 − 1×28 − 5×28) / 5 = 23.6°C
+        let water = TemperatureCalculator.desiredActivationWaterTemperature(
+            referenceDoughTemp: 24,
+            kitchenTemp: 28,
+            starterTempCelsius: 28,
+            ratioStarter: 1, ratioFlour: 5, ratioWater: 5
+        )
+        #expect(abs(water - 23.6) < 0.01)
+    }
+
+    // MARK: - Ratio-Aware Levain Peak
+
+    @Test func oneToFivePeakEqualsLegacyBuildMinutes() {
+        // The standard ratio must be numerically identical to the legacy curve so
+        // existing schedule behaviour is unchanged.
+        for temp in [18.0, 22.0, 24.0, 27.0] {
+            #expect(
+                TemperatureCalculator.levainPeakMinutes(ratio: .oneToFive, kitchenTemp: temp)
+                    == TemperatureCalculator.levainBuildMinutes(kitchenTemp: temp)
+            )
+        }
+    }
+
+    @Test func lowerInoculationTakesLongerToPeak() {
+        // At a fixed temperature, less starter per part (1:10:10) peaks slower than
+        // more (1:1:1) — the lever for an overnight build.
+        let oneToOne = TemperatureCalculator.levainPeakMinutes(ratio: .oneToOne, kitchenTemp: 24)
+        let oneToTwo = TemperatureCalculator.levainPeakMinutes(ratio: .oneToTwo, kitchenTemp: 24)
+        let oneToFive = TemperatureCalculator.levainPeakMinutes(ratio: .oneToFive, kitchenTemp: 24)
+        let oneToTen = TemperatureCalculator.levainPeakMinutes(ratio: .oneToTen, kitchenTemp: 24)
+        #expect(oneToOne < oneToTwo)
+        #expect(oneToTwo < oneToFive)
+        #expect(oneToFive < oneToTen)
+    }
+
+    @Test func overnightRatioLandsInOvernightRange() {
+        // 1:10:10 at moderate temp should be a genuine overnight build (~8–12h).
+        let minutes = TemperatureCalculator.levainPeakMinutes(ratio: .oneToTen, kitchenTemp: 24)
+        #expect(minutes >= 8 * 60 && minutes <= 12 * 60)
+    }
+
+    @Test func fastRatioShortensMinimumChain() {
+        // 1:1:1 is meaningfully faster than the standard build — what lets the app
+        // offer earlier bread-ready times.
+        let fast = TemperatureCalculator.levainPeakMinutes(ratio: .oneToOne, kitchenTemp: 24)
+        #expect(fast < TemperatureCalculator.levainBuildMinutes(kitchenTemp: 24))
+        #expect(fast <= 3 * 60 + 1)
+    }
+
+    @Test func coolerKitchenSlowsEveryRatio() {
+        for ratio in FeedRatioBucket.allCases {
+            let cool = TemperatureCalculator.levainPeakMinutes(ratio: ratio, kitchenTemp: 18)
+            let warm = TemperatureCalculator.levainPeakMinutes(ratio: ratio, kitchenTemp: 27)
+            #expect(cool > warm)
+        }
+    }
 }

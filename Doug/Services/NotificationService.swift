@@ -14,6 +14,7 @@ final class NotificationService {
         static let coldRetardEnd = "COLD_RETARD_END"
         static let bakePhase = "BAKE_PHASE"
         static let starterFeed = "STARTER_FEED"
+        static let revivalMix = "REVIVAL_MIX"
     }
 
     /// Action identifiers for interactive notifications.
@@ -41,7 +42,7 @@ final class NotificationService {
     func registerCategories() {
         let logFeedAction = UNNotificationAction(
             identifier: Action.logFeed,
-            title: "Log Feed",
+            title: "Log Feed…",
             options: [.foreground]
         )
         let snoozeFeedAction = UNNotificationAction(
@@ -73,7 +74,20 @@ final class NotificationService {
             intentIdentifiers: [],
             options: []
         )
+        let coldRetardEndCategory = UNNotificationCategory(
+            identifier: Category.coldRetardEnd,
+            actions: [snoozeStepAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        let revivalMixCategory = UNNotificationCategory(
+            identifier: Category.revivalMix,
+            actions: [snoozeStepAction],
+            intentIdentifiers: [],
+            options: []
+        )
 
+        // No snooze on bake phases — the bread is on a physical timeline.
         let markDoneAction = UNNotificationAction(
             identifier: Action.markBakePhaseDone,
             title: "Done",
@@ -81,7 +95,7 @@ final class NotificationService {
         )
         let bakePhaseCategory = UNNotificationCategory(
             identifier: Category.bakePhase,
-            actions: [markDoneAction, snoozeStepAction],
+            actions: [markDoneAction],
             intentIdentifiers: [],
             options: []
         )
@@ -90,23 +104,57 @@ final class NotificationService {
             starterFeedCategory,
             handsOnStepCategory,
             foldStepCategory,
+            coldRetardEndCategory,
+            revivalMixCategory,
             bakePhaseCategory,
         ])
+    }
+
+    // MARK: - Snooze
+
+    /// Re-schedules an already-delivered notification's content `minutes` from
+    /// now. Reuses the original identifier so the existing cancel paths (step
+    /// notification ids, stable reminder ids) still match the snoozed copy, and
+    /// repeated snoozes replace rather than stack.
+    func snoozeDelivered(identifier: String, content: UNNotificationContent, minutes: Int) async {
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: Double(minutes) * 60,
+            repeats: false
+        )
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: trigger
+        )
+        try? await center.add(request)
     }
 
     // MARK: - Schedule Notifications
 
     /// Schedules notifications for hands-on steps (5 min before start),
     /// passive-flexible steps (at timer completion), and bake substep transitions.
+    ///
+    /// Steps beyond the first pending gate step (levain peak, bulk ferment) are not
+    /// scheduled — their times are speculative until the baker confirms the gate.
+    /// See `NotificationGate`.
     func scheduleNotifications(for steps: [ScheduleStep]) async {
         let authorized = await requestAuthorization()
         guard authorized else { return }
 
-        for step in steps {
+        for step in stepsWithinGateCutoff(steps) {
             let stepType = step.stepType
 
+            if NotificationGate.isGate(stepTypeID: step.stepTypeID) {
+                await scheduleGateCheckNotification(step: step)
+                continue
+            }
+
             if stepType.classification == .passiveFlexible {
-                await scheduleFlexibleCompletionNotification(step: step)
+                if NotificationPolicy.shouldScheduleFlexibleCompletion(
+                    nextTopLevelStepTypeID: nextTopLevelStepTypeID(after: step)
+                ) {
+                    await scheduleFlexibleCompletionNotification(step: step)
+                }
                 continue
             }
 
@@ -143,7 +191,9 @@ final class NotificationService {
 
         if stepType.requiresTempReading {
             content.categoryIdentifier = Category.foldStep
-        } else if stepType.id == .preheat {
+        } else if stepType.id == .preheat || stepType.id == .temper {
+            // The step that ends a cold retard: preheat for bread, temper for
+            // pizza. Either way the dough must come out of the fridge on time.
             content.categoryIdentifier = Category.coldRetardEnd
             content.interruptionLevel = .timeSensitive
         } else {
@@ -348,12 +398,14 @@ final class NotificationService {
         "revival-mix-\(planID)-\(stepIndex)"
     }
 
-    /// Schedules a one-shot reminder to mix the next revival feed at the given time.
+    /// Schedules a one-shot reminder to mix the next plan feed at the given time.
+    /// Used by both revival and new-starter plans; `isNewStarter` only changes copy.
     func scheduleRevivalMixReminder(
         at date: Date,
         planID: String,
         stepIndex: Int,
-        title: String
+        title: String,
+        isNewStarter: Bool = false
     ) async {
         let authorized = await requestAuthorization()
         guard authorized, date > Date() else { return }
@@ -362,10 +414,14 @@ final class NotificationService {
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
 
         let content = UNMutableNotificationContent()
-        content.title = "Time to mix your starter"
+        content.title = isNewStarter ? "Time to feed your new starter" : "Time to mix your starter"
         content.body = title
         content.sound = .default
-        content.categoryIdentifier = Category.starterFeed
+        content.categoryIdentifier = Category.revivalMix
+        content.userInfo = [
+            "planID": planID,
+            "stepIndex": stepIndex,
+        ]
 
         let trigger = UNTimeIntervalNotificationTrigger(
             timeInterval: max(date.timeIntervalSinceNow, 1),
@@ -395,20 +451,27 @@ final class NotificationService {
         return pending.contains { $0.identifier == target }
     }
 
-    /// Reschedules a revival mix reminder only if one was already pending.
+    /// Reschedules a plan mix reminder only if one was already pending.
     /// Returns true if a reminder was found and rescheduled.
     @discardableResult
     func rescheduleRevivalMixReminderIfPending(
         at date: Date,
         planID: String,
         stepIndex: Int,
-        title: String
+        title: String,
+        isNewStarter: Bool = false
     ) async -> Bool {
         let target = Self.revivalMixIdentifier(planID: planID, stepIndex: stepIndex)
         let pending = await center.pendingNotificationRequests()
         guard pending.contains(where: { $0.identifier == target }) else { return false }
         cancelRevivalMixReminder(planID: planID, stepIndex: stepIndex)
-        await scheduleRevivalMixReminder(at: date, planID: planID, stepIndex: stepIndex, title: title)
+        await scheduleRevivalMixReminder(
+            at: date,
+            planID: planID,
+            stepIndex: stepIndex,
+            title: title,
+            isNewStarter: isNewStarter
+        )
         return true
     }
 
@@ -416,5 +479,79 @@ final class NotificationService {
     func cancelAllRevivalReminders(planID: String, stepCount: Int) {
         let identifiers = (0 ..< stepCount).map { Self.revivalMixIdentifier(planID: planID, stepIndex: $0) }
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+}
+
+// MARK: - Gate Cutoff
+
+extension NotificationService {
+    /// Drops steps that sit beyond the first pending gate step in the schedule.
+    /// The gate itself and its substeps (e.g. folds inside bulk ferment) are kept.
+    private func stepsWithinGateCutoff(_ steps: [ScheduleStep]) -> [ScheduleStep] {
+        guard let schedule = steps.first?.schedule else { return steps }
+        let topLevel = schedule.steps
+            .filter { $0.parentStep == nil }
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+        let infos = topLevel.map {
+            NotificationGate.StepInfo(
+                stepTypeID: $0.stepTypeID,
+                isPending: $0.stepStatus == .upcoming || $0.stepStatus == .active
+            )
+        }
+        guard let gateIndex = NotificationGate.firstPendingGateIndex(in: infos) else {
+            return steps
+        }
+        let gateSequenceIndex = topLevel[gateIndex].sequenceIndex
+        return steps.filter { ($0.parentStep ?? $0).sequenceIndex <= gateSequenceIndex }
+    }
+
+    /// The top-level step that immediately follows `step` in its schedule,
+    /// used to decide whether a flexible step's completion notification would
+    /// double up with the next step's before-start reminder.
+    private func nextTopLevelStepTypeID(after step: ScheduleStep) -> String? {
+        guard let schedule = step.schedule else { return nil }
+        let topLevel = schedule.steps
+            .filter { $0.parentStep == nil }
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+        guard let idx = topLevel.firstIndex(where: { $0 === step }) else { return nil }
+        let next = topLevel.index(after: idx)
+        guard next < topLevel.endIndex else { return nil }
+        return topLevel[next].stepTypeID
+    }
+
+    /// A gate step ends on the baker's judgement, so the only notification it gets
+    /// is a check-in when its predicted timer elapses.
+    private func scheduleGateCheckNotification(step: ScheduleStep) async {
+        let notifTime = step.computedEndTime
+        guard notifTime > Date() else { return }
+
+        let stepType = step.stepType
+        let content = UNMutableNotificationContent()
+        content.title = stepType.label
+        content.body = StepTypeRegistry.gateCheckNotificationText(for: stepType.id)
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        content.categoryIdentifier = Category.handsOnStep
+        content.userInfo = [
+            "stepTypeID": step.stepTypeID,
+            "sequenceIndex": step.sequenceIndex,
+        ]
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: max(notifTime.timeIntervalSinceNow, 1),
+            repeats: false
+        )
+
+        let identifier = "step-\(step.stepTypeID)-\(step.sequenceIndex)-check"
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: trigger
+        )
+
+        do {
+            try await center.add(request)
+            step.notificationIdentifier = identifier
+        } catch {}
     }
 }

@@ -18,6 +18,11 @@ struct CompactStepRow: View {
                     Text(step.stepType.label)
                         .font(isSubStep ? .caption.weight(.medium) : .subheadline.weight(.medium))
                     StepCountdownLabel(step: step, referenceDate: referenceDate)
+                    if let summary = levainBuildSummary {
+                        Text(summary)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 if hasConflict {
@@ -57,6 +62,28 @@ struct CompactStepRow: View {
     private var ovenTemperature: Int? {
         guard [.preheat, .bakeCovered, .bakeUncovered].contains(stepTypeIDEnum) else { return nil }
         return step.schedule?.recipe.bakeTemperature(for: stepTypeIDEnum)
+    }
+
+    /// One-line measurements for an upcoming Build Levain step, so the amounts
+    /// are visible before the step opens.
+    private var levainBuildSummary: String? {
+        guard stepTypeIDEnum == .buildLevain,
+              step.stepStatus == .upcoming,
+              let schedule = step.schedule else { return nil }
+        // Prefer the scheduler's adaptively-chosen ratio (e.g. a slow overnight
+        // build) over the recipe's fixed default.
+        let adaptive = step.levainRatioBucket
+        let build = LevainBuildCalculator.calculate(.init(
+            levainGramsNeeded: schedule.scaledIngredients.levainGrams,
+            baseRatio: adaptive?.buildRatio ?? schedule.recipe.levainBuildRatio,
+            referenceTemp: schedule.recipe.referenceTemperatureCelsius,
+            kitchenTemp: schedule.kitchenTemperatureCelsius
+        ))
+        let amounts = "\(Int(build.starterGrams))g starter + \(Int(build.flourGrams))g flour + \(Int(build.waterGrams))g water"
+        if let label = adaptive?.adaptiveBuildLabel {
+            return "\(label) · \(amounts)"
+        }
+        return amounts
     }
 
     private var statusDot: some View {

@@ -16,6 +16,17 @@ final class StarterProfile {
     var stateChangedAt: Date = Date()
     var activePeakAverageMinutes: Double?
 
+    /// False when the user has no starter yet — a fresh install that chose
+    /// "not yet", or an existing starter declared dead. Existing rows default
+    /// to true, which is correct for anyone already using the app.
+    var hasStarter: Bool = true
+    /// Bumped each time a new starter is established. Feed logs carry the
+    /// generation they belong to so a dead starter's readings can't skew the
+    /// new one's averages and scheduling.
+    var starterGeneration: Int = 1
+    /// When the current generation finished its plan and became usable.
+    var starterBornAt: Date?
+
     init(
         storageType: StarterStorageType = .fridge,
         maintenanceCycleDays: Double = 6

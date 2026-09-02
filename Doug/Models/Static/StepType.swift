@@ -11,9 +11,13 @@ enum StepTypeID: String, CaseIterable, Codable {
     case addInclusions
     case shape
     case coldRetard
+    case coldRetardBalls
+    case temper
     case finalProof
     case panShape
+    case tinShape
     case bakeSheet
+    case bakeTin
     case preheat
     case bake
     case bakeCovered
@@ -24,6 +28,15 @@ enum StepTypeID: String, CaseIterable, Codable {
     case waitForPeak
     case waitForLevainPeak
     case refeedAndRefrigerate
+}
+
+extension StepTypeID {
+    /// Both fridge-fermentation steps: the bread retard (shaped loaf in a
+    /// banneton) and the pizza retard (divided dough balls). The scheduler's
+    /// overnight handling applies to either.
+    var isColdRetard: Bool {
+        self == .coldRetard || self == .coldRetardBalls
+    }
 }
 
 // MARK: - Step Classification

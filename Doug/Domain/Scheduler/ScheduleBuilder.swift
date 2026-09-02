@@ -49,6 +49,10 @@ struct ScheduledStep: Identifiable {
     let subSteps: [ScheduledStep]
     let requiresTempReading: Bool
     let levainElapsedMinutes: Double?
+    /// The adaptively-chosen inoculation ratio for a `buildLevain` step, when the
+    /// scheduler sized the build to fit its ripening window (e.g. a slow overnight
+    /// levain). nil for non-levain steps and when the standard build is used.
+    let levainBuildRatio: FeedRatioBucket?
 
     init(
         methodStepID: UUID,
@@ -60,7 +64,8 @@ struct ScheduledStep: Identifiable {
         durationMinutes: Double,
         subSteps: [ScheduledStep] = [],
         requiresTempReading: Bool = false,
-        levainElapsedMinutes: Double? = nil
+        levainElapsedMinutes: Double? = nil,
+        levainBuildRatio: FeedRatioBucket? = nil
     ) {
         id = UUID()
         self.methodStepID = methodStepID
@@ -73,6 +78,7 @@ struct ScheduledStep: Identifiable {
         self.subSteps = subSteps
         self.requiresTempReading = requiresTempReading
         self.levainElapsedMinutes = levainElapsedMinutes
+        self.levainBuildRatio = levainBuildRatio
     }
 }
 
@@ -440,7 +446,9 @@ enum ScheduleBuilder {
                             subSteps: next.subSteps,
                             requiresTempReading: next.requiresTempReading
                         )
-                        print("[ScheduleBuilder] extended \(next.label) earlier by \(Int(extendBy / 60))min to close levain gap")
+                        print(
+                            "[ScheduleBuilder] extended \(next.label) earlier by \(Int(extendBy / 60))min to close levain gap"
+                        )
                     }
                 }
             }
@@ -449,16 +457,30 @@ enum ScheduleBuilder {
         // Enforce earliest start: shift pre-flex steps forward, compress flex step
         let firstNonLevain = result.first(where: { $0.levainElapsedMinutes == nil })
         let shiftAnchor = firstNonLevain?.startTime ?? result.first?.startTime
-        print("[ScheduleBuilder] pre-shift check: earliestStart=\(input.earliestStartTime?.description ?? "nil") shiftAnchor=\(shiftAnchor?.description ?? "nil") (\(firstNonLevain?.label ?? result.first?.label ?? "nil"))")
+        // An in-progress levain (levainElapsedMinutes) is already fermenting in
+        // the jar, so its backdated build/wait steps legitimately sit before the
+        // earliest-start floor. When the shift can't be honoured, the violation
+        // is only real if work the baker still has to do — the first step after
+        // the pinned wait — would start before the floor.
+        let postLevainAnchor: Date? = {
+            guard let pinnedIdx = result.lastIndex(where: { $0.levainElapsedMinutes != nil }),
+                  pinnedIdx + 1 < result.count else { return nil }
+            return result[pinnedIdx + 1].startTime
+        }()
+        print(
+            "[ScheduleBuilder] pre-shift check: earliestStart=\(input.earliestStartTime?.description ?? "nil") shiftAnchor=\(shiftAnchor?.description ?? "nil") (\(firstNonLevain?.label ?? result.first?.label ?? "nil"))"
+        )
         for (i, s) in result.enumerated() {
-            print("[ScheduleBuilder]   [\(i)] \(s.label) start=\(s.startTime) dur=\(Int(s.durationMinutes))min levainElapsed=\(s.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")")
+            print(
+                "[ScheduleBuilder]   [\(i)] \(s.label) start=\(s.startTime) dur=\(Int(s.durationMinutes))min levainElapsed=\(s.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")"
+            )
         }
         if let earliest = input.earliestStartTime,
            let firstStart = shiftAnchor,
            firstStart < earliest
         {
             let delay = earliest.timeIntervalSince(firstStart)
-            print("[ScheduleBuilder] earliest=\(earliest) firstStart=\(firstStart) delay=\(Int(delay/60))min")
+            print("[ScheduleBuilder] earliest=\(earliest) firstStart=\(firstStart) delay=\(Int(delay / 60))min")
 
             if let flexIdx = result.indices.max(by: { a, b in
                 result[a].classification != .passiveFlexible ? true
@@ -469,19 +491,24 @@ enum ScheduleBuilder {
                 let newDuration = flexStep.durationMinutes - (delay / 60.0)
                 let methodFlex = method.first { $0.stepTypeID == flexStep.stepTypeID }
                 let minDuration = methodFlex?.effectiveFlexRange?.lowerBound ?? 0
-                print("[ScheduleBuilder] flexStep=\(flexStep.label) idx=\(flexIdx) oldDur=\(Int(flexStep.durationMinutes))min newDur=\(Int(newDuration))min min=\(Int(minDuration))min")
+                print(
+                    "[ScheduleBuilder] flexStep=\(flexStep.label) idx=\(flexIdx) oldDur=\(Int(flexStep.durationMinutes))min newDur=\(Int(newDuration))min min=\(Int(minDuration))min"
+                )
 
                 if newDuration >= minDuration {
-                    print("[ScheduleBuilder] shifting \(flexIdx) steps forward by \(Int(delay/60))min")
+                    print("[ScheduleBuilder] shifting \(flexIdx) steps forward by \(Int(delay / 60))min")
                     for i in 0 ..< flexIdx {
                         let old = result[i]
-                        print("[ScheduleBuilder]   [\(i)] \(old.label) start=\(old.startTime) dur=\(Int(old.durationMinutes))min levainElapsed=\(old.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")")
+                        print(
+                            "[ScheduleBuilder]   [\(i)] \(old.label) start=\(old.startTime) dur=\(Int(old.durationMinutes))min levainElapsed=\(old.levainElapsedMinutes.map { String(Int($0)) } ?? "nil")"
+                        )
                         // An in-progress levain is fermenting in the jar: pin it to its
                         // real fed time and its true peak duration. Never stretch it to
                         // absorb target-anchoring slack — that belongs to the flex step
                         // (compressed below). Re-gluing buildLevain happens after the loop.
                         if old.levainElapsedMinutes != nil,
-                           let ctx = input.levainContext, ctx.remainingMinutes() > 0 {
+                           let ctx = input.levainContext, ctx.remainingMinutes() > 0
+                        {
                             let fedAt = ctx.fedAt
                             let levainEnd = fedAt.addingTimeInterval(ctx.expectedPeakMinutes * 60)
                             print("[ScheduleBuilder]   → levain: fedAt=\(fedAt) levainEnd=\(levainEnd)")
@@ -537,7 +564,9 @@ enum ScheduleBuilder {
 
                     print("[ScheduleBuilder] after shift:")
                     for i in 0 ... flexIdx {
-                        print("[ScheduleBuilder]   [\(i)] \(result[i].label) start=\(result[i].startTime) end=\(result[i].endTime) dur=\(Int(result[i].durationMinutes))min")
+                        print(
+                            "[ScheduleBuilder]   [\(i)] \(result[i].label) start=\(result[i].startTime) end=\(result[i].endTime) dur=\(Int(result[i].durationMinutes))min"
+                        )
                     }
                     for i in 0 ..< flexIdx where result[i].classification == .handsOn {
                         let shifted = result[i]
@@ -556,11 +585,45 @@ enum ScheduleBuilder {
                             ))
                         }
                     }
+                } else if let postLevainAnchor, postLevainAnchor.timeIntervalSince(earliest) > -60 {
+                    // Phantom delay: only the backdated in-progress levain sits
+                    // before the floor; everything the baker still has to do
+                    // starts after it. Nothing real to enforce — keep the
+                    // schedule as built.
+                    print(
+                        "[ScheduleBuilder] flex compress skipped: delay is only the in-progress levain (post-levain start \(postLevainAnchor) ≥ earliest)"
+                    )
                 } else {
-                    print("[ScheduleBuilder] flex compress rejected: \(Int(newDuration))min < min \(Int(minDuration))min")
+                    // The flex step can't compress enough to push the schedule's start up
+                    // to the earliest allowed time. Honouring this bread-ready time would
+                    // mean starting before then — so it's genuinely not bakeable. Report a
+                    // conflict rather than returning a schedule that starts too early
+                    // (which the caller would later reject when prepending starter activation).
+                    print(
+                        "[ScheduleBuilder] flex compress rejected: \(Int(newDuration))min < min \(Int(minDuration))min"
+                    )
+                    return .conflict(ScheduleConflict(
+                        conflictingStepLabel: flexStep.label,
+                        conflictingWindowName: "schedule constraint",
+                        message: "This bread-ready time is too soon to fit the whole bake. Try a later time.",
+                        suggestedAlternativeTime: nil
+                    ))
                 }
+            } else if let postLevainAnchor, postLevainAnchor.timeIntervalSince(earliest) > -60 {
+                // Same phantom-delay case as above, without a flex step.
+                print(
+                    "[ScheduleBuilder] earliest-start skipped: delay is only the in-progress levain (post-levain start \(postLevainAnchor) ≥ earliest)"
+                )
             } else {
+                // No flexible step exists to absorb the delay, so the start can't be pushed
+                // to the earliest allowed time. Same reasoning as above — report a conflict.
                 print("[ScheduleBuilder] no flex step found to absorb delay")
+                return .conflict(ScheduleConflict(
+                    conflictingStepLabel: firstNonLevain?.label ?? result.first?.label ?? "Schedule",
+                    conflictingWindowName: "schedule constraint",
+                    message: "This bread-ready time is too soon to fit the whole bake. Try a later time.",
+                    suggestedAlternativeTime: nil
+                ))
             }
         }
 
@@ -571,7 +634,8 @@ enum ScheduleBuilder {
         // No-op when there is no in-progress levain (no levainElapsedMinutes step).
         if let waitIdx = result.firstIndex(where: { $0.levainElapsedMinutes != nil }),
            waitIdx > 0,
-           result[waitIdx - 1].stepTypeID == .buildLevain {
+           result[waitIdx - 1].stepTypeID == .buildLevain
+        {
             let mix = result[waitIdx - 1]
             let waitStart = result[waitIdx].startTime
             result[waitIdx - 1] = ScheduledStep(
@@ -586,6 +650,90 @@ enum ScheduleBuilder {
                 requiresTempReading: mix.requiresTempReading,
                 levainElapsedMinutes: mix.levainElapsedMinutes
             )
+        }
+
+        // Fresh-levain adaptive sizing (no levain built yet — dormant starter).
+        //
+        // resolveConflict can push the hands-on Build Levain earlier (past an
+        // unavailable block) while the passiveFixed Wait for Levain Peak stays put,
+        // and the re-glue above only repairs *in-progress* levains. For a fresh
+        // build that strands the levain past peak before the dough work begins.
+        //
+        // Instead, think like a baker: glue the wait to the build and size the build
+        // (inoculation ratio) so the levain ripens into the consumer's usable window
+        // — a slow overnight levain fills a long gap rather than a fast one collapsing
+        // in it. Slack at the back of the chain is still absorbed by the cold retard;
+        // this only reshapes the levain when a real front gap remains.
+        if input.levainContext == nil,
+           let waitIdx = result.firstIndex(where: { $0.stepTypeID == .waitForLevainPeak }),
+           waitIdx > 0,
+           waitIdx + 1 < result.count,
+           result[waitIdx - 1].stepTypeID == .buildLevain
+        {
+            let buildIdx = waitIdx - 1
+            let consumerIdx = waitIdx + 1
+            let build = result[buildIdx]
+            let consumerStart = result[consumerIdx].startTime
+            let buildEnd = build.startTime.addingTimeInterval(build.durationMinutes * 60)
+            let windowMinutes = consumerStart.timeIntervalSince(buildEnd) / 60.0
+
+            if windowMinutes > 0 {
+                switch LevainBuildPlanner.selectBuild(
+                    windowMinutes: windowMinutes,
+                    kitchenTemp: input.kitchenTemperatureCelsius,
+                    profile: input.peakProfile
+                ) {
+                case let .build(choice):
+                    // Glue the wait to the build, sized to the chosen peak.
+                    let waitStart = buildEnd
+                    let waitEnd = waitStart.addingTimeInterval(choice.peakMinutes * 60)
+                    let oldWait = result[waitIdx]
+                    result[waitIdx] = ScheduledStep(
+                        methodStepID: oldWait.methodStepID,
+                        stepTypeID: oldWait.stepTypeID,
+                        label: oldWait.label,
+                        classification: oldWait.classification,
+                        startTime: waitStart,
+                        endTime: waitEnd,
+                        durationMinutes: choice.peakMinutes,
+                        subSteps: oldWait.subSteps,
+                        requiresTempReading: oldWait.requiresTempReading
+                    )
+                    // Tag the build with the chosen ratio so the UI can show it.
+                    result[buildIdx] = ScheduledStep(
+                        methodStepID: build.methodStepID,
+                        stepTypeID: build.stepTypeID,
+                        label: build.label,
+                        classification: build.classification,
+                        startTime: build.startTime,
+                        endTime: buildEnd,
+                        durationMinutes: build.durationMinutes,
+                        subSteps: build.subSteps,
+                        requiresTempReading: build.requiresTempReading,
+                        levainBuildRatio: choice.ratio
+                    )
+                    // A gap beyond even a slow build's plateau (very long overnight)
+                    // is bridged by chilling the levain, not leaving it to collapse.
+                    if choice.holdMinutes > 0, waitEnd < consumerStart {
+                        result.insert(ScheduledStep(
+                            methodStepID: UUID(),
+                            stepTypeID: .holdStarter,
+                            label: "Chill Levain",
+                            classification: .passiveFixed,
+                            startTime: waitEnd,
+                            endTime: consumerStart,
+                            durationMinutes: consumerStart.timeIntervalSince(waitEnd) / 60.0
+                        ), at: consumerIdx)
+                    }
+                case .tooSoon:
+                    return .conflict(ScheduleConflict(
+                        conflictingStepLabel: build.label,
+                        conflictingWindowName: "schedule constraint",
+                        message: "This bread-ready time is too soon to build a fresh levain in your available hours. Try a later time.",
+                        suggestedAlternativeTime: nil
+                    ))
+                }
+            }
         }
 
         // Validate all flexible steps stay within their flex range
@@ -608,7 +756,7 @@ enum ScheduleBuilder {
         }
 
         // Same-day recipes: verify no step starts during unavailable hours
-        let isSameDay = !method.contains { $0.stepTypeID == .coldRetard }
+        let isSameDay = !method.contains { $0.stepTypeID.isColdRetard }
         if isSameDay {
             for scheduled in result {
                 for block in unavailableBlocks {

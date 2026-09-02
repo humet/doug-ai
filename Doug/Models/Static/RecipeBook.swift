@@ -3,7 +3,7 @@ import Foundation
 enum RecipeBook {
     static let all: [Recipe] = [
         countryLoaf, highHydrationArtisan, wholeWheatHoney, oliveRosemary,
-        sameDayCountry, focaccia, pizzaDough, softRolls,
+        sameDayCountry, focaccia, pizzaDough, softRolls, sandwichLoaf,
     ]
 
     static func recipe(for id: RecipeID) -> Recipe {
@@ -184,7 +184,6 @@ enum RecipeBook {
                 foldSpacingFraction: 0.67,
                 inclusionAtFold: 2
             ),
-            MethodStep(stepTypeID: .addInclusions),
             MethodStep(stepTypeID: .shape),
             MethodStep(
                 stepTypeID: .coldRetard,
@@ -285,7 +284,13 @@ enum RecipeBook {
         ],
         bakeTemperatureCelsius: 220,
         degreeHourTarget: 80,
-        referenceTemperatureCelsius: 24.0
+        referenceTemperatureCelsius: 24.0,
+        yield: RecipeYield(
+            unitSingular: "tray",
+            unitPlural: "trays",
+            baseCount: 1,
+            countRange: 1 ... 2
+        )
     )
 
     // MARK: - Pizza Dough
@@ -293,10 +298,10 @@ enum RecipeBook {
     static let pizzaDough = Recipe(
         id: .pizzaDough,
         name: "Pizza Dough",
-        description: "Sourdough pizza dough — 65% hydration with olive oil. Divide into balls and proof at room temperature. You handle the bake.",
+        description: "Sourdough pizza dough — 65% hydration with olive oil. Divide into balls, cold retard in the fridge for 12–72 hours, then temper before stretching. You handle the bake.",
         difficulty: .beginner,
         hydrationPercent: 65,
-        approximateTotalHours: 7 ... 10,
+        approximateTotalHours: 20 ... 76,
         ingredients: Ingredients(
             flourGrams: 450,
             waterGrams: 293,
@@ -319,15 +324,25 @@ enum RecipeBook {
                 foldSpacingFraction: 0.67
             ),
             MethodStep(stepTypeID: .shape),
-            MethodStep(
-                stepTypeID: .finalProof,
-                flexRangeOverride: 60 ... 150
-            ),
+            MethodStep(stepTypeID: .coldRetardBalls),
+            MethodStep(stepTypeID: .temper),
         ],
         bakeTemperatureCelsius: 0,
         degreeHourTarget: 70,
         referenceTemperatureCelsius: 24.0,
-        completionLabel: "Dough Ready"
+        completionLabel: "Dough Ready",
+        yield: RecipeYield(
+            unitSingular: "ball",
+            unitPlural: "balls",
+            baseCount: 3,
+            approxUnitGrams: 285,
+            countRange: 1 ... 8,
+            sizePresets: [
+                YieldSizePreset(id: "10in", label: "10\"", unitGrams: 230),
+                YieldSizePreset(id: "12in", label: "12\"", unitGrams: 270),
+                YieldSizePreset(id: "14in", label: "14\"", unitGrams: 340),
+            ]
+        )
     )
 
     // MARK: - Soft Rolls
@@ -367,6 +382,56 @@ enum RecipeBook {
             ),
             MethodStep(stepTypeID: .preheat),
             MethodStep(stepTypeID: .bakeSheet, durationOverrideMinutes: 22),
+        ],
+        bakeTemperatureCelsius: 200,
+        degreeHourTarget: 70,
+        referenceTemperatureCelsius: 24.0,
+        yield: RecipeYield(
+            unitSingular: "roll",
+            unitPlural: "rolls",
+            baseCount: 8,
+            countRange: 4 ... 16
+        )
+    )
+
+    // MARK: - Sandwich Loaf
+
+    static let sandwichLoaf = Recipe(
+        id: .sandwichLoaf,
+        name: "Sandwich Loaf",
+        description: "A soft sourdough sandwich loaf baked in a tin. 70% hydration enriched with butter and honey for a tender, fine, even crumb that slices cleanly — no scoring, no dutch oven. Shape in the evening, cold retard overnight, and bake straight from the fridge. Makes one tin loaf.",
+        difficulty: .intermediate,
+        hydrationPercent: 70,
+        approximateTotalHours: 18 ... 26,
+        ingredients: Ingredients(
+            flourGrams: 500,
+            waterGrams: 350,
+            saltGrams: 10,
+            levainGrams: 100,
+            extras: [
+                ExtraIngredient("Butter", grams: 35, note: "softened"),
+                ExtraIngredient("Honey", grams: 20),
+            ]
+        ),
+        method: [
+            MethodStep(stepTypeID: .buildLevain, levainBuildRatio: (1, 5, 5)),
+            MethodStep(stepTypeID: .waitForLevainPeak),
+            MethodStep(stepTypeID: .autolyse),
+            MethodStep(stepTypeID: .mix),
+            MethodStep(
+                stepTypeID: .bulkFerment,
+                durationOverrideMinutes: 210,
+                foldCount: 3,
+                degreeHourTarget: 70,
+                foldSpacingFraction: 0.67
+            ),
+            MethodStep(stepTypeID: .tinShape),
+            MethodStep(
+                stepTypeID: .coldRetard,
+                flexRangeOverride: 480 ... 1080
+            ),
+            MethodStep(stepTypeID: .preheat),
+            MethodStep(stepTypeID: .bakeTin, durationOverrideMinutes: 40),
         ],
         bakeTemperatureCelsius: 200,
         degreeHourTarget: 70,

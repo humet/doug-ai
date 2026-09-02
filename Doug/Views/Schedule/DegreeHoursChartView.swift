@@ -8,6 +8,10 @@ import SwiftUI
 struct DegreeHoursChartView: View {
     let readings: [DoughTemperatureReading]
     let targetDegreeHours: Double
+    /// Extends the degree-hour integration past the last reading to this date,
+    /// assuming the last logged temperature holds. Without it the progress bar
+    /// freezes at the last fold even though the dough keeps fermenting.
+    let asOf: Date?
 
     private var sortedReadings: [DoughTemperatureReading] {
         readings.sorted { $0.timestamp < $1.timestamp }
@@ -17,7 +21,7 @@ struct DegreeHoursChartView: View {
         let pairs = sortedReadings.map {
             (timestamp: $0.timestamp, temperatureCelsius: $0.temperatureCelsius)
         }
-        return DegreeHourCalculator.accumulatedDegreeHours(readings: pairs)
+        return DegreeHourCalculator.accumulatedDegreeHours(readings: pairs, extrapolatedTo: asOf)
     }
 
     private var progress: Double {
