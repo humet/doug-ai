@@ -1,8 +1,11 @@
 import SwiftData
 import SwiftUI
 
-/// Full feed history, grouped by month. The Starter tab shows only the most
-/// recent feeds; this screen holds the rest.
+/// Full feed history, grouped by starter and then by month.
+///
+/// A retired starter's feeds stay readable here — they're a record worth
+/// keeping — but they're separated out, because they no longer describe the
+/// starter the user has now and they're excluded from its averages.
 struct FeedHistoryView: View {
     let viewModel: StarterViewModel
     var profile: StarterProfile?
@@ -19,9 +22,38 @@ struct FeedHistoryView: View {
         let logs: [StarterFeedLog]
     }
 
-    private var monthGroups: [MonthGroup] {
+    private struct GenerationGroup: Identifiable {
+        let id: Int
+        let title: String?
+        let months: [MonthGroup]
+    }
+
+    /// The generation the user's current starter belongs to.
+    private var liveGeneration: Int {
+        profile?.starterGeneration ?? 1
+    }
+
+    private var generationGroups: [GenerationGroup] {
+        let grouped = Dictionary(grouping: feedLogs, by: \.starterGeneration)
+        return grouped
+            .sorted { $0.key > $1.key }
+            .map { generation, logs in
+                GenerationGroup(
+                    id: generation,
+                    // The current starter needs no label; retired ones do.
+                    title: generation >= liveGeneration ? nil : retiredTitle(for: generation),
+                    months: monthGroups(for: logs)
+                )
+            }
+    }
+
+    private func retiredTitle(for generation: Int) -> String {
+        "Previous starter #\(generation)"
+    }
+
+    private func monthGroups(for logs: [StarterFeedLog]) -> [MonthGroup] {
         let calendar = Calendar.current
-        let grouped = Dictionary(grouping: feedLogs) { log in
+        let grouped = Dictionary(grouping: logs) { log in
             calendar.date(from: calendar.dateComponents([.year, .month], from: log.timestamp)) ?? log.timestamp
         }
         return grouped
@@ -37,24 +69,37 @@ struct FeedHistoryView: View {
 
     var body: some View {
         List {
-            ForEach(monthGroups) { group in
-                Section(group.title) {
-                    ForEach(group.logs) { log in
-                        FeedLogRow(log: log) {
-                            viewModel.markPeakTarget = log
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                feedLogToDelete = log
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+            ForEach(generationGroups) { generation in
+                if let title = generation.title {
+                    Section {
+                        Label(title, systemImage: "archivebox")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        Text("Kept for the record. These feeds don't affect your current starter's timings.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                ForEach(generation.months) { group in
+                    Section(group.title) {
+                        ForEach(group.logs) { log in
+                            FeedLogRow(log: log) {
+                                viewModel.markPeakTarget = log
                             }
-                            Button {
-                                viewModel.editingFeedLog = log
-                            } label: {
-                                Label("Edit", systemImage: "pencil")
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    feedLogToDelete = log
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                Button {
+                                    viewModel.editingFeedLog = log
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                .tint(.blue)
                             }
-                            .tint(.blue)
                         }
                     }
                 }
@@ -72,7 +117,9 @@ struct FeedHistoryView: View {
                         log,
                         modelContext: modelContext,
                         profile: profile,
-                        feedLogs: Array(feedLogs)
+                        // Averages must only ever be recomputed from the
+                        // current starter's readings.
+                        feedLogs: viewModel.currentGeneration(Array(feedLogs), profile: profile)
                     )
                 }
                 feedLogToDelete = nil

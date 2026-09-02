@@ -270,6 +270,7 @@ struct ScheduleConfigSheet: View {
         case .activating: "flame.fill"
         case .dormant: "snowflake"
         case .reviving: "arrow.triangle.2.circlepath.circle.fill"
+        case .establishing: "sparkles"
         }
     }
 
@@ -279,6 +280,7 @@ struct ScheduleConfigSheet: View {
         case .activating: .orange
         case .dormant: .blue
         case .reviving: .purple
+        case .establishing: .purple
         }
     }
 
@@ -288,6 +290,7 @@ struct ScheduleConfigSheet: View {
         case .activating: "Starter activating"
         case .dormant: "Starter in the fridge"
         case .reviving: "Starter in revival"
+        case .establishing: "New starter in progress"
         }
     }
 
@@ -321,6 +324,8 @@ struct ScheduleConfigSheet: View {
             return "Feed it on the counter first. Earliest \(label): \(estimate.earliestBreadReady.formatted(date: .abbreviated, time: .shortened))"
         case .reviving:
             return "Your starter needs to finish revival before you can bake."
+        case .establishing:
+            return "Your new starter needs to finish its plan before you can bake with it."
         }
     }
 

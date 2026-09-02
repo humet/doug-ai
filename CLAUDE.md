@@ -85,6 +85,22 @@ Step classifications:
 
 Works backwards from target bread-ready time. Iterates method steps in reverse, subtracting durations and checking hands-on steps against availability. Flexible steps (autolyse, cold retard) absorb conflicts by compressing/expanding within their range. Schedule changes are applied by deterministic domain logic rather than by the language model.
 
+## Starter Plans
+
+`RevivalPlan` / `RevivalFeedStep` back two flows that share one shape — a sequence of dated feeds, each with its own instruction copy, grams and tolerance band:
+
+- **Revival** of an existing but neglected starter (`origin == nil`), built by `RevivalPlanGenerator`.
+- **Establishing** a new starter (`origin` set to a `StarterOrigin`: `fromScratch`, `driedCulture`, `freshGift`, `shopKit`), built by `StarterOriginPlanner` from the baselines in `StarterOriginBlueprints`.
+
+The models keep their original names so the persisted store needs only SwiftData lightweight migration — every added property is optional or has a declaration-site default. Don't rename them, and don't introduce a `VersionedSchema`.
+
+New-starter plans differ from revival in two ways:
+
+- **Steps may expect no peak.** `StarterStepKind.expectsPeak` is false for `initialMix`, `rehydrate` and `dailyFeed` — on day two there's nothing to peak, so the step is just "I fed it".
+- **Progression is condition-driven, not calendar-driven.** The generated plan is a baseline; `StarterEstablishProgress.evaluate` reshapes it from what the user reports at each check-in (activity level + smell), returning an `EstablishOutcome` that holds course, skips ahead, adds feeds, or completes. The resulting `EstablishNotice` is persisted on the plan so an explanation the user needs to read survives navigation and relaunches.
+
+Starter generations: completing a plan bumps `StarterProfile.starterGeneration` and clears the inherited averages. `StarterFeedLog.starterGeneration` scopes readings to the starter that produced them — filter through `StarterViewModel.currentGeneration(_:profile:)` anywhere feed logs feed health, averages or peak estimates. A retired starter's logs stay visible in `FeedHistoryView`, grouped and labelled, but must never reach the scheduler.
+
 ## AI Coach
 
 The coach is deliberately layered above the deterministic baking model:

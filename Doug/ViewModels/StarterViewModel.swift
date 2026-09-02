@@ -12,6 +12,8 @@ enum StarterPrimaryAction: Equatable {
     case feedAndRefrigerate
     case waitForBake
     case followRevival
+    case followStarterPlan
+    case startNewStarter
 }
 
 @Observable
@@ -55,6 +57,10 @@ final class StarterViewModel {
     var revivalFlourType = "white"
     var revivalKitchenTemp = 22.0
     var revivalIsPreparing = false
+
+    // MARK: - New Starter Form
+
+    var showStartNewStarter = false
 
     func healthStatus(
         profile: StarterProfile?,
@@ -139,7 +145,9 @@ final class StarterViewModel {
             flourType: feedFlourType,
             kitchenTemperatureCelsius: feedKitchenTemp,
             starterGrams: grams,
-            feedIntent: resolvedIntent
+            feedIntent: resolvedIntent,
+            // A feed always belongs to the starter that's alive right now.
+            starterGeneration: profile?.starterGeneration ?? 1
         )
         modelContext.insert(log)
 
@@ -287,12 +295,17 @@ final class StarterViewModel {
         hasRisingFeed: Bool,
         hasUpcomingRecipe: Bool,
         hasRecentLevainFeed: Bool,
-        bakeAwaitingLevainMix: Bool
+        bakeAwaitingLevainMix: Bool,
+        hasStarter: Bool = true
     ) -> StarterPrimaryAction {
         switch lifecycleState {
+        case .establishing:
+            return .followStarterPlan
         case .reviving:
             return .followRevival
         case .dormant:
+            // Nothing to feed yet — the only sensible next step is to make one.
+            guard hasStarter else { return .startNewStarter }
             // Always offer activation — even when health says "needs revival"
             // (which is also a fresh install's state, with zero feed history).
             // The revival section below carries its own call to action.
@@ -648,7 +661,7 @@ final class StarterViewModel {
 
     // MARK: - Private
 
-    private func applyRevivalDelta(
+    func applyRevivalDelta(
         _ delta: TimeInterval,
         fromIndex startIndex: Int,
         plan: RevivalPlan,
@@ -673,12 +686,14 @@ final class StarterViewModel {
             let stepIndex = step.sequenceIndex
             let title = step.instructionTitle ?? "Feed \(stepIndex + 1)"
             let newTime = snapped
+            let isNewStarter = plan.isEstablishingNewStarter
             Task {
                 await NotificationService.shared.rescheduleRevivalMixReminderIfPending(
                     at: newTime,
                     planID: planID,
                     stepIndex: stepIndex,
-                    title: title
+                    title: title,
+                    isNewStarter: isNewStarter
                 )
             }
         }
@@ -730,7 +745,7 @@ final class StarterViewModel {
 
     // MARK: - Revival Notifications
 
-    private func scheduleNextRevivalReminder(plan: RevivalPlan) {
+    func scheduleNextRevivalReminder(plan: RevivalPlan) {
         let steps = plan.feedSteps.sorted { $0.sequenceIndex < $1.sequenceIndex }
         guard let next = steps.first(where: { $0.feedStatus == .pending }),
               next.scheduledTime > Date()
@@ -740,19 +755,21 @@ final class StarterViewModel {
         let stepIndex = next.sequenceIndex
         let title = next.instructionTitle ?? "Feed \(stepIndex + 1)"
         let date = next.scheduledTime
+        let isNewStarter = plan.isEstablishingNewStarter
         Task {
             await NotificationService.shared.scheduleRevivalMixReminder(
                 at: date,
                 planID: planID,
                 stepIndex: stepIndex,
-                title: title
+                title: title,
+                isNewStarter: isNewStarter
             )
         }
     }
 
     // MARK: - Live Activity
 
-    private func syncRevivalActivity(plan: RevivalPlan) {
+    func syncRevivalActivity(plan: RevivalPlan) {
         guard plan.revivalStatus == .active else {
             LiveActivityService.shared.endRevivalActivity()
             return

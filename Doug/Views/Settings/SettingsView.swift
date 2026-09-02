@@ -213,6 +213,7 @@ struct SettingsView: View {
             if profiles.isEmpty {
                 modelContext.insert(StarterProfile(storageType: .fridge))
             }
+            let generation = profiles.first?.starterGeneration ?? 1
 
             let now = Date()
             let feed = StarterFeedLog(
@@ -221,7 +222,8 @@ struct SettingsView: View {
                 ratioFlour: 5,
                 ratioWater: 5,
                 flourType: "white",
-                kitchenTemperatureCelsius: 22
+                kitchenTemperatureCelsius: 22,
+                starterGeneration: generation
             )
             feed.markPeak(at: now.addingTimeInterval(-60 * 60))
             modelContext.insert(feed)
@@ -231,6 +233,7 @@ struct SettingsView: View {
             if profiles.isEmpty {
                 modelContext.insert(StarterProfile(storageType: .fridge))
             }
+            let generation = profiles.first?.starterGeneration ?? 1
 
             // Clear any existing feed logs so the stale one is most recent.
             for existing in feedLogs {
@@ -244,7 +247,8 @@ struct SettingsView: View {
                 ratioFlour: 5,
                 ratioWater: 5,
                 flourType: "white",
-                kitchenTemperatureCelsius: 22
+                kitchenTemperatureCelsius: 22,
+                starterGeneration: generation
             )
             modelContext.insert(feed)
         }

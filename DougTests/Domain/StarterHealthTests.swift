@@ -106,4 +106,32 @@ struct StarterHealthTests {
         )
         #expect(status == .needsRevival)
     }
+
+    // MARK: - No Starter Yet
+
+    @Test func aUserWithNoStarterNeedsToMakeOneNotReviveOne() {
+        // The old behaviour offered a revival plan for a starter that had
+        // never existed.
+        var profile = Self.fridgeProfile
+        profile.hasStarter = false
+
+        let status = StarterHealthAssessor.assess(profile: profile, feedLogs: [])
+        #expect(status == .establishing)
+    }
+
+    @Test func anExistingStarterWithNoLogsStillNeedsRevival() {
+        var profile = Self.fridgeProfile
+        profile.hasStarter = true
+
+        let status = StarterHealthAssessor.assess(profile: profile, feedLogs: [])
+        #expect(status == .needsRevival)
+    }
+
+    @Test func establishingLifecycleReportsEstablishing() {
+        var profile = Self.fridgeProfile
+        profile.lifecycleState = .establishing
+
+        let status = StarterHealthAssessor.assess(profile: profile, feedLogs: [])
+        #expect(status == .establishing)
+    }
 }

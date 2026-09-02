@@ -70,7 +70,10 @@ enum EarliestBakeEstimator {
                 ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTempC)
             return basePeak + warmUp
 
-        case .reviving:
+        case .reviving, .establishing:
+            // Both are mid-plan, so the true lead time is however many feeds
+            // remain — which this estimator can't see. One peak is the floor,
+            // not the expectation; callers surface the plan itself instead.
             let basePeak = activePeakAverage
                 ?? TemperatureCalculator.levainBuildMinutes(kitchenTemp: kitchenTempC)
             return basePeak + warmUp

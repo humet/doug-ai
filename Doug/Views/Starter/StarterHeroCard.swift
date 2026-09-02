@@ -9,6 +9,7 @@ enum StarterHeroAction {
     case feedAndRefrigerate
     case logMaintenanceFeed
     case refrigerate
+    case startNewStarter
 }
 
 /// State-first summary of the starter: what it's doing right now and the one
@@ -55,10 +56,13 @@ struct StarterHeroCard: View {
 
     private var detailRow: some View {
         HStack(spacing: 16) {
-            Label(
-                storageType == .counter ? "Counter" : "Fridge",
-                systemImage: storageType == .counter ? "sun.max" : "refrigerator"
-            )
+            // Storage is meaningless until there's something to store.
+            if !(state == .dormant && healthStatus == .establishing) {
+                Label(
+                    storageType == .counter ? "Counter" : "Fridge",
+                    systemImage: storageType == .counter ? "sun.max" : "refrigerator"
+                )
+            }
             Label(healthText, systemImage: healthIcon)
                 .foregroundStyle(healthColor)
             if let lastFeedDate {
@@ -130,8 +134,10 @@ struct StarterHeroCard: View {
                         .foregroundStyle(.secondary)
                 }
             }
-        case .followRevival:
-            EmptyView() // the revival section below carries the call to action
+        case .followRevival, .followStarterPlan:
+            EmptyView() // the plan section below carries the call to action
+        case .startNewStarter:
+            prominentButton("Start a Starter", tint: .accentColor) { onAction(.startNewStarter) }
         }
     }
 
@@ -160,6 +166,7 @@ struct StarterHeroCard: View {
         case .activating: "flame.fill"
         case .active: "checkmark.circle.fill"
         case .reviving: "arrow.triangle.2.circlepath.circle.fill"
+        case .establishing: "sparkles"
         }
     }
 
@@ -169,15 +176,17 @@ struct StarterHeroCard: View {
         case .activating: .orange
         case .active: DougTheme.starterReady
         case .reviving: .accentColor
+        case .establishing: .accentColor
         }
     }
 
     private var title: String {
         switch state {
-        case .dormant: "In the Fridge"
+        case .dormant: healthStatus == .establishing ? "No Starter Yet" : "In the Fridge"
         case .activating: risingSince != nil ? "Waking Up" : "Activating"
         case .active: bakeAwaitingLevainMix ? "Powering Your Bake" : "Ready to Bake!"
         case .reviving: "In Revival"
+        case .establishing: "Building a Starter"
         }
     }
 
@@ -187,6 +196,9 @@ struct StarterHeroCard: View {
             if let lastFeedDate {
                 let days = Int(now.timeIntervalSince(lastFeedDate) / 86400)
                 return "Last fed \(days) day\(days == 1 ? "" : "s") ago"
+            }
+            if healthStatus == .establishing {
+                return "You don't have a starter yet — let's make one"
             }
             return "No feeds logged yet"
         case .activating:
@@ -203,6 +215,8 @@ struct StarterHeroCard: View {
             return "Active for \(hours)h — build your levain or feed & refrigerate"
         case .reviving:
             return "Your starter is rebuilding strength. Follow the revival plan below."
+        case .establishing:
+            return "A new starter is on the way. Follow the plan below."
         }
     }
 
@@ -211,6 +225,7 @@ struct StarterHeroCard: View {
         case .readyToBake: "Healthy"
         case .needsFeed: "Needs feed"
         case .needsRevival: "Needs revival"
+        case .establishing: "Getting started"
         }
     }
 
@@ -219,6 +234,7 @@ struct StarterHeroCard: View {
         case .readyToBake: "checkmark.circle.fill"
         case .needsFeed: "exclamationmark.circle.fill"
         case .needsRevival: "xmark.circle.fill"
+        case .establishing: "sparkles"
         }
     }
 
@@ -227,6 +243,7 @@ struct StarterHeroCard: View {
         case .readyToBake: DougTheme.starterReady
         case .needsFeed: DougTheme.starterNeedsFeed
         case .needsRevival: DougTheme.starterNeedsRevival
+        case .establishing: .accentColor
         }
     }
 }

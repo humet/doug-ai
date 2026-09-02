@@ -398,12 +398,14 @@ final class NotificationService {
         "revival-mix-\(planID)-\(stepIndex)"
     }
 
-    /// Schedules a one-shot reminder to mix the next revival feed at the given time.
+    /// Schedules a one-shot reminder to mix the next plan feed at the given time.
+    /// Used by both revival and new-starter plans; `isNewStarter` only changes copy.
     func scheduleRevivalMixReminder(
         at date: Date,
         planID: String,
         stepIndex: Int,
-        title: String
+        title: String,
+        isNewStarter: Bool = false
     ) async {
         let authorized = await requestAuthorization()
         guard authorized, date > Date() else { return }
@@ -412,7 +414,7 @@ final class NotificationService {
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
 
         let content = UNMutableNotificationContent()
-        content.title = "Time to mix your starter"
+        content.title = isNewStarter ? "Time to feed your new starter" : "Time to mix your starter"
         content.body = title
         content.sound = .default
         content.categoryIdentifier = Category.revivalMix
@@ -449,20 +451,27 @@ final class NotificationService {
         return pending.contains { $0.identifier == target }
     }
 
-    /// Reschedules a revival mix reminder only if one was already pending.
+    /// Reschedules a plan mix reminder only if one was already pending.
     /// Returns true if a reminder was found and rescheduled.
     @discardableResult
     func rescheduleRevivalMixReminderIfPending(
         at date: Date,
         planID: String,
         stepIndex: Int,
-        title: String
+        title: String,
+        isNewStarter: Bool = false
     ) async -> Bool {
         let target = Self.revivalMixIdentifier(planID: planID, stepIndex: stepIndex)
         let pending = await center.pendingNotificationRequests()
         guard pending.contains(where: { $0.identifier == target }) else { return false }
         cancelRevivalMixReminder(planID: planID, stepIndex: stepIndex)
-        await scheduleRevivalMixReminder(at: date, planID: planID, stepIndex: stepIndex, title: title)
+        await scheduleRevivalMixReminder(
+            at: date,
+            planID: planID,
+            stepIndex: stepIndex,
+            title: title,
+            isNewStarter: isNewStarter
+        )
         return true
     }
 

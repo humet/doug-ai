@@ -85,17 +85,3 @@ struct RevivalPlanGeneratorGramsTests {
         #expect(RevivalPlanGenerator.stepKind(index: 3, totalSteps: 4) == .revivalFinal)
     }
 }
-
-extension FeedStepKind: @retroactive Equatable {
-    public static func == (lhs: FeedStepKind, rhs: FeedStepKind) -> Bool {
-        switch (lhs, rhs) {
-        case (.revivalFirst, .revivalFirst),
-             (.revivalMiddle, .revivalMiddle),
-             (.revivalFinal, .revivalFinal),
-             (.maintenance, .maintenance):
-            true
-        default:
-            false
-        }
-    }
-}

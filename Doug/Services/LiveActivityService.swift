@@ -260,7 +260,7 @@ final class LiveActivityService {
               let currentFeed = steps.first(where: { $0.sequenceIndex == currentIndex })
         else {
             return RevivalActivityAttributes.ContentState(
-                feedLabel: "Revival Complete",
+                feedLabel: plan.isEstablishingNewStarter ? "Starter Ready" : "Revival Complete",
                 feedStatus: RevivalFeedStatus.completed.rawValue,
                 scheduledMixTime: nil,
                 risingStartTime: nil,
@@ -273,7 +273,11 @@ final class LiveActivityService {
             )
         }
 
-        let feedLabel = "Feed \(currentIndex + 1)/\(totalSteps)"
+        let feedLabel = if plan.isEstablishingNewStarter {
+            "Day \(currentFeed.dayNumber ?? currentIndex + 1)"
+        } else {
+            "Feed \(currentIndex + 1)/\(totalSteps)"
+        }
         let status = currentFeed.feedStatus
 
         var expectedPeakTime: Date?

@@ -226,7 +226,11 @@ struct ScheduleTab: View {
                 ) {
                     Button("OK") { viewModel.starterHealthBlock = nil }
                 } message: {
-                    if viewModel.starterHealthBlock == .needsRevival {
+                    if viewModel.starterHealthBlock == .establishing {
+                        Text(
+                            "Your new starter isn't established yet. Finish its plan on the Starter tab and you'll be able to bake with it."
+                        )
+                    } else if viewModel.starterHealthBlock == .needsRevival {
                         Text("Your starter needs revival before baking. Check the Starter tab for a revival plan.")
                     } else {
                         Text(

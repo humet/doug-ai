@@ -13,6 +13,9 @@ final class StarterFeedLog {
     var timeToPeakMinutes: Double?
     var starterGrams: Double?
     var feedIntent: String = FeedIntent.maintenance.rawValue
+    /// Which starter this feed belongs to. Readings from a retired starter stay
+    /// visible in history but are excluded from averages and health assessment.
+    var starterGeneration: Int = 1
 
     init(
         timestamp: Date = Date(),
@@ -22,7 +25,8 @@ final class StarterFeedLog {
         flourType: String = "white",
         kitchenTemperatureCelsius: Double,
         starterGrams: Double? = nil,
-        feedIntent: FeedIntent = .maintenance
+        feedIntent: FeedIntent = .maintenance,
+        starterGeneration: Int = 1
     ) {
         self.timestamp = timestamp
         self.ratioStarter = ratioStarter
@@ -32,6 +36,7 @@ final class StarterFeedLog {
         self.kitchenTemperatureCelsius = kitchenTemperatureCelsius
         self.starterGrams = starterGrams
         self.feedIntent = feedIntent.rawValue
+        self.starterGeneration = starterGeneration
     }
 
     var starterFeedIntent: FeedIntent {

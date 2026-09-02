@@ -705,7 +705,9 @@ final class ScheduleViewModel {
                 ? TemperatureCalculator.fridgeWarmUpMinutes(kitchenTempCelsius: kitchenTemperature)
                 : 0.0
             return now.addingTimeInterval((activateDuration + peakDuration + warmUp) * 60)
-        case .reviving:
+        case .reviving, .establishing:
+            // Mid-plan, so the real answer is however many feeds remain. A day
+            // is a placeholder floor — the pre-bake check blocks the bake anyway.
             return now.addingTimeInterval(24 * 3600)
         }
     }
@@ -755,7 +757,7 @@ final class ScheduleViewModel {
             // A ready starter left on the counter degrades while it waits. If the
             // levain build is far off, recommend chilling it to hold at peak.
             return onCounter ? (buildChillStarterPreamble(recipeSteps: recipeSteps) ?? []) : []
-        case .reviving:
+        case .reviving, .establishing:
             return []
         case .activating:
             let activating = buildActivatingPreamble(
@@ -941,6 +943,8 @@ final class ScheduleViewModel {
             return .activating(lastFeed: lastActivation?.timestamp, peaked: lastActivation?.peakTimestamp != nil)
         case .reviving:
             return .blocked(.needsRevival)
+        case .establishing:
+            return .blocked(.establishing)
         case .dormant:
             let profileInput = StarterProfileInput(from: profile)
             let logInputs = feedLogs.map { FeedLogInput(from: $0) }
@@ -952,6 +956,8 @@ final class ScheduleViewModel {
                 return .needsActivation
             case .needsRevival:
                 return .blocked(.needsRevival)
+            case .establishing:
+                return .blocked(.establishing)
             }
         }
     }
@@ -1771,7 +1777,8 @@ final class ScheduleViewModel {
                     flourType: input.flourType,
                     kitchenTemperatureCelsius: input.kitchenTemperatureCelsius,
                     starterGrams: input.starterGrams,
-                    feedIntent: input.feedIntent
+                    feedIntent: input.feedIntent,
+                    starterGeneration: profile.starterGeneration
                 )
                 modelContext.insert(log)
                 ToastCenter.shared.show(Self.feedLoggedMessage(for: input.feedIntent))
